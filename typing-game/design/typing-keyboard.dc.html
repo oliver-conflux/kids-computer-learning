@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: #eef0f3; }
+  a { color: #2a9dad; }
+  a:hover { color: #1d7c8a; }
+  @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); } }
+  @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:28px;padding:44px 24px 0;font-family:Nunito, sans-serif;background:#eef0f3">
+
+  <div style="display:flex;align-items:flex-start;gap:20px;width:960px;max-width:100%">
+    <div style="flex:none;width:132px;display:flex;flex-direction:column;align-items:center;gap:8px;animation:bob 3.2s ease-in-out infinite">
+      <div style="width:120px;height:80px;border-radius:10px;background:#ffffff;border:3px solid #c9ced6;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 0 #dfe3e9">
+        <div style="width:98px;height:60px;border-radius:6px;background:#bfe7f2;display:flex;align-items:center;justify-content:center;gap:14px;position:relative;overflow:hidden">
+          <div style="position:absolute;top:-14px;left:-10px;width:56px;height:40px;border-radius:50%;background:rgba(255,255,255,.45)"></div>
+          <div style="width:8px;height:14px;border-radius:3px;background:#2f4858"></div>
+          <div style="width:8px;height:14px;border-radius:3px;background:#2f4858"></div>
+          <div style="position:absolute;bottom:12px;width:34px;height:14px;border-bottom:4px solid #2f4858;border-radius:0 0 20px 20px"></div>
+        </div>
+      </div>
+      <div style="width:132px;height:9px;border-radius:0 0 8px 8px;background:#d3d8df"></div>
+    </div>
+
+    <div style="flex:1;position:relative;background:#ffffff;border-radius:26px;padding:26px 34px 30px;box-shadow:0 8px 0 rgba(160,168,180,.22)">
+      <div style="position:absolute;left:-13px;top:38px;width:26px;height:26px;background:#ffffff;transform:rotate(45deg);border-radius:5px"></div>
+      <div style="font-size:20px;font-weight:700;color:#7b8493;letter-spacing:.01em">{{ promptLead }}</div>
+      <div style="display:flex;align-items:center;gap:16px;margin-top:12px">
+        <div style="font-family:'Baloo 2', sans-serif;font-size:44px;font-weight:700;color:#2f3742;line-height:1">Type the</div>
+        <div style="{{ promptKeyStyle }}">{{ promptKey }}</div>
+        <div style="font-family:'Baloo 2', sans-serif;font-size:44px;font-weight:700;color:#2f3742;line-height:1">key</div>
+      </div>
+      <div style="{{ cheerStyle }}">{{ cheer }}</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:6px;padding:6px;border-radius:999px;background:#ffffff;box-shadow:0 3px 0 rgba(160,168,180,.28)">
+    <sc-for list="{{ modes }}" as="m" hint-placeholder-count="3">
+      <div style="{{ m.style }}" onClick="{{ m.onClick }}">{{ m.label }}</div>
+    </sc-for>
+  </div>
+
+  <sc-if value="{{ showLegend }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;width:924px;max-width:100%">
+      <sc-for list="{{ legend }}" as="item" hint-placeholder-count="8">
+        <div style="{{ item.style }}">{{ item.name }}</div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <div style="display:flex;align-items:center;gap:12px;font-size:17px;font-weight:700;color:#8a919d">
+    <span>Keys in a row</span>
+    <span style="{{ streakStyle }}">{{ streak }}</span>
+  </div>
+
+  <div style="{{ stageStyle }}">
+    <div style="position:absolute;top:0;left:0;width:924px;padding:16px;box-sizing:border-box;border-radius:22px;background:#d9dde3;box-shadow:0 10px 0 rgba(158,166,178,.35);display:flex;flex-direction:column;gap:8px">
+      <sc-for list="{{ rows }}" as="row" hint-placeholder-count="5">
+        <div style="display:flex;gap:8px">
+          <sc-for list="{{ row.keys }}" as="k" hint-placeholder-count="13">
+            <div style="{{ k.style }}" onClick="{{ k.onClick }}">{{ k.label }}</div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+
+    <svg viewBox="0 0 924 385" width="924" height="385" style="position:absolute;top:0;left:0;z-index:5;pointer-events:none" aria-hidden="true">
+      <sc-if value="{{ isTapered }}" hint-placeholder-val="{{ true }}">
+        <g opacity="{{ handOpacity }}">
+          <path d="{{ dLP }}" fill="{{ fillLP }}"></path>
+          <path d="{{ dLR }}" fill="{{ fillLR }}"></path>
+          <path d="{{ dLM }}" fill="{{ fillLM }}"></path>
+          <path d="{{ dLI }}" fill="{{ fillLI }}"></path>
+          <path d="{{ dLT }}" fill="{{ fillLT }}"></path>
+          <path d="{{ dRI }}" fill="{{ fillRI }}"></path>
+          <path d="{{ dRM }}" fill="{{ fillRM }}"></path>
+          <path d="{{ dRR }}" fill="{{ fillRR }}"></path>
+          <path d="{{ dRP }}" fill="{{ fillRP }}"></path>
+          <path d="{{ dRT }}" fill="{{ fillRT }}"></path>
+          <path d="M 200,316 L 330,328 Q 372,334 366,378 L 340,600 L 194,600 L 162,360 Q 158,322 200,316 Z" fill="{{ palmL }}"></path>
+          <path d="M 622,316 L 492,328 Q 450,334 456,378 L 482,600 L 628,600 L 660,360 Q 664,322 622,316 Z" fill="{{ palmR }}"></path>
+        </g>
+      </sc-if>
+      <g opacity="{{ blockyOpacity }}" stroke="rgba(90,70,68,.14)" stroke-width="2">
+        <rect x="150" y="392" width="200" height="150" rx="62" fill="{{ palmL }}"></rect>
+        <rect x="472" y="392" width="200" height="150" rx="62" fill="{{ palmR }}"></rect>
+        <rect x="125" y="142" width="32" height="290" rx="16" transform="rotate(-19,141,158)" fill="{{ fillLP }}"></rect>
+        <rect x="185" y="142" width="32" height="295" rx="16" transform="rotate(-7,201,158)" fill="{{ fillLR }}"></rect>
+        <rect x="245" y="142" width="32" height="305" rx="16" transform="rotate(1,261,158)" fill="{{ fillLM }}"></rect>
+        <rect x="305" y="142" width="32" height="285" rx="16" transform="rotate(13,321,158)" fill="{{ fillLI }}"></rect>
+        <rect x="372" y="282" width="36" height="205" rx="18" transform="rotate(18,390,296)" fill="{{ fillLT }}"></rect>
+        <rect x="485" y="142" width="32" height="285" rx="16" transform="rotate(-13,501,158)" fill="{{ fillRI }}"></rect>
+        <rect x="545" y="142" width="32" height="305" rx="16" transform="rotate(-1,561,158)" fill="{{ fillRM }}"></rect>
+        <rect x="605" y="142" width="32" height="295" rx="16" transform="rotate(7,621,158)" fill="{{ fillRR }}"></rect>
+        <rect x="665" y="142" width="32" height="290" rx="16" transform="rotate(19,681,158)" fill="{{ fillRP }}"></rect>
+        <rect x="516" y="282" width="36" height="205" rx="18" transform="rotate(-18,534,296)" fill="{{ fillRT }}"></rect>
+      </g>
+    </svg>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;handStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Tapered hands&quot;,&quot;Blocky hands&quot;,&quot;No hands&quot;],&quot;default&quot;:&quot;Tapered hands&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;practiceSet&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Home row&quot;,&quot;Home + top row&quot;,&quot;All letters&quot;],&quot;default&quot;:&quot;Home row&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;handOpacity&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:0.2,&quot;max&quot;:1,&quot;step&quot;:0.05,&quot;default&quot;:0.55,&quot;tsType&quot;:&quot;number&quot;},&quot;showLegend&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;accentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#7b6bd6&quot;,&quot;#2a9dad&quot;,&quot;#e0813f&quot;,&quot;#3f9e63&quot;],&quot;default&quot;:&quot;#7b6bd6&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;handColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#e8b7ac&quot;,&quot;#d9a074&quot;,&quot;#a9744f&quot;,&quot;#7a5236&quot;],&quot;default&quot;:&quot;#e8b7ac&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const U = 52, GAP = 8;
+
+const FINGER = {
+  '`':'lp','1':'lp','q':'lp','a':'lp','z':'lp','tab':'lp','caps':'lp','shift':'lp',
+  '2':'lr','w':'lr','s':'lr','x':'lr',
+  '3':'lm','e':'lm','d':'lm','c':'lm',
+  '4':'li','5':'li','r':'li','t':'li','f':'li','g':'li','v':'li','b':'li',
+  '6':'ri','7':'ri','y':'ri','u':'ri','h':'ri','j':'ri','n':'ri','m':'ri',
+  '8':'rm','i':'rm','k':'rm',',':'rm',
+  '9':'rr','o':'rr','l':'rr','.':'rr',
+  '0':'rp','-':'rp','=':'rp','p':'rp','[':'rp',']':'rp','\\':'rp',';':'rp',"'":'rp','/':'rp',
+  'delete':'rp','enter':'rp','shift2':'rp','space':'rt',
+  'ctrl':'lp','alt':'lp','cmd':'lt','cmd2':'rt','alt2':'rp','ctrl2':'rp'
+};
+
+const NAMES = {
+  lp:'left pinky', lr:'left ring', lm:'left middle', li:'left index', lt:'left thumb',
+  ri:'right index', rm:'right middle', rr:'right ring', rp:'right pinky', rt:'right thumb'
+};
+
+const ROWS = [
+  ['`','1','2','3','4','5','6','7','8','9','0','-','=',['delete',2]],
+  [['tab',1.5],'Q','W','E','R','T','Y','U','I','O','P','[',']',['\\',1.5]],
+  [['caps',1.75],'A','S','D','F','G','H','J','K','L',';',"'",['enter',2.25]],
+  [['shift',2.25],'Z','X','C','V','B','N','M',',','.','/',['shift',2.75,'shift2']],
+  [['ctrl',1.25],['alt',1.25],['cmd',1.75],['space',6.5],['cmd',1.75,'cmd2'],['alt',1.25,'alt2'],['ctrl',1.25,'ctrl2']]
+];
+
+const SETS = {
+  'Home row': 'asdfghjkl;'.split(''),
+  'Home + top row': 'asdfghjkl;qwertyuiop'.split(''),
+  'All letters': 'abcdefghijklmnopqrstuvwxyz'.split('')
+};
+
+const MODES = ['Tapered hands', 'Blocky hands', 'No hands'];
+
+const FCOLOR = { lp:'#f0a6b6', lr:'#f3c463', lm:'#86ce93', li:'#76bde4', lt:'#bdb3ec',
+                 rp:'#f0a6b6', rr:'#f3c463', rm:'#86ce93', ri:'#76bde4', rt:'#bdb3ec' };
+
+// tapered capsule: tip T, base B, tip radius rt, base radius rb
+function taper(tx, ty, bx, by, rt, rb, bow) {
+  bow = bow || 0;
+  const dx = bx - tx, dy = by - ty, len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  const px = uy, py = -ux;
+  const n = (v) => Math.round(v * 10) / 10;
+  const P = (x, y) => n(x) + ',' + n(y);
+  const k = 1.33, rm = (rt + rb) / 2;
+  const mx = (tx + bx) / 2 + bow, my = (ty + by) / 2;
+  return 'M ' + P(tx + px*rt, ty + py*rt) +
+    ' C ' + P(tx + px*rt - ux*rt*k, ty + py*rt - uy*rt*k) +
+    ' ' + P(tx - px*rt - ux*rt*k, ty - py*rt - uy*rt*k) +
+    ' ' + P(tx - px*rt, ty - py*rt) +
+    ' Q ' + P(mx - px*rm, my - py*rm) + ' ' + P(bx - px*rb, by - py*rb) +
+    ' C ' + P(bx - px*rb + ux*rb*k, by - py*rb + uy*rb*k) +
+    ' ' + P(bx + px*rb + ux*rb*k, by + py*rb + uy*rb*k) +
+    ' ' + P(bx + px*rb, by + py*rb) +
+    ' Q ' + P(mx + px*rm, my + py*rm) + ' ' + P(tx + px*rt, ty + py*rt) + ' Z';
+}
+
+class Component extends DCLogic {
+  state = { target: 'j', streak: 0, cheer: '', pressed: null, mode: null };
+
+  componentDidMount() {
+    this._onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.length === 1 ? e.key.toLowerCase() : null;
+      if (!k) return;
+      e.preventDefault();
+      this.hit(k);
+    };
+    window.addEventListener('keydown', this._onKey);
+    this.setState({ target: this.pick(null) });
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('keydown', this._onKey);
+    clearTimeout(this._t);
+  }
+
+  pool() { return SETS[this.props.practiceSet] || SETS['Home row']; }
+
+  pick(prev) {
+    const p = this.pool().filter(c => c !== prev);
+    return p[Math.floor(Math.random() * p.length)];
+  }
+
+  hit(k) {
+    clearTimeout(this._t);
+    if (k === this.state.target) {
+      const cheers = ['Nice!', 'Got it!', 'Perfect!', 'Yes!', 'Great!'];
+      this.setState(s => ({
+        streak: s.streak + 1,
+        cheer: cheers[Math.floor(Math.random() * cheers.length)],
+        target: this.pick(s.target),
+        pressed: k
+      }));
+    } else {
+      this.setState({ streak: 0, cheer: 'Oops — try again', pressed: k });
+    }
+    this._t = setTimeout(() => this.setState({ cheer: '', pressed: null }), 900);
+  }
+
+  renderVals() {
+    const accent = this.props.accentColor || '#2a9dad';
+    const skin = this.props.handColor || '#e8b7ac';
+    const target = this.state.target;
+    const finger = FINGER[target] || 'ri';
+    const opacity = this.props.handOpacity ?? 0.55;
+    const showLegend = this.props.showLegend ?? true;
+    const mode = this.state.mode || this.props.handStyle || 'Tapered hands';
+    const colorKeys = mode === 'No hands';
+
+    const rows = ROWS.map((row, ri) => ({
+      keys: row.map(entry => {
+        const arr = Array.isArray(entry) ? entry : [entry, 1];
+        const label = arr[0];
+        const w = arr[1];
+        const id = arr[2] || String(label).toLowerCase();
+        const isTarget = id === target;
+        const isWrongPress = this.state.pressed === id && id !== target;
+        const wide = String(label).length > 1;
+        const fc = FCOLOR[FINGER[id]];
+        const tint = colorKeys && fc && !wide ? fc + '55' : '#ffffff';
+        return {
+          label,
+          onClick: () => this.hit(id),
+          style: {
+            width: (w * U + (w - 1) * GAP) + 'px',
+            height: U + 'px',
+            flex: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '9px',
+            background: isTarget ? accent : (isWrongPress ? '#f4c9c2' : tint),
+            color: isTarget ? '#ffffff' : '#6b7381',
+            fontFamily: 'Nunito, sans-serif',
+            fontWeight: wide ? 600 : 700,
+            fontSize: wide ? '13px' : '17px',
+            textTransform: wide ? 'none' : 'uppercase',
+            boxShadow: isTarget
+              ? '0 3px 0 rgba(0,0,0,.16), 0 0 0 5px ' + accent + '33'
+              : '0 2px 0 rgba(150,158,170,.45)',
+            cursor: 'pointer',
+            userSelect: 'none',
+            transition: 'background .12s, box-shadow .12s',
+            animation: isTarget ? 'pop .45s ease' : 'none'
+          }
+        };
+      })
+    }));
+
+    // [tipX, tipY, baseX, baseY, tipR, baseR, bow]
+    const GEO = {
+      lp: [141, 158, 198, 398, 12, 23, -11],
+      lr: [201, 152, 247, 376, 13, 18, -7],
+      lm: [261, 150, 283, 374, 13.5, 18, -3],
+      li: [321, 155, 317, 378, 13.5, 19, 7],
+      lt: [372, 286, 350, 410, 15, 28, 8],
+      ri: [501, 155, 505, 378, 13.5, 19, -7],
+      rm: [561, 150, 539, 374, 13.5, 18, 3],
+      rr: [621, 152, 575, 376, 13, 18, 7],
+      rp: [681, 158, 624, 398, 12, 23, 11],
+      rt: [450, 286, 472, 410, 15, 28, -8]
+    };
+    // hands stay put on home row; the highlight alone carries the lesson
+    const fp = (id) => {
+      const g = GEO[id];
+      return taper(g[0], g[1], g[2], g[3], g[4], g[5], g[6]);
+    };
+
+    const fill = (id) => (id === finger ? accent : skin);
+
+    const legend = ['lp','lr','lm','li','ri','rm','rr','rp'].map(id => ({
+      name: NAMES[id],
+      style: {
+        padding: '7px 14px',
+        borderRadius: '999px',
+        fontSize: '13px',
+        fontWeight: 700,
+        background: id === finger ? accent : (colorKeys ? FCOLOR[id] + '55' : '#ffffff'),
+        color: id === finger ? '#ffffff' : '#7d8593',
+        boxShadow: '0 2px 0 rgba(160,168,180,.28)'
+      }
+    }));
+
+    const modes = MODES.map(m => ({
+      label: m,
+      onClick: () => this.setState({ mode: m }),
+      style: {
+        padding: '9px 20px',
+        borderRadius: '999px',
+        fontSize: '14px',
+        fontWeight: 800,
+        cursor: 'pointer',
+        userSelect: 'none',
+        background: m === mode ? accent : 'transparent',
+        color: m === mode ? '#ffffff' : '#98a0ac'
+      }
+    }));
+
+    return {
+      rows,
+      legend,
+      modes,
+      showLegend,
+      isTapered: mode === 'Tapered hands',
+      blockyOpacity: mode === 'Blocky hands' ? opacity : 0,
+      handOpacity: mode === 'Tapered hands' ? opacity : 0,
+      stageStyle: { position: 'relative', width: '924px', height: colorKeys ? '356px' : '385px', flex: 'none' },
+      dLP: fp('lp'), dLR: fp('lr'), dLM: fp('lm'), dLI: fp('li'), dLT: fp('lt'),
+      dRI: fp('ri'), dRM: fp('rm'), dRR: fp('rr'), dRP: fp('rp'), dRT: fp('rt'),
+      promptLead: 'Howdy! Use your ' + NAMES[finger] + ' finger to:',
+      promptKey: target === ' ' ? 'space' : String(target).toUpperCase(),
+      promptKeyStyle: {
+        minWidth: '58px',
+        height: '58px',
+        padding: '0 12px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '12px',
+        border: '3px solid #2f3742',
+        fontFamily: "'Baloo 2', sans-serif",
+        fontSize: '34px',
+        fontWeight: 700,
+        color: '#2f3742',
+        boxSizing: 'border-box'
+      },
+      cheer: this.state.cheer,
+      cheerStyle: {
+        marginTop: '10px',
+        height: '22px',
+        fontSize: '18px',
+        fontWeight: 800,
+        color: this.state.cheer.startsWith('Oops') ? '#d98a7d' : accent,
+        opacity: this.state.cheer ? 1 : 0,
+        transition: 'opacity .2s'
+      },
+      streak: this.state.streak,
+      streakStyle: {
+        minWidth: '38px',
+        height: '38px',
+        padding: '0 12px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '999px',
+        background: accent,
+        color: '#ffffff',
+        fontFamily: "'Baloo 2', sans-serif",
+        fontSize: '20px',
+        fontWeight: 700
+      },
+      palmL: fill('__palmL'), palmR: fill('__palmR'),
+      fillLP: fill('lp'), fillLR: fill('lr'), fillLM: fill('lm'), fillLI: fill('li'), fillLT: fill('lt'),
+      fillRI: fill('ri'), fillRM: fill('rm'), fillRR: fill('rr'), fillRP: fill('rp'), fillRT: fill('rt')
+    };
+  }
+}
+
+</script>
+</body>
+</html>
