@@ -89,8 +89,15 @@
  * renders here rather than in the hint region below.
  */
 .slot[data-state='revealed'] {
+  /*
+   * Greyed, but deliberately NOT faint. This is the hint of last resort — it is
+   * shown to a kid who has already been through every earlier rung — so it has
+   * to be the most readable grey on the screen, not the least. An earlier
+   * version stacked opacity 0.5 on top of --muted, which computed to 1.79:1
+   * against the slot and made the final help the hardest thing on screen to
+   * read. Do not add opacity here.
+   */
   color: var(--muted);
-  opacity: 0.5;
 }
 
 /* ---------- wrong-answer pulse ---------- */

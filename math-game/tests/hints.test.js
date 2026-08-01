@@ -33,12 +33,16 @@ test('blocks never appears when the product exceeds blocksMaxProduct', () => {
   }
 });
 
-test('blocks always appears when the product is within blocksMaxProduct', () => {
+test('blocks appears for every drawable product within blocksMaxProduct', () => {
+  // "Drawable" excludes 0: the bound is 1..blocksMaxProduct, not 0... A zero
+  // product renders an empty array, which is a blank hint region rather than a
+  // gentler hint. See the zero-operand test below.
   for (const f of allFacts()) {
-    if (answerOf(f) <= CONFIG.blocksMaxProduct) {
+    const product = answerOf(f);
+    if (product >= 1 && product <= CONFIG.blocksMaxProduct) {
       assert.ok(
         ladderFor(f, CONFIG).includes('blocks'),
-        `${factId(f)} (product ${answerOf(f)}) should offer blocks`,
+        `${factId(f)} (product ${product}) should offer blocks`,
       );
     }
   }
@@ -260,5 +264,28 @@ test('every non-trivial fact outside the squares has a strategy', () => {
       continue;
     }
     assert.notEqual(strategyFor(f), null, `${factId(f)} has no strategy`);
+  }
+});
+
+test('a zero-product fact gets no blocks rung — it would draw nothing', () => {
+  // 21 facts have a zero operand. Their product is 0, which passes the upper
+  // bound, but the array renders empty: a kid stuck on 0 x 7 would stare at a
+  // blank hint region for the full delay. None of them gets a strategy either,
+  // so without the lower bound their ladder is clean -> nothing -> reveal.
+  for (const b of [0, 1, 5, 7, 10]) {
+    assert.deepEqual(ladderFor({ op: '*', a: 0, b }, CONFIG), ['clean', 'reveal']);
+    assert.deepEqual(ladderFor({ op: '*', a: b, b: 0 }, CONFIG), ['clean', 'reveal']);
+  }
+});
+
+test('a product of exactly 1 still gets blocks — one block is a real picture', () => {
+  assert.ok(ladderFor({ op: '*', a: 1, b: 1 }, CONFIG).includes('blocks'));
+});
+
+test('no ladder ever contains a rung that would render nothing', () => {
+  for (const fact of allFacts()) {
+    if (ladderFor(fact, CONFIG).includes('blocks')) {
+      assert.ok(answerOf(fact) >= 1, `${fact.a}x${fact.b} offers an empty block array`);
+    }
   }
 });

@@ -43,7 +43,17 @@ const LADDER = [
     stage: 'blocks',
     // Above about 25 items the array stops being a visualisation — nobody
     // counts 42 blocks — so the drawing is worse than useless there.
-    applies: (fact, config) => answerOf(fact) <= config.blocksMaxProduct,
+    //
+    // The lower bound matters just as much. A product of 0 draws an EMPTY grid,
+    // so a kid stuck on `0 x 7` would sit in front of a blank hint region for
+    // the full stage delay before the answer arrived. That is not a gentler
+    // hint, it is a broken-looking screen. 21 facts have a zero operand, and
+    // none of them gets a strategy either, so without this bound their whole
+    // ladder is clean -> nothing -> reveal.
+    applies: (fact, config) => {
+      const product = answerOf(fact);
+      return product >= 1 && product <= config.blocksMaxProduct;
+    },
   },
   {
     stage: 'reveal',

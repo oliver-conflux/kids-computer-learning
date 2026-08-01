@@ -12,6 +12,11 @@
  */
 
 .results {
+  /* base.css disables selection globally, which is right while a kid is typing
+     but wrong here: the results screen is also the parent-facing diagnostic, and
+     a fact list you cannot copy out is less useful than one you can. */
+  -webkit-user-select: text;
+  user-select: text;
   --page: #eef0f3;
   --accent: #7b6bd6;
   --heading: #2f3742;
@@ -22,11 +27,11 @@
   /* Bucket colours. */
   --cold-fill: #e3e6ec;
   --cold-line: #b9c0cc;
-  --cold-text: #6b7381;
+  --cold-text: #565d69;   /* was #6b7381 = 3.82:1 on the cold fill; AA needs 4.5 at 13px */
   --warm-fill: #f3c98d;
   --warm-line: #dda85c;
   --warm-text: #7a4f16;
-  --hot-fill: #7b6bd6;
+  --hot-fill: #6455c4;    /* was the raw accent #7b6bd6 = 4.27:1 with white; AA needs 4.5 */
   --hot-line: #6a5ac6;
   --hot-text: #ffffff;
 
@@ -40,7 +45,7 @@
   padding: 24px 20px 64px;
   color: var(--heading);
   background: var(--page);
-  font-family: 'Nunito', 'Baloo 2', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-ui, 'Nunito', 'Avenir Next', system-ui, -apple-system, 'Segoe UI', sans-serif);
 }
 
 .results *,
@@ -66,14 +71,14 @@
 /* --- header ------------------------------------------------------------ */
 
 .results__title {
-  font-family: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
   font-size: clamp(28px, 6vw, 40px);
   font-weight: 700;
   letter-spacing: 0.01em;
 }
 
 .results__h2 {
-  font-family: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
   font-size: 20px;
   font-weight: 700;
 }
@@ -109,7 +114,7 @@
 }
 
 .results__stat-value {
-  font-family: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
   font-size: 34px;
   font-weight: 700;
   line-height: 1.1;
@@ -447,7 +452,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  font-family: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
   font-size: 24px;
   font-weight: 700;
 }
