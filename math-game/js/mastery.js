@@ -180,6 +180,16 @@ export function deriveMastery(events, config) {
     if (!known.has(id)) {
       continue;
     }
+    // `ms` is the primary signal of the entire system — it drives buckets, hint
+    // timing and scheduling weight. An attempt whose latency is missing or not a
+    // finite number carries nothing this model reads, so it is dropped with the
+    // other corrupt lines rather than admitted. Admitting it would put NaN into
+    // `medianCleanMs` while `cleanCount` stayed positive, which contradicts the
+    // contract's "null only when cleanCount is 0" and would then propagate a
+    // silently poisoned median into the scheduler's weights and the grid.
+    if (!Number.isFinite(event.ms)) {
+      continue;
+    }
     usable.push({ id, event });
   }
 
@@ -187,7 +197,13 @@ export function deriveMastery(events, config) {
   usable.sort((left, right) => compareTimestamps(left.event.t, right.event.t));
 
   for (const { id, event } of usable) {
-    const wrong = Array.isArray(event.wrong) ? [...event.wrong] : [];
+    // `wrong` is contractually Set<number>. A corrupt line carrying nulls or
+    // strings would otherwise land in it verbatim: inert for the scheduler's
+    // membership check, but off-contract, and it would surface as junk the
+    // moment the results grid renders a fact's recorded wrong answers.
+    const wrong = Array.isArray(event.wrong)
+      ? event.wrong.filter(Number.isFinite)
+      : [];
 
     // Confusions come from the full history, before any retention trimming.
     if (wrong.length > 0) {

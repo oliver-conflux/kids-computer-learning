@@ -47,6 +47,16 @@ build*. Read the spec section referenced by your task before starting.
   rendering, CSS, or wiring. Task headers state which applies; do not add tests
   to a task marked no-tests.
 - **Commit at the end of each task**, one commit per task, present-tense summary.
+- **Timestamps are UTC `Z`-suffixed ISO 8601, always.** `mastery.js` sorts events
+  by comparing `t` as a plain string, which is correct only while every writer
+  emits the fixed `toISOString()` format. A single writer emitting an offset like
+  `+05:00` makes lexicographic order stop matching chronological order, silently
+  reintroducing a defect already fixed once. This is a rule on writers, not a
+  date parser on the reader.
+- **`now` is epoch milliseconds everywhere.** Never a monotonic
+  high-resolution timer. `toAttemptEvent` builds `t` from `resolvedAt` as a real
+  date, so a monotonic clock yields 1970 timestamps while `ms` still looks
+  correct — nothing throws and no test fails.
 - **Worktree base.** Agent worktrees may be cut from a stale commit that predates
   the spec and plan. Before starting, verify `math-game/docs/` exists in your
   worktree; if it does not, run `git merge math-facts-game` to bring the branch

@@ -611,3 +611,51 @@ test('mutating the model does not reach back into the events', () => {
   model.byId.get(SIX_SEVEN).attempts[0].wrong.push(999);
   assert.deepEqual(events[0].wrong, [48]);
 });
+
+// --- corrupt-field guards (Review-W1 S1 and S2) -----------------------------
+
+test('an attempt with a non-finite ms is dropped, not admitted with NaN', () => {
+  // Admitting it produced cleanCount > 0 alongside medianCleanMs: NaN, which
+  // contradicts "null only when cleanCount is 0" and would propagate a poisoned
+  // median into the scheduler's weights and the results grid.
+  const at = (t, ms) => ({
+    type: 'attempt', t, build: 'm1', session: 's',
+    op: '*', a: 6, b: 7, ms, stage: 'clean', typed: [], wrong: [],
+  });
+  const stats = deriveMastery([
+    at('2026-07-28T10:00:00.000Z', 'fast'),
+    at('2026-07-28T10:01:00.000Z', NaN),
+    at('2026-07-28T10:02:00.000Z', undefined),
+    at('2026-07-28T10:03:00.000Z', 900),
+  ], CONFIG).byId.get('*:6x7');
+
+  assert.equal(stats.cleanCount, 1);
+  assert.equal(stats.medianCleanMs, 900);
+  assert.ok(Number.isFinite(stats.medianCleanMs));
+});
+
+test('medianCleanMs is finite whenever cleanCount is positive, for every fact', () => {
+  const events = allFacts().map((fact, i) => ({
+    type: 'attempt', t: `2026-07-28T10:00:${String(i % 60).padStart(2, '0')}.000Z`,
+    build: 'm1', session: 's', op: fact.op, a: fact.a, b: fact.b,
+    ms: i % 3 === 0 ? 'corrupt' : 900, stage: 'clean', typed: [], wrong: [],
+  }));
+  for (const [, stats] of deriveMastery(events, CONFIG).byId) {
+    if (stats.cleanCount > 0) {
+      assert.ok(Number.isFinite(stats.medianCleanMs), `${stats.id} median not finite`);
+    } else {
+      assert.equal(stats.medianCleanMs, null);
+    }
+  }
+});
+
+test('confusions holds only finite numbers', () => {
+  const confusions = deriveMastery([{
+    type: 'attempt', t: '2026-07-28T10:00:00.000Z', build: 'm1', session: 's',
+    op: '*', a: 6, b: 7, ms: 900, stage: 'clean', typed: [],
+    wrong: [null, 'x', undefined, NaN, {}, 48],
+  }], CONFIG).confusions.get('*:6x7');
+
+  assert.deepEqual([...confusions], [48]);
+  assert.ok([...confusions].every(Number.isFinite));
+});

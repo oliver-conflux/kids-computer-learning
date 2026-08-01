@@ -185,6 +185,15 @@ export function tick(state, now, delayMs) {
  * `t` is derived from `resolvedAt` rather than read from a clock, so replaying a
  * session offline reproduces the same line byte for byte.
  *
+ * REQUIRED OF CALLERS: the `now` values fed to every function in this module must
+ * be EPOCH MILLISECONDS. This is the one place that requirement becomes visible,
+ * because `t` is built from `resolvedAt` as a real date. Drive the game loop with
+ * a monotonic high-resolution timer instead and every logged `t` becomes a 1970
+ * timestamp — while `ms` still looks perfectly correct, because it is a
+ * difference and the offset cancels. Nothing throws and no test fails; the log's
+ * primary time axis is simply garbage, and mastery's chronological sort silently
+ * stops meaning anything. Pass epoch milliseconds.
+ *
  * @param {object} state ProblemState with status 'correct'
  * @param {object} config the CONFIG table
  * @param {string} session session id, 's_' + 4 hex chars
