@@ -1,0 +1,531 @@
+/* Results screen and mastery grid.
+ *
+ * Every selector in this file is scoped under `.results`, and every custom
+ * property is declared on `.results` rather than `:root`, so nothing here can
+ * reach the problem screen's stylesheets or be reached by them. The palette
+ * values are the project palette, written literally so this file renders
+ * correctly whatever base.css happens to name its variables.
+ *
+ * Bucket colours differ in hue AND lightness, and each is backed by a
+ * non-colour cue (dashed border / solid border / filled), so the grid still
+ * reads for a colour-blind kid or a parent looking over a shoulder.
+ */
+
+.results {
+  --page: #eef0f3;
+  --accent: #7b6bd6;
+  --heading: #2f3742;
+  --muted: #7b8493;
+  --error-fill: #f4c9c2;
+  --error-text: #d98a7d;
+
+  /* Bucket colours. */
+  --cold-fill: #e3e6ec;
+  --cold-line: #b9c0cc;
+  --cold-text: #6b7381;
+  --warm-fill: #f3c98d;
+  --warm-line: #dda85c;
+  --warm-text: #7a4f16;
+  --hot-fill: #7b6bd6;
+  --hot-line: #6a5ac6;
+  --hot-text: #ffffff;
+
+  --card: #ffffff;
+  --cell: clamp(30px, 5.2vmin, 46px);
+  --gap: 3px;
+
+  box-sizing: border-box;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 24px 20px 64px;
+  color: var(--heading);
+  background: var(--page);
+  font-family: 'Nunito', 'Baloo 2', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.results *,
+.results *::before,
+.results *::after {
+  box-sizing: border-box;
+}
+
+.results h1,
+.results h2,
+.results h3,
+.results h4,
+.results p,
+.results ul {
+  margin: 0;
+}
+
+.results ul {
+  padding: 0;
+  list-style: none;
+}
+
+/* --- header ------------------------------------------------------------ */
+
+.results__title {
+  font-family: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  font-size: clamp(28px, 6vw, 40px);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.results__h2 {
+  font-family: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.results__h4 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.results__caption,
+.results__empty {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* --- session stats ----------------------------------------------------- */
+
+.results__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.results__stat {
+  flex: 1 1 150px;
+  padding: 14px 16px;
+  background: var(--card);
+  border-radius: 14px;
+}
+
+.results__stat-value {
+  font-family: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--accent);
+}
+
+.results__stat-label {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.results__stat-note {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* --- bucket movement --------------------------------------------------- */
+
+.results__moves {
+  margin-top: 28px;
+}
+
+.results__move-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.results__move {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--card);
+  border-radius: 12px;
+  border-left: 4px solid var(--cold-line);
+}
+
+.results__move--up {
+  border-left-color: var(--accent);
+}
+
+/* A regression is shown as plainly as a promotion. Movement is not one-way:
+ * quick answers age out of the retain window and a fact drops back. That is
+ * information, not a failure, so it is warm-toned rather than alarming. */
+.results__move--down {
+  border-left-color: var(--error-text);
+}
+
+.results__move-arrow {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.results__move--up .results__move-arrow {
+  color: var(--accent);
+}
+
+.results__move--down .results__move-arrow {
+  color: var(--error-text);
+}
+
+.results__move-fact {
+  font-weight: 700;
+  min-width: 90px;
+}
+
+.results__move-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.results__move-to {
+  color: var(--muted);
+}
+
+.results__move-why {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--error-text);
+}
+
+.results__pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.results__pill--cold {
+  background: var(--cold-fill);
+  color: var(--cold-text);
+  border: 1px dashed var(--cold-line);
+}
+
+.results__pill--warm {
+  background: var(--warm-fill);
+  color: var(--warm-text);
+  border: 1px solid var(--warm-line);
+}
+
+.results__pill--hot {
+  background: var(--hot-fill);
+  color: var(--hot-text);
+  border: 1px solid var(--hot-line);
+}
+
+/* --- grid -------------------------------------------------------------- */
+
+.results__grid-section {
+  margin-top: 30px;
+}
+
+.results__grid-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.results__coldcount {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.results__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.results__legend-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.results__swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+.results__swatch--cold {
+  background: var(--cold-fill);
+  border: 1px dashed var(--cold-line);
+}
+
+.results__swatch--warm {
+  background: var(--warm-fill);
+  border: 1px solid var(--warm-line);
+}
+
+.results__swatch--hot {
+  background: var(--hot-fill);
+  border: 1px solid var(--hot-line);
+}
+
+.results__swatch--mismatch {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--cold-line);
+}
+
+.results__swatch--mismatch::after,
+.results__cell.is-mismatched::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-top: 7px solid var(--heading);
+  border-left: 7px solid transparent;
+}
+
+.results__board {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+.results__grid-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.results__axis {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.results__axis--side {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  align-self: center;
+}
+
+.results__grid {
+  display: grid;
+  grid-template-columns: repeat(12, var(--cell));
+  gap: var(--gap);
+  width: max-content;
+}
+
+/* Rows exist for screen readers; the 12-column grid does the layout. */
+.results__row {
+  display: contents;
+}
+
+.results__corner,
+.results__head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--cell);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.results__corner {
+  font-size: 16px;
+  color: var(--heading);
+}
+
+.results__cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--cell);
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  user-select: none;
+}
+
+.results__cell--cold {
+  background: var(--cold-fill);
+  color: var(--cold-text);
+  border: 1px dashed var(--cold-line);
+}
+
+.results__cell--warm {
+  background: var(--warm-fill);
+  color: var(--warm-text);
+  border: 1px solid var(--warm-line);
+}
+
+.results__cell--hot {
+  background: var(--hot-fill);
+  color: var(--hot-text);
+  border: 1px solid var(--hot-line);
+}
+
+/* The mirror axis. Cells reflect across this line, and the whole point of the
+ * grid is that a cell and its reflection need not match. */
+.results__cell.is-diagonal {
+  box-shadow: inset 0 0 0 2px rgba(47, 55, 66, 0.28);
+}
+
+.results__cell.is-selected {
+  outline: 3px solid var(--heading);
+  outline-offset: 1px;
+  z-index: 1;
+}
+
+/* The transpose of whatever is selected — the cell to compare against. */
+.results__cell.is-mirror {
+  outline: 3px dashed var(--accent);
+  outline-offset: 1px;
+  z-index: 1;
+}
+
+.results__cell:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* --- detail panel ------------------------------------------------------ */
+
+.results__detail {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--card);
+  border-radius: 14px;
+  min-height: 132px;
+}
+
+.results__detail-hint {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.results__detail-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.results__detail-line {
+  margin-top: 4px;
+  font-size: 15px;
+}
+
+.results__mirror {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--page);
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.results__mirror.is-mismatched {
+  color: var(--heading);
+  border-left: 4px solid var(--accent);
+  font-weight: 700;
+}
+
+.results__block {
+  margin-top: 14px;
+}
+
+.results__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.results__chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--page);
+  border: 1px solid var(--cold-line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.results__chip--clean {
+  background: rgba(123, 107, 214, 0.12);
+  border-color: var(--accent);
+}
+
+.results__chip.is-latest {
+  box-shadow: 0 0 0 2px rgba(47, 55, 66, 0.18);
+}
+
+.results__chip-ms {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--heading);
+}
+
+.results__chip-wrong {
+  color: var(--error-text);
+}
+
+.results__wrongs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.results__wrong {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: var(--error-fill);
+  color: var(--error-text);
+  font-size: 12px;
+}
+
+.results__wrong-value {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 420px) {
+  .results {
+    --cell: 26px;
+    padding: 16px 12px 48px;
+  }
+}
