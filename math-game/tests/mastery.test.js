@@ -24,6 +24,11 @@ function attempt(a, b, ms, stage, wrong = []) {
   };
 }
 
+/** Same attempt, stamped with an explicit ISO timestamp. */
+function at(t, event) {
+  return { ...event, t };
+}
+
 /** A run of identical attempts, oldest first. */
 function repeat(count, make) {
   return Array.from({ length: count }, (_unused, index) => make(index));
@@ -457,6 +462,127 @@ test('malformed log lines are skipped silently and never break the derivation', 
   assert.equal(model.byId.size, 121);
   assert.equal(model.byId.get(SIX_SEVEN).cleanCount, 1);
   assert.equal(model.byId.get(SIX_SEVEN).attempts.length, 1);
+});
+
+// --- chronological ordering ------------------------------------------------
+
+test('events supplied out of order produce the same model as events in order', () => {
+  const inOrder = [
+    at('2026-07-28T09:00:00.000Z', attempt(6, 7, 5000, 'reveal', [48])),
+    at('2026-07-29T09:00:00.000Z', attempt(6, 7, 4000, 'strategy')),
+    at('2026-07-30T09:00:00.000Z', attempt(6, 7, 400, 'clean')),
+    at('2026-07-31T09:00:00.000Z', attempt(6, 7, 500, 'clean')),
+    at('2026-08-01T09:00:00.000Z', attempt(6, 7, 600, 'clean')),
+    at('2026-08-01T09:01:00.000Z', attempt(7, 6, 900, 'clean')),
+  ];
+  const shuffled = [inOrder[3], inOrder[0], inOrder[5], inOrder[2], inOrder[4], inOrder[1]];
+
+  assert.deepEqual(deriveMastery(shuffled, CONFIG), deriveMastery(inOrder, CONFIG));
+  assert.equal(deriveMastery(shuffled, CONFIG).byId.get(SIX_SEVEN).bucket, 'hot');
+});
+
+test('the retain window keeps the latest by timestamp, not the last by position', () => {
+  // The outbox replay case: Tuesday's attempts were queued while the server was
+  // down and got appended to the file AFTER Wednesday's. File order is wrong;
+  // time order is not.
+  const wednesday = repeat(5, (index) =>
+    at(`2026-07-29T09:0${index}:00.000Z`, attempt(6, 7, 300 + index, 'clean')),
+  );
+  const tuesday = repeat(5, (index) =>
+    at(`2026-07-28T09:0${index}:00.000Z`, attempt(6, 7, 8000 + index, 'reveal')),
+  );
+
+  const asWritten = [...wednesday, ...tuesday]; // replayed late, so later in the file
+  const stats = statsFor(asWritten, SIX_SEVEN);
+
+  assert.deepEqual(
+    stats.attempts.map((a) => a.ms),
+    [300, 301, 302, 303, 304],
+    'Wednesday is the recent form, whatever order the lines landed in',
+  );
+  assert.equal(stats.cleanCount, 5);
+  assert.equal(stats.bucket, 'hot');
+});
+
+test('a late-replayed old session cannot drag a hot fact back to cold', () => {
+  const recent = repeat(3, (index) =>
+    at(`2026-08-01T09:0${index}:00.000Z`, attempt(6, 7, 400, 'clean')),
+  );
+  const stale = repeat(5, (index) =>
+    at(`2026-07-01T09:0${index}:00.000Z`, attempt(6, 7, 9000, 'reveal')),
+  );
+  assert.equal(statsFor([...recent, ...stale], SIX_SEVEN).bucket, 'hot');
+});
+
+test('attempts remain most-recent-last after sorting', () => {
+  const events = [
+    at('2026-08-01T09:00:00.000Z', attempt(6, 7, 100, 'clean')),
+    at('2026-07-30T09:00:00.000Z', attempt(6, 7, 200, 'clean')),
+    at('2026-07-31T09:00:00.000Z', attempt(6, 7, 300, 'clean')),
+  ];
+  const stats = statsFor(events, SIX_SEVEN);
+  assert.deepEqual(
+    stats.attempts.map((a) => a.ms),
+    [200, 300, 100],
+  );
+  assert.equal(stats.attempts.at(-1).ms, 100, 'the newest timestamp is last');
+});
+
+test('events sharing a timestamp keep file order — the sort is stable', () => {
+  const sameInstant = '2026-08-01T09:00:00.000Z';
+  const events = repeat(7, (index) => at(sameInstant, attempt(6, 7, (index + 1) * 100, 'clean')));
+  assert.deepEqual(
+    statsFor(events, SIX_SEVEN).attempts.map((a) => a.ms),
+    [300, 400, 500, 600, 700],
+    'seven events at one instant, retain 5 — the tail of file order survives',
+  );
+});
+
+test('confusions are unaffected by ordering', () => {
+  const events = [
+    at('2026-08-01T09:00:00.000Z', attempt(6, 7, 400, 'clean')),
+    at('2026-07-01T09:00:00.000Z', attempt(6, 7, 5000, 'reveal', [48])),
+  ];
+  assert.deepEqual(deriveMastery(events, CONFIG).confusions.get(SIX_SEVEN), new Set([48]));
+});
+
+test('a missing or malformed timestamp does not throw and does not corrupt the rest', () => {
+  const noTimestamp = attempt(6, 7, 9000, 'reveal');
+  delete noTimestamp.t;
+
+  const events = [
+    at('2026-08-01T09:00:00.000Z', attempt(6, 7, 400, 'clean')),
+    noTimestamp,
+    at('not-a-date', attempt(6, 7, 9000, 'reveal')),
+    at(42, attempt(6, 7, 9000, 'reveal')),
+    at(null, attempt(6, 7, 9000, 'reveal')),
+    at('2026-08-01T09:01:00.000Z', attempt(6, 7, 500, 'clean')),
+    at('2026-08-01T09:02:00.000Z', attempt(6, 7, 600, 'clean')),
+  ];
+
+  const stats = statsFor(events, SIX_SEVEN);
+  assert.equal(stats.attempts.length, CONFIG.retain);
+  assert.deepEqual(
+    stats.attempts.map((a) => a.ms),
+    [9000, 9000, 400, 500, 600],
+    'undatable events sort to the front, where they cannot displace real recent work',
+  );
+  assert.equal(stats.cleanCount, 3);
+  assert.equal(stats.bucket, 'hot', 'the datable recent attempts still decide the bucket');
+});
+
+test('an all-undatable log still derives, in file order', () => {
+  const events = repeat(3, (index) => {
+    const event = attempt(6, 7, (index + 1) * 100, 'clean');
+    delete event.t;
+    return event;
+  });
+  const stats = statsFor(events, SIX_SEVEN);
+  assert.deepEqual(
+    stats.attempts.map((a) => a.ms),
+    [100, 200, 300],
+  );
+  assert.equal(stats.bucket, 'hot');
 });
 
 // --- purity and determinism -----------------------------------------------
