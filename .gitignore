@@ -1,1 +1,7 @@
 .claude/worktrees/
+
+# The typing log records the kid's name alongside their per-keystroke mistakes.
+# The math log is committed, but this one is deliberately not: this repo has an
+# origin, and a child's name and error history should not follow it there.
+# Flip this if the remote is private and you want the history versioned.
+data/typing-log.jsonl

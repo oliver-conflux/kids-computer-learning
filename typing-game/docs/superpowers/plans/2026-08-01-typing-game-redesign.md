@@ -972,12 +972,27 @@ const NUMBER_RUNGS = [
     mix: { drills: 6, words: 4, sentences: 0 } },
 ];
 
-/** Accumulate availableKeys down a track, so it can never drift from newKeys. */
+/**
+ * Accumulate availableKeys down a track, so it can never drift from newKeys.
+ *
+ * 'Shift' is a sentinel rather than a literal key: what it actually unlocks is
+ * the uppercase form of every letter taught so far. Expanding it here is what
+ * lets the shift-caps rung's content contain capitals at all — without the
+ * expansion, the validator rejects every capital on the one rung whose entire
+ * purpose is capitals.
+ */
 function buildTrack(rungs, track) {
   const seen = [];
   return rungs.map((rung) => {
     for (const key of rung.newKeys) {
-      if (key !== 'Shift' && !seen.includes(key)) seen.push(key);
+      if (key === 'Shift') {
+        for (const taught of [...seen]) {
+          const upper = taught.toUpperCase();
+          if (upper !== taught && !seen.includes(upper)) seen.push(upper);
+        }
+      } else if (!seen.includes(key)) {
+        seen.push(key);
+      }
     }
     return { ...rung, track, availableKeys: [...seen] };
   });

@@ -91,6 +91,39 @@ test('the letter ladder ends with punctuation, and ! is NOT there', () => {
   assert.ok(!punct.availableKeys.includes('!'), '! is shift-1 and belongs to the number track');
 });
 
+// The 'Shift' sentinel unlocks the uppercase form of every letter taught so
+// far. This went unnoticed at first: buildTrack skipped the sentinel without
+// expanding it, so the one rung whose entire purpose is capitals had no
+// capitals available and the content validator rejected every one of them.
+test('shift-caps unlocks capitals for every letter taught so far', () => {
+  const sc = lessonById('shift-caps');
+  const caps = sc.availableKeys.filter((k) => k >= 'A' && k <= 'Z');
+  assert.equal(caps.length, 26, 'all 26 letters are taught by rung 12');
+  for (const ch of 'ABZQP') {
+    assert.ok(sc.availableKeys.includes(ch), `shift-caps must allow ${ch}`);
+  }
+});
+
+test('capitals carry forward to punctuation, the rung after shift-caps', () => {
+  const p = lessonById('punctuation');
+  assert.equal(p.availableKeys.filter((k) => k >= 'A' && k <= 'Z').length, 26);
+});
+
+test('no rung before shift-caps has any capital available', () => {
+  for (const lesson of lessonsForTrack('letters')) {
+    if (lesson.id === 'shift-caps') break;
+    const caps = lesson.availableKeys.filter((k) => k >= 'A' && k <= 'Z');
+    assert.deepEqual(caps, [], `${lesson.id} leaked capitals before shift taught them`);
+  }
+});
+
+test('the number track never gains capitals — it teaches no letters', () => {
+  for (const lesson of lessonsForTrack('numbers')) {
+    const caps = lesson.availableKeys.filter((k) => k >= 'A' && k <= 'Z');
+    assert.deepEqual(caps, [], lesson.id);
+  }
+});
+
 test('the number track teaches ! at num-10, with - and =', () => {
   const last = lessonById('num-10');
   assert.ok(last.availableKeys.includes('!'));
