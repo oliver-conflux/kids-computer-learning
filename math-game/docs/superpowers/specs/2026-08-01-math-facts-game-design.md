@@ -68,11 +68,23 @@ Each of these maps to a design decision below.
 
 ## 1. The fact space
 
-Operands **0 through 10**, so 121 ordered pairs.
+Operands **0 through 10**, so **121 facts** — every ordered pair.
 
-`6 × 7` and `7 × 6` are **one fact**, sharing a single record; which orientation
-is displayed is randomised per showing. That reduces the space to **66 unique
-facts** and stops the system treating a known fact as two half-known ones.
+`6 × 7` and `7 × 6` are **tracked separately**, as two records with independent
+latency histories and buckets.
+
+This is deliberate and it is the more expensive choice, so the reasoning matters.
+Commutativity is understood as a *rule* long before retrieval becomes symmetric:
+a kid will correctly tell you the two are the same while still being measurably
+slower on whichever orientation they drilled less. Merging the records would
+average that asymmetry away and report a fact as half-learned when the truth is
+"learned in one direction and not the other" — which is a different diagnosis
+with a different fix.
+
+It is also the recoverable choice. If the logs eventually show orientation rarely
+matters, collapsing the pairs is a derivation we can apply at any time. Merging
+from the start would mean the signal was never captured, and no later analysis
+could reconstruct it.
 
 Answers range 0–100. Digit lengths matter to the input rule (§3): `0`–`9` are one
 digit, `10`–`99` are two, and `100` is the only three-digit answer in the set.
@@ -133,7 +145,7 @@ visible rather than a hidden contract to be inferred from things not happening.
 
 The slot count is a small hint — it rules out one-digit answers for `6 × 7`, and
 for `10 × 10` three slots effectively give it away. We take that trade. The
-give-away case is one fact out of 66 and the easiest in the set, and more
+give-away case is one fact out of 121 and the easiest in the set, and more
 substantively, knowing that `6 × 7` lands in the two-digit range is **magnitude
 estimation** — real number sense that a good teacher asks for explicitly. The
 slots ask it for free. It pays off again when addition arrives and `7 + 8 = ▢▢`
@@ -237,11 +249,16 @@ fact has been practised since.
 
 ## 7. The scheduler
 
-Weighted sample over all 66 facts, weight by bucket — `cold` 6, `warm` 3, `hot` 1
-— so mastered facts still resurface occasionally rather than disappearing. Then
-three constraints, applied in order:
+Weighted sample over all 121 facts, weight by bucket — `cold` 6, `warm` 3,
+`hot` 1 — so mastered facts still resurface occasionally rather than
+disappearing. Then three constraints, applied in order:
 
-1. **No repeat** within the last 4 items.
+1. **No repeat within the last 4 items, and that includes the transpose.**
+   Serving `7 × 6` right after `6 × 7` would be answered out of working memory
+   rather than long-term retrieval, and would log a fast latency that means
+   nothing. Tracking the orientations separately is what makes this constraint
+   necessary; the two records need to be sampled independently but never
+   adjacently.
 2. **Interference guard.** If `48` has ever been typed for `6×7`, that pair is
    recorded as a confusion pair and the two facts are not served adjacently while
    either is `cold`. Once both are `warm` or better the guard lifts, and
@@ -293,8 +310,8 @@ file is unreachable — a parallel localStorage copy would only add reconciliati
 logic and eventual drift.
 
 - **On load** — `GET /api/log?tail=N`, **default N = 2000**. Mastery needs the
-  last 5 attempts across 66 facts, so 330 lines is the floor; 2000 covers roughly
-  100 sessions and keeps enough history for the confusion guard and for
+  last 5 attempts across 121 facts, so 605 lines is the floor; 2000 covers
+  roughly 100 sessions and keeps enough history for the confusion guard and for
   before/after comparison across a build change. The client derives mastery from
   the tail.
 - **During play** — all state in memory. Each completed problem fires
@@ -368,11 +385,15 @@ Every game is served, so the typing game continues to work unchanged.
 
 ### The grid
 
-An **11 × 11 grid** — operands 0 through 10 on each axis — with each cell
-coloured by its fact's bucket. Because commutative pairs share one record the
-grid is **symmetric about the diagonal**: `6 × 7` and `7 × 6` are the same cell
-colour because they are the same fact. That symmetry is a feature, not a
-redundancy; it makes commutativity visible.
+An **11 × 11 grid** — operands 0 through 10 on each axis, 121 cells, one per
+fact — each coloured by its bucket.
+
+Because orientations are tracked separately the grid is **not symmetric**, and
+that is the most informative thing on it. A cell that is hot at `6 × 7` and cold
+at `7 × 6` is a visible, specific finding with a specific fix: the fact is known
+in one direction only, and the weak orientation needs drilling. A symmetric grid
+would have shown one lukewarm cell and told us nothing. Reading across the
+diagonal is how that gets spotted.
 
 It serves both audiences from one surface: the kid reads *"six cold cells left"*
 as a goal, and it reads as a diagnostic to a parent. A concrete, small, visibly
@@ -472,7 +493,8 @@ The tests that earn their place:
 - Scheduler never repeats within 4, never serves a live confusion pair
   adjacently, and injects a `hot` fact when the rolling clean rate drops below
   0.8.
-- `6 × 7` and `7 × 6` resolve to one record.
+- `6 × 7` and `7 × 6` resolve to **two independent records** with independent
+  buckets — and the scheduler never serves one directly after the other.
 - Mastery derivation is deterministic — replaying the same log twice gives an
   identical result.
 - The server refuses a path that resolves outside the repo root.
@@ -522,3 +544,11 @@ Recorded here because the v1 design deliberately leaves room for them.
   against the first few weeks of real data.
 - Whether `0 ×` and `1 ×` facts should be excluded from the grid display even
   though they remain in the fact space, to keep the visible goal honest.
+- **How much orientation actually matters.** The whole point of tracking `6 × 7`
+  and `7 × 6` separately is that we do not know. The first real question to ask
+  the log is how often a fact's two orientations sit in different buckets, and
+  how long the weaker one lags. If the answer turns out to be "rarely, and not
+  for long," collapsing the pairs becomes a justified simplification — and
+  because the data was captured per-orientation, that collapse is available as a
+  pure derivation without losing anything. If the answer is "often," the weak
+  orientation deserves its own targeted treatment.
