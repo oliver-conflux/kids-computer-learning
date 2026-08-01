@@ -525,8 +525,17 @@ five engine functions exactly as given. T8 and T10 consume them.
 `math-game/css/hints.css`, `math-game/js/ui/problem.js`
 
 **Interfaces:** Consumes `ProblemState` from T5 and `strategyFor` from T4.
-Produces `renderProblem(container, state)` and `mountProblemScreen(container)`.
-Rendering is a pure function of state — the module holds no game state of its own.
+Produces `renderProblem(container, state)`, `mountProblemScreen(container)`, and
+`renderProgress(container, done, total)`. Rendering is a pure function of state —
+the module holds no game state of its own.
+
+`renderProgress` exists because the "7 / 20" counter is genuinely not derivable
+from `ProblemState`, which carries no session index. The alternative — T10
+reaching into T8's markup by element id — would make the interface between the
+two an undocumented pair of DOM ids that breaks silently on rename. An explicit
+export keeps DOM knowledge inside the module that owns it. T8 must state in its
+handoff whether `done` is the completed count or the 1-based index of the current
+problem; they differ by one.
 
 - [ ] Build `index.html` as the shell: progress bar, problem region, reserved
       hint region. Load `js/main.js` as `type="module"`.
