@@ -627,6 +627,13 @@ problem; they differ by one.
 - [ ] Bind keyboard input: digits `0`–`9` to `typeDigit`, Backspace to
       `backspace`. Ignore everything else. Input is live from the moment the
       problem appears — there is no submit key.
+- [ ] **Two different things are called `typed`.** `ProblemState.typed` is a
+      **string** (the digits currently in the box); `AttemptEvent.typed` is a
+      **string[]** (every intermediate value, which is `state.history`). Both are
+      correct per contract and both are named `typed`. Do not pass one where the
+      other belongs — it will not throw, it will just write a malformed log line
+      that the server happily accepts, since it validates only that `type` is a
+      non-empty string.
 - [ ] On each correct answer: `record(toAttemptEvent(...))`, then advance.
 - [ ] Snapshot each fact's bucket at session start so bucket movement can be
       computed at the end. Re-derive mastery from the session's attempts and diff

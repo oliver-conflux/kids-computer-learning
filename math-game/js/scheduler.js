@@ -148,6 +148,23 @@ function interferingWithLast(model, history) {
 function recentCleanRate(model, history, config) {
   const recent = tailOf(history, config.governorWindow);
   /** @type {Map<string, number>} */
+  // CALLER REQUIREMENT — the model MUST include this session's attempts.
+  //
+  // `history` carries fact ids and no outcomes, so the recent clean rate is
+  // recovered from each fact's retained attempts below. That only works if the
+  // model has actually seen this session. Pass a model derived once at load and
+  // the governor is not merely blind — it is scored against the WRONG evidence:
+  // a fact answered well yesterday and badly today reads as yesterday's success.
+  //
+  // Measured: eight facts aced yesterday (hot) and bombed today at 'reveal' give
+  // a true clean rate of 0.00 against a floor of 0.8. With a stale model the
+  // governor fires on 1% of picks; with the model re-derived per problem it
+  // fires on 100%. Nothing throws either way, so the failure is invisible — the
+  // 80% floor silently ceases to exist and a struggling kid receives a run of
+  // consecutive cold facts, the exact bad night this mechanism exists to stop.
+  //
+  // Re-derive mastery after every completed problem. It is cheap next to a kid
+  // typing an answer.
   const consumed = new Map();
   let scored = 0;
   let clean = 0;

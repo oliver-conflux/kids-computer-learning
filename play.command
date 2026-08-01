@@ -11,7 +11,10 @@ URL="http://localhost:${PORT}/games-menu.html"
 cd "$(dirname "$0")" || exit 1
 
 port_is_serving() {
-  curl -s -o /dev/null -m 2 "http://127.0.0.1:${PORT}/games-menu.html"
+  # -f matters: without it curl exits 0 for ANY HTTP response, so an unrelated
+  # process on this port answering 404 would read as "our server is already up"
+  # and we would skip startup and open a dead URL. -f makes >=400 a failure.
+  curl -sf -o /dev/null -m 2 "http://127.0.0.1:${PORT}/games-menu.html"
 }
 
 if port_is_serving; then
