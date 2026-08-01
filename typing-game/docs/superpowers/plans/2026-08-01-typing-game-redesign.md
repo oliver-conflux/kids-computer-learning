@@ -1276,8 +1276,28 @@ git commit -m "Derive lesson progress from log events instead of storing it"
 ## Task 5: The content validator, before any content exists
 
 **Files:**
-- Create: `typing-game/js/content.js` (seed data only — three lessons)
+- Create: `typing-game/js/content.js` (the barrel — merges and exports)
+- Create: `typing-game/js/content/home.js`, `top.js`, `bottom.js`, `shift.js`, `numbers.js`
 - Test: `typing-game/tests/content.test.js`
+
+**Why content is split across files.** The lesson data is ~600 hand-authored
+strings, which is both too much for one comfortable file and the one part of
+this build that parallelises cleanly — several people (or agents) can author
+different rungs at once only if they are not all editing the same file.
+`content.js` stays the single import point, so nothing downstream knows or cares:
+
+```
+content.js          barrel — merges the five groups, exports CONTENT/contentFor/itemsFor
+content/home.js     home-base, home-stretch
+content/top.js      top-ei … top-qp
+content/bottom.js   bot-vm … bot-z-slash
+content/shift.js    shift-caps, punctuation
+content/numbers.js  num-38 … num-10
+```
+
+In THIS task, create all five group files but author only `home.js` and
+`top.js` (seed content, below). The other three export empty objects and are
+filled in Task 13.
 
 **Interfaces:**
 - Consumes: `LESSONS`, `lessonById` from `curriculum.js`
@@ -1430,7 +1450,7 @@ test('itemsFor is deterministic for a given rng sequence', () => {
 Run: `node --test typing-game/tests/content.test.js`
 Expected: FAIL — `Cannot find module '../js/content.js'`
 
-- [ ] **Step 3: Write the implementation with seed content for three lessons**
+- [ ] **Step 3: Write the barrel, `content.js`**
 
 `home-base` deliberately has only 12 words — that is genuinely all `asdfjkl;` yields (§3), and it is why the early rungs are drill-heavy.
 
@@ -1454,56 +1474,19 @@ Expected: FAIL — `Cannot find module '../js/content.js'`
 // Pure module: no DOM, no network, no clock, no randomness.
 
 import { lessonById } from './curriculum.js';
+import { HOME } from './content/home.js';
+import { TOP } from './content/top.js';
+import { BOTTOM } from './content/bottom.js';
+import { SHIFT } from './content/shift.js';
+import { NUMBERS } from './content/numbers.js';
 
 const EMPTY = { drills: [], words: [], sentences: [] };
 
-export const CONTENT = {
-  'home-base': {
-    drills: [
-      'asdf jkl;', 'fj fj fj', 'dk dk dk', 'sl sl sl', 'a; a; a;',
-      'fjdk slas', 'jf kd ls ;a', 'ff jj dd kk', 'as df jk l;',
-      'lad sad fad', 'ask all add', 'dad lad fad',
-    ],
-    words: [
-      'ask', 'sad', 'lad', 'dad', 'fad', 'all', 'fall', 'flask',
-      'salad', 'alas', 'falls', 'asks',
-    ],
-    sentences: [],
-  },
-
-  'home-stretch': {
-    drills: [
-      'gh gh gh', 'fg fg fg', 'jh jh jh', 'gg hh gg', 'fgh jhg',
-      'gas has had', 'lash gash dash', 'flag glad half',
-    ],
-    words: [
-      'gas', 'has', 'had', 'hall', 'half', 'flag', 'glad', 'gash',
-      'lash', 'dash', 'shall', 'flash', 'shag', 'gala',
-    ],
-    sentences: [],
-  },
-
-  'top-ei': {
-    drills: [
-      'did die kid', 'fed lea sid', 'ei ei ei', 'de de de', 'ki ki ki',
-      'kid lid did', 'fie die lie', 'held field',
-    ],
-    words: [
-      'slide', 'field', 'said', 'slid', 'held', 'shed', 'lied', 'died',
-      'ideal', 'shield', 'defies', 'jailed',
-    ],
-    sentences: [
-      'she had a field',
-      'he did like his kid',
-      'the lad slid',
-      'she has a shield',
-      'he held the flag',
-      'a sad file',
-      'she likes his dad',
-      'the kid gladlyfled',
-    ],
-  },
-};
+/**
+ * Every lesson's content, merged from the five group files. Downstream code
+ * imports only from here and never reaches into content/ directly.
+ */
+export const CONTENT = { ...HOME, ...TOP, ...BOTTOM, ...SHIFT, ...NUMBERS };
 
 /**
  * @param {string} lessonId
@@ -1551,17 +1534,120 @@ export function itemsFor(lessonId, rng) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Write the five group files**
+
+`content/home.js` and `content/top.js` carry seed content. The other three export
+empty objects for Task 13 to fill.
+
+Note how thin `home-base`'s word list is: twelve entries is genuinely most of
+what `asdfjkl;` yields in English. That is why the early rungs are drill-heavy
+(§3), and it is the reason per-rung targets are set against each alphabet rather
+than applied uniformly.
+
+```js
+// typing-game/js/content/home.js
+//
+// Rungs 0-1. See content.js for the two authoring rules; the validator in
+// tests/content.test.js enforces both.
+//
+// home-base has only asdfjkl; to work with, which is about a dozen real English
+// words in total. Do not pad it with non-words to hit a target — the drills
+// carry this rung.
+
+export const HOME = {
+  'home-base': {
+    drills: [
+      'asdf jkl;', 'fj fj fj', 'dk dk dk', 'sl sl sl', 'a; a; a;',
+      'fjdk slas', 'jf kd ls ;a', 'ff jj dd kk', 'as df jk l;',
+      'lad sad fad', 'ask all add', 'dad lad fads',
+    ],
+    words: [
+      'ask', 'sad', 'lad', 'dad', 'fad', 'all', 'fall', 'flask',
+      'salad', 'alas', 'falls', 'asks',
+    ],
+    sentences: [],
+  },
+
+  'home-stretch': {
+    drills: [
+      'gh gh gh', 'fg fg fg', 'jh jh jh', 'gg hh gg', 'fgh jhg',
+      'gas has had', 'lash gash dash', 'flag glad half',
+    ],
+    words: [
+      'gas', 'has', 'had', 'hall', 'half', 'flag', 'glad', 'gash',
+      'lash', 'dash', 'shall', 'flash', 'shag', 'gala',
+    ],
+    sentences: [],
+  },
+};
+```
+
+```js
+// typing-game/js/content/top.js
+//
+// Rungs 2-6. Task 13 fills top-ru through top-qp; top-ei is seeded here as the
+// worked example.
+//
+// Every sentence is lowercase and unpunctuated. Capitals arrive at shift-caps
+// and the period at bot-x-period, so writing "The lad slid." here would be
+// wrong even though it reads better. See content.js.
+
+export const TOP = {
+  'top-ei': {
+    drills: [
+      'did die kid', 'fed lea sid', 'ei ei ei', 'de de de', 'ki ki ki',
+      'kid lid did', 'fie die lie', 'held field',
+    ],
+    words: [
+      'slide', 'field', 'said', 'slid', 'held', 'shed', 'lied', 'died',
+      'ideal', 'shield', 'defies', 'jailed',
+    ],
+    // No 't' in these — it does not arrive until top-ty, so "the" is off limits
+    // for three more rungs. This is the constraint that makes early sentences
+    // hard to write and is exactly what the validator checks.
+    sentences: [
+      'she had a field',
+      'he did like his kid',
+      'his lad slid',
+      'she has a shield',
+      'he held his flag',
+      'a sad file',
+      'she likes his dad',
+      'she fed his kid',
+    ],
+  },
+};
+```
+
+```js
+// typing-game/js/content/bottom.js
+// Rungs 7-11. Authored in Task 13.
+export const BOTTOM = {};
+```
+
+```js
+// typing-game/js/content/shift.js
+// Rungs 12-13. Authored in Task 13.
+export const SHIFT = {};
+```
+
+```js
+// typing-game/js/content/numbers.js
+// The number track. Authored in Task 13.
+export const NUMBERS = {};
+```
+
+- [ ] **Step 5: Run test to verify it passes**
 
 Run: `node --test typing-game/tests/content.test.js`
 Expected: PASS, 12 tests
 
-If a seed item fails validation, **fix the item, not the test.** That is the validator doing its job.
+If a seed item fails validation, **fix the item, not the test.** That is the validator doing its job — and it already caught three seed sentences in an earlier draft that used `t` before `top-ty` taught it.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add typing-game/js/content.js typing-game/tests/content.test.js
+git add typing-game/js/content.js typing-game/js/content/ typing-game/tests/content.test.js
 git commit -m "Add content validator and seed three lessons against it"
 ```
 
@@ -2953,18 +3039,38 @@ git commit -m "Wire the typing game: round loop, shift tracking, and logging"
 ## Task 13: Author the remaining content
 
 **Files:**
-- Modify: `typing-game/js/content.js`
+- Modify: `typing-game/js/content/top.js`, `bottom.js`, `shift.js`, `numbers.js`
 - Create: `typing-game/js/practice.js`
 
 **Interfaces:**
 - Consumes: the validator from Task 5.
-- Produces: `CONTENT` covering all 19 lessons; `PRACTICE: {words, sentences, math, name}` in `practice.js`.
+- Produces: `CONTENT` covering all 19 lessons; `PRACTICE: {words, sentences, math}` and `withName` in `practice.js`.
 
 This is the bulk of the writing and it is a real amount of work. **Run the validator after every lesson**, not at the end:
 
 ```bash
 node --test typing-game/tests/content.test.js
 ```
+
+### Splitting this across three workers
+
+The five group files exist precisely so this can be done in parallel. Each
+worker owns distinct files and they never collide:
+
+| Worker | Files | Lessons |
+|---|---|---|
+| **A** | `content/top.js` | `top-ru`, `top-ty`, `top-wo`, `top-qp` (`top-ei` is already seeded) |
+| **B** | `content/bottom.js`, `content/shift.js` | the five bottom-row rungs, plus `shift-caps` and `punctuation` |
+| **C** | `content/numbers.js`, `practice.js` | the five number rungs, plus all of practice mode |
+
+`content.js` is the barrel and **nobody edits it** — it already imports all five
+groups. A worker who finds themselves editing `content.js` has taken a wrong
+turn.
+
+Worker A has the hardest job and should not be given the largest share by count:
+`top-ru` can only use `asdfghjkl;eiru`, which is a genuinely cramped alphabet,
+while worker B's rungs have most of the keyboard available. Judge the split by
+difficulty, not by lesson count.
 
 Per-lesson targets — set against each rung's actual alphabet, not applied uniformly:
 
@@ -3016,16 +3122,21 @@ export function withName(pool, name) {
 }
 ```
 
-- [ ] **Step 1: Author `home-base` and `home-stretch` to target, run the validator, commit**
-- [ ] **Step 2: Author the five top-row lessons, run the validator, commit**
-- [ ] **Step 3: Author the five bottom-row lessons, run the validator, commit**
-- [ ] **Step 4: Author `shift-caps` and `punctuation`, run the validator, commit**
-- [ ] **Step 5: Author the five number lessons, run the validator, commit**
-- [ ] **Step 6: Author `practice.js` including the Math tier, commit**
+- [ ] **Step 1 (worker A): Author `top-ru`, `top-ty`, `top-wo`, `top-qp` in `content/top.js`**
+- [ ] **Step 2 (worker B): Author the five bottom-row rungs in `content/bottom.js`**
+- [ ] **Step 3 (worker B): Author `shift-caps` and `punctuation` in `content/shift.js`**
+- [ ] **Step 4 (worker C): Author the five number rungs in `content/numbers.js`**
+- [ ] **Step 5 (worker C): Author `practice.js` including the Math tier**
+- [ ] **Step 6: Run the full suite and commit**
+
+`shift-caps` is the first rung where capitals are legal, and its content should
+lean on them heavily — that rung exists to make the opposite-hand rule automatic.
+`punctuation` is the first rung that may end a sentence with `?` or use `'` in a
+contraction.
 
 ```bash
 node --test typing-game/tests/*.test.js
-git add typing-game/js/content.js typing-game/js/practice.js
+git add typing-game/js/content/ typing-game/js/practice.js
 git commit -m "Author lesson content for all 19 rungs plus practice mode"
 ```
 

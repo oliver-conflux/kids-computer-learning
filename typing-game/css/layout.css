@@ -1,0 +1,33 @@
+/* typing-game/css/layout.css */
+.topbar { width: min(924px, 100%); display: flex; align-items: center; gap: 1rem; }
+.lesson-title { font-family: var(--display); font-size: 1.5rem; }
+.progress { margin-left: auto; display: flex; align-items: center; gap: .75rem; }
+.progress-count { font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress-track { width: 220px; height: 10px; background: var(--deck); border-radius: 999px; overflow: hidden; }
+.progress-bar { height: 100%; width: 0%; background: var(--accent); transition: width .25s ease; }
+
+.prompt-row { width: min(924px, 100%); display: flex; align-items: center; gap: 1rem; }
+.character { width: 64px; height: 56px; background: var(--deck); border-radius: 14px;
+  display: grid; place-items: center; animation: bob 2.4s ease-in-out infinite; }
+.character-face { width: 34px; height: 14px; border-radius: 8px;
+  background: radial-gradient(circle at 25% 50%, var(--heading) 4px, transparent 4px),
+              radial-gradient(circle at 75% 50%, var(--heading) 4px, transparent 4px); }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@media (prefers-reduced-motion: reduce) { .character { animation: none; } }
+
+.prompt { font-size: 1.15rem; color: var(--heading); }
+
+/* Both lines monospace so columns align character-for-character. That
+   alignment is the whole point of the two-line compare — it is what lets a kid
+   see exactly which letter went wrong. */
+.typing-lines { width: min(924px, 100%); display: flex; flex-direction: column; gap: .35rem; }
+.line { font-family: var(--mono); font-size: 1.75rem; letter-spacing: .06em; white-space: pre; min-height: 2.2rem; }
+.line-target { color: var(--muted); }
+.line-typed { color: var(--heading); }
+.line-typed .ok { color: var(--heading); }
+.line-typed .bad { color: var(--error-text); background: var(--wrong-flash); border-radius: 3px; }
+.line-typed .caret { border-left: 2px solid var(--accent); margin-left: -1px; animation: blink 1s step-end infinite; }
+@keyframes blink { 50% { border-color: transparent; } }
+
+.shake { animation: shake .18s ease-in-out 2; }
+@keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }

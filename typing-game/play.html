@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Typing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/keyboard.css">
+<link rel="stylesheet" href="css/hands.css">
+<link rel="stylesheet" href="css/results.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 id="lesson-title" class="lesson-title">Home row</h1>
+    <div class="progress">
+      <span id="progress-count" class="progress-count">0 / 10</span>
+      <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+    </div>
+  </header>
+
+  <section class="prompt-row">
+    <div class="character" aria-hidden="true">
+      <div class="character-face"></div>
+    </div>
+    <p id="prompt" class="prompt">Ready when you are.</p>
+  </section>
+
+  <section class="typing-lines">
+    <div id="target" class="line line-target"></div>
+    <div id="typed" class="line line-typed"></div>
+  </section>
+
+  <section id="stage" class="stage">
+    <div id="keyboard" class="keyboard"></div>
+    <svg id="hands" class="hands" viewBox="0 0 924 385" aria-hidden="true"></svg>
+  </section>
+
+  <div id="results" class="results hidden"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
