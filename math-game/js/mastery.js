@@ -17,6 +17,10 @@ import { allFacts, factId } from './facts.js';
 const CLEAN_STAGE = 'clean';
 const ATTEMPT_TYPE = 'attempt';
 
+// Enough of ISO 8601 to know the value is a real date-time we can order
+// lexicographically. Anything else is treated as "no usable timestamp".
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
 /**
  * @typedef {{ ms: number, stage: string, wrong: number[] }} Attempt
  * @typedef {{
@@ -45,6 +49,37 @@ function median(values) {
     return sorted[mid];
   }
   return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * Order two log timestamps, oldest first.
+ *
+ * ISO 8601 in a fixed UTC format is chronological under plain string
+ * comparison, so this parses nothing and consults no clock. A missing or
+ * malformed `t` sorts to the front rather than throwing: the oldest slot is the
+ * safe place for an event we cannot date, because it cannot then push a real
+ * attempt out of the retain window.
+ *
+ * @param {unknown} left
+ * @param {unknown} right
+ * @returns {number}
+ */
+function compareTimestamps(left, right) {
+  const leftOk = typeof left === 'string' && ISO_TIMESTAMP_PATTERN.test(left);
+  const rightOk = typeof right === 'string' && ISO_TIMESTAMP_PATTERN.test(right);
+  if (!leftOk && !rightOk) {
+    return 0; // both undatable — stable sort keeps file order
+  }
+  if (!leftOk) {
+    return -1;
+  }
+  if (!rightOk) {
+    return 1;
+  }
+  if (left < right) {
+    return -1;
+  }
+  return left > right ? 1 : 0;
 }
 
 /**
@@ -77,9 +112,24 @@ function bucketFor(cleanCount, medianCleanMs, config) {
 /**
  * Derive the mastery model from a list of log events.
  *
- * Events are read in the order given, which for the append-only log is
- * chronological. "Most recent" therefore means "latest in the list"; this
- * function does not sort by timestamp and does not consult a clock.
+ * Attempt events are sorted by their `t` timestamp before anything is folded in,
+ * so "most recent" means latest in TIME, not last in the array.
+ *
+ * File order cannot be trusted to be chronological. The log is append-only, and
+ * the log client queues events to an outbox when the server is unreachable and
+ * replays them at the next startup — so Tuesday's attempts can land in the file
+ * after Wednesday's and nothing ever corrects that. Reading in file order would
+ * then hand the retain window the wrong five attempts and produce a wrong
+ * bucket, a wrong median and a wrong scheduling weight, silently. Sorting on
+ * read makes the model correct however the file came to be written, which also
+ * keeps tools/replay.js honest against the same file.
+ *
+ * The sort is stable, so events sharing a timestamp keep file order. `t` values
+ * are compared as strings: ISO 8601 in a fixed UTC format sorts chronologically
+ * under lexicographic comparison, and no date parsing means no clock. Events
+ * whose `t` is missing or not an ISO date-time sort to the front — the oldest
+ * position, where they cannot displace real attempts out of the retain window —
+ * rather than throwing.
  *
  * Two different windows are in play, deliberately:
  *
@@ -116,6 +166,9 @@ export function deriveMastery(events, config) {
 
   const known = new Set(allFacts().map(factId));
 
+  // Keep only usable attempt events, then put them in time order. Filtering
+  // first means a corrupt line is dropped before it can influence the sort.
+  const usable = [];
   for (const event of events) {
     if (event === null || typeof event !== 'object') {
       continue;
@@ -127,7 +180,13 @@ export function deriveMastery(events, config) {
     if (!known.has(id)) {
       continue;
     }
+    usable.push({ id, event });
+  }
 
+  // Stable in Node 22, so equal timestamps fall back to file order.
+  usable.sort((left, right) => compareTimestamps(left.event.t, right.event.t));
+
+  for (const { id, event } of usable) {
     const wrong = Array.isArray(event.wrong) ? [...event.wrong] : [];
 
     // Confusions come from the full history, before any retention trimming.
