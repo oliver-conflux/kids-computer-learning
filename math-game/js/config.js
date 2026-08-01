@@ -15,6 +15,12 @@ export const CONFIG = {
   sessionLength: 20,
   retain: 5,
   hotMs: 1500,
+  // Above this, an attempt is not evidence of retrieval — it is evidence the kid
+  // left the room. The hint ladder reveals the answer within ~18s at the slowest
+  // bucket, so anything past a minute means they saw it and did not type it.
+  // Tunable: the raw log keeps every ms, and this only affects derivation, so
+  // changing it re-reads all history rather than losing anything.
+  maxPlausibleMs: 60_000,
   delays: { cold: 2000, warm: 4000, hot: 6000 },
   weights: { cold: 6, warm: 3, hot: 1 },
   noRepeatWithin: 4,

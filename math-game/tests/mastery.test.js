@@ -659,3 +659,33 @@ test('confusions holds only finite numbers', () => {
   assert.deepEqual([...confusions], [48]);
   assert.ok([...confusions].every(Number.isFinite));
 });
+
+test('an implausibly long clean attempt is not counted as retrieval', () => {
+  // A kid who switches tabs gets a long ms with stage 'clean': the rAF loop
+  // driving the hint ladder pauses in a hidden tab while wall time keeps
+  // running. That is not evidence of fluency, and one of them in a window of
+  // five drags the median far enough to flip the bucket.
+  const at = (t, ms, wrong = []) => ({
+    type: 'attempt', t, build: 'm1', session: 's',
+    op: '*', a: 6, b: 7, ms, stage: 'clean', typed: [], wrong,
+  });
+  const stats = deriveMastery([
+    at('2026-07-28T10:00:00.000Z', 800),
+    at('2026-07-28T10:01:00.000Z', 900),
+    at('2026-07-28T10:02:00.000Z', 850),
+    at('2026-07-28T10:03:00.000Z', 90_000, [48]),
+  ], CONFIG).byId.get('*:6x7');
+
+  assert.equal(stats.cleanCount, 3, 'the 90s attempt is not retrieval evidence');
+  assert.equal(stats.medianCleanMs, 850);
+  assert.equal(stats.bucket, 'hot', 'three fast answers still make it hot');
+  assert.equal(stats.attempts.length, 4, 'but the attempt still happened');
+});
+
+test('a wrong answer still counts as confusion however long the kid took', () => {
+  const confusions = deriveMastery([{
+    type: 'attempt', t: '2026-07-28T10:00:00.000Z', build: 'm1', session: 's',
+    op: '*', a: 6, b: 7, ms: 120_000, stage: 'clean', typed: [], wrong: [48],
+  }], CONFIG).confusions.get('*:6x7');
+  assert.deepEqual([...confusions], [48], 'interference evidence is not time-limited');
+});

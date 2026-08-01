@@ -240,8 +240,21 @@ export function deriveMastery(events, config) {
     // Keep the most recent `retain` attempts — the tail of the list, not the head.
     const attempts = all.length > config.retain ? all.slice(all.length - config.retain) : all;
 
+    // An implausibly long attempt is excluded from the latency evidence even if
+    // it landed at the clean stage. Waiting 90 seconds and then typing the right
+    // answer is not retrieval — the kid switched tabs, or was called away, and
+    // the rAF loop that drives the hint ladder pauses in a hidden tab while wall
+    // time keeps running. One such attempt in a window of five drags the median
+    // far enough to flip a fact's bucket.
+    //
+    // The attempt stays in `attempts` because it did happen, and its `wrong`
+    // entries still count toward `confusions` — a wrong answer is evidence of
+    // interference no matter how long the kid took to give it.
     const cleanMs = attempts
-      .filter((attempt) => attempt.stage === CLEAN_STAGE)
+      .filter(
+        (attempt) =>
+          attempt.stage === CLEAN_STAGE && attempt.ms <= config.maxPlausibleMs,
+      )
       .map((attempt) => attempt.ms);
     const cleanCount = cleanMs.length;
     const medianCleanMs = cleanCount === 0 ? null : median(cleanMs);
