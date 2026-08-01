@@ -64,7 +64,7 @@ function median(values) {
  * @param {unknown} right
  * @returns {number}
  */
-function compareTimestamps(left, right) {
+export function compareTimestamps(left, right) {
   const leftOk = typeof left === 'string' && ISO_TIMESTAMP_PATTERN.test(left);
   const rightOk = typeof right === 'string' && ISO_TIMESTAMP_PATTERN.test(right);
   if (!leftOk && !rightOk) {

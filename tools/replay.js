@@ -41,7 +41,7 @@ import { resolve } from 'node:path';
 
 import { CONFIG } from '../math-game/js/config.js';
 import { allFacts, factId } from '../math-game/js/facts.js';
-import { deriveMastery } from '../math-game/js/mastery.js';
+import { deriveMastery, compareTimestamps } from '../math-game/js/mastery.js';
 import { pickNext } from '../math-game/js/scheduler.js';
 // The SAME generator the scheduler suite uses. Two independently written PRNGs
 // would make a replay result unreproducible from the tests that validated the
@@ -72,31 +72,6 @@ const USAGE = [
 // handed to a decision is not the model that stood at that moment.
 const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 
-/**
- * Order two log timestamps, oldest first. Undatable events sort to the front,
- * the oldest slot, where they cannot displace a real attempt out of a window.
- *
- * @param {unknown} left
- * @param {unknown} right
- * @returns {number}
- */
-function compareTimestamps(left, right) {
-  const leftOk = typeof left === 'string' && ISO_TIMESTAMP_PATTERN.test(left);
-  const rightOk = typeof right === 'string' && ISO_TIMESTAMP_PATTERN.test(right);
-  if (!leftOk && !rightOk) {
-    return 0;
-  }
-  if (!leftOk) {
-    return -1;
-  }
-  if (!rightOk) {
-    return 1;
-  }
-  if (left < right) {
-    return -1;
-  }
-  return left > right ? 1 : 0;
-}
 
 /**
  * Parse argv into replay options. Throws on anything it does not recognise —

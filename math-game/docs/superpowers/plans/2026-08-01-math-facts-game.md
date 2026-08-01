@@ -184,7 +184,13 @@ answerDigits(fact)         -> number           // 1, 2, or 3
 transposeId(fact)          -> FactId           // "*:7x6" for 6x7
 
 // js/mastery.js
-deriveMastery(events, config)  -> MasteryModel
+deriveMastery(events, config)     -> MasteryModel
+compareTimestamps(left, right)    -> number   // sort comparator, exported
+
+// `compareTimestamps` is exported only so tools/replay.js can walk events in
+// exactly the order deriveMastery folds them. A private copy in each would
+// diverge silently and the replay would then simulate a different scheduler
+// than the one that ran — the same failure mode as two hand-written PRNGs.
 
 MasteryModel = {
   byId: Map<FactId, FactStats>,          // every one of the 121 facts present
