@@ -144,13 +144,21 @@ never written to the log because they are derivable.
 ```
 SessionSummary = {
   session: string,
-  items: number,          // problems completed
-  cleanRate: number,      // 0..1, share resolved at the 'clean' stage
-  medianMs: number,       // median across all problems this session
-  moved: BucketMove[],    // facts whose bucket changed during this session
+  items: number,             // problems completed
+  cleanRate: number,         // 0..1, share resolved at the 'clean' stage
+  medianMs: number,          // median across all problems this session
+  previousMedianMs: number | null,  // last session's medianMs; null on first run
+  moved: BucketMove[],       // facts whose bucket changed during this session
 }
 BucketMove = { id: FactId, from: Bucket, to: Bucket }
 ```
+
+`previousMedianMs` is the only comparison the results screen is allowed to make.
+Spec §11 calls for it and the design depends on it: "typical time 2.7s" is
+meaningless to a kid without a reference point, and the only permitted reference
+point is their own previous session — never another person, never a target.
+T10 recovers it from the loaded log by taking the `medianMs` of the most recent
+`SessionEvent` preceding this session, and passes `null` on a first run.
 
 ### Stages and buckets
 
@@ -594,6 +602,23 @@ problem; they differ by one.
       `deriveMastery`. Generate a session id as `'s_' + 4 hex chars`.
 - [ ] Run the session loop for `CONFIG.sessionLength` problems: `pickNext` →
       `ladderFor` → `startProblem` → render.
+- [ ] **Re-derive the mastery model after every completed problem**, from the
+      loaded tail plus this session's attempt events so far. Do not reuse the
+      session-start model. This is a hard requirement, not an optimisation
+      question, and it fails silently if ignored.
+
+      Verified by execution: the success governor recovers the recent clean rate
+      from `model.byId` attempts, because `history` carries only fact ids. Given
+      a history of eight facts the model knows were answered at the `reveal`
+      stage, `pickNext` returns a `hot` fact on 20 of 20 draws — the governor
+      fires. Given the identical history and a model that has not seen those
+      attempts, it returns a `cold` fact on 20 of 20 draws. Nothing throws and
+      nothing logs a warning; the 80%-success floor simply does not exist, and a
+      struggling kid receives twenty consecutive cold facts — precisely the bad
+      night the governor was designed to prevent.
+
+      Re-deriving 121 facts from a 2000-line tail between problems is cheap
+      relative to a kid typing an answer. Do it every problem.
 - [ ] This module owns the clock and the randomness. It passes `now` and `rng`
       into the pure modules. `Date.now()` and `Math.random()` appear here and in
       `log.js` and nowhere else in `math-game/js/`.
