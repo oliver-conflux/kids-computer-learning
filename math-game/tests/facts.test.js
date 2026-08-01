@@ -99,12 +99,24 @@ test('answerDigits is 1 for 2x2, 2 for 6x7, 3 for 10x10', () => {
   assert.equal(answerDigits({ op: '*', a: 10, b: 10 }), 3);
 });
 
-test('answerDigits is 1, 2, or 3 for every fact and matches the product', () => {
+// Deliberately does NOT reuse String(product).length — that is the production
+// formula, and asserting it against itself would pass even if both were wrong
+// the same way. A piecewise range check is an independent statement of intent.
+test('answerDigits matches the product range for every fact', () => {
   for (const fact of allFacts()) {
-    const digits = answerDigits(fact);
-    assert.ok(digits >= 1 && digits <= 3, `${factId(fact)} gave ${digits}`);
-    assert.equal(digits, String(answerOf(fact)).length);
+    const product = answerOf(fact);
+    const expected = product <= 9 ? 1 : product <= 99 ? 2 : 3;
+    assert.equal(
+      answerDigits(fact),
+      expected,
+      `${factId(fact)} product ${product}`,
+    );
   }
+});
+
+test('answerDigits changes at the 9 to 10 boundary', () => {
+  assert.equal(answerDigits({ op: '*', a: 3, b: 3 }), 1); // 9
+  assert.equal(answerDigits({ op: '*', a: 2, b: 5 }), 2); // 10
 });
 
 test('answerDigits treats a zero product as one digit', () => {
