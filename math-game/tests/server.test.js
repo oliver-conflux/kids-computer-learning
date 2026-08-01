@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { start, HOST, DEFAULT_TAIL, resolveSafe } from '../../server/serve.js';
+import { start, createServer, HOST, DEFAULT_TAIL, resolveSafe } from '../../server/serve.js';
 
 /** Raw request so `..` segments survive — fetch() would normalise them away. */
 function request(port, options, body) {
@@ -46,6 +46,22 @@ async function withServer(logLines, run) {
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+}
+
+/** An empty temp directory, used as both the static root and the log directory. */
+function freshTempDir() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'game-server-'));
+}
+
+/** Listen on an ephemeral port and return the base URL. */
+function listen(server) {
+  return new Promise((resolve) => {
+    server.listen(0, HOST, () => resolve(`http://${HOST}:${server.address().port}`));
+  });
+}
+
+function close(server) {
+  return new Promise((resolve) => server.close(resolve));
 }
 
 test('binds 127.0.0.1 only, never 0.0.0.0', async () => {
@@ -235,4 +251,92 @@ test('a POST is visible to the next GET', async () => {
     const { events } = JSON.parse((await request(port, { method: 'GET', path: '/api/log' })).text);
     assert.deepEqual(events.map((e) => e.k), [1, 2]);
   });
+});
+
+// --- ?game= routes the log through an allowlist -----------------------------
+
+test('GET /api/log?game=typing reads the typing log', async () => {
+  const dir = freshTempDir();
+  const typingLog = path.join(dir, 'typing-log.jsonl');
+  fs.writeFileSync(typingLog, JSON.stringify({ type: 'round', lesson: 'top-ei' }) + '\n');
+
+  const server = createServer({
+    root: dir,
+    logPaths: { math: path.join(dir, 'math-log.jsonl'), typing: typingLog },
+  });
+  const base = await listen(server);
+
+  const res = await fetch(`${base}/api/log?game=typing&tail=10`);
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.events.length, 1);
+  assert.equal(body.events[0].lesson, 'top-ei');
+
+  await close(server);
+});
+
+test('POST /api/log?game=typing appends to the typing log only', async () => {
+  const dir = freshTempDir();
+  const mathLog = path.join(dir, 'math-log.jsonl');
+  const typingLog = path.join(dir, 'typing-log.jsonl');
+
+  const server = createServer({ root: dir, logPaths: { math: mathLog, typing: typingLog } });
+  const base = await listen(server);
+
+  const res = await fetch(`${base}/api/log?game=typing`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'round', lesson: 'top-ei', accuracy: 0.96 }),
+  });
+  assert.equal(res.status, 204);
+  assert.ok(fs.readFileSync(typingLog, 'utf8').includes('top-ei'));
+  assert.equal(fs.existsSync(mathLog), false, 'the math log must be untouched');
+
+  await close(server);
+});
+
+test('omitting ?game keeps the existing math behaviour', async () => {
+  const dir = freshTempDir();
+  const mathLog = path.join(dir, 'math-log.jsonl');
+  const server = createServer({ root: dir, logPaths: { math: mathLog, typing: path.join(dir, 't.jsonl') } });
+  const base = await listen(server);
+
+  const res = await fetch(`${base}/api/log`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'attempt', op: '*', a: 6, b: 7 }),
+  });
+  assert.equal(res.status, 204);
+  assert.ok(fs.readFileSync(mathLog, 'utf8').includes('"a":6'));
+
+  await close(server);
+});
+
+test('an unknown game is rejected, not resolved to a path', async () => {
+  const dir = freshTempDir();
+  const server = createServer({ root: dir });
+  const base = await listen(server);
+
+  for (const game of ['nope', '../secrets', 'math-log', '__proto__', '']) {
+    const res = await fetch(`${base}/api/log?game=${encodeURIComponent(game)}`);
+    assert.equal(res.status, 400, `game=${game} must be rejected`);
+  }
+
+  await close(server);
+});
+
+test('an unknown game is rejected on POST too, and writes nothing', async () => {
+  const dir = freshTempDir();
+  const server = createServer({ root: dir });
+  const base = await listen(server);
+
+  const res = await fetch(`${base}/api/log?game=../../etc/passwd`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'round' }),
+  });
+  assert.equal(res.status, 400);
+  assert.deepEqual(fs.readdirSync(dir), []);
+
+  await close(server);
 });

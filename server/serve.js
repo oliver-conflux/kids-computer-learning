@@ -1,9 +1,10 @@
 // Dependency-free localhost server for the kids-computer-learning games.
-// Serves static files from the repo root and owns data/math-log.jsonl.
+// Serves static files from the repo root and owns the per-game logs in data/.
 //
-// Two hygiene rules, both tested in math-game/tests/server.test.js:
+// Three hygiene rules, all tested in math-game/tests/server.test.js:
 //   1. binds 127.0.0.1 only, never 0.0.0.0 — this does not go on the network
 //   2. every requested path is resolved and checked to be inside the repo root
+//   3. ?game= names a log through an allowlist; an unknown game is a 400
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -15,8 +16,33 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const HOST = '127.0.0.1';
 export const DEFAULT_PORT = 8777;
 export const REPO_ROOT = path.resolve(HERE, '..');
-export const DEFAULT_LOG_PATH = path.join(REPO_ROOT, 'data', 'math-log.jsonl');
+export const DEFAULT_GAME = 'math';
+
+/** The ONLY log files this server will ever touch, keyed by `?game=`. */
+export const LOG_PATHS = {
+  math: path.join(REPO_ROOT, 'data', 'math-log.jsonl'),
+  typing: path.join(REPO_ROOT, 'data', 'typing-log.jsonl'),
+};
+
+export const DEFAULT_LOG_PATH = LOG_PATHS.math;
 export const DEFAULT_TAIL = 2000;
+
+/**
+ * Resolve `?game=` to a log path through an ALLOWLIST.
+ *
+ * This value reaches the filesystem, so it is never interpolated into a path.
+ * hasOwnProperty rather than `in` or a truthiness check, so inherited keys like
+ * '__proto__' cannot name a path. An unknown game is a 400, not a fallback —
+ * falling back would turn a typo into silent writes to the wrong game's history.
+ *
+ * @param {Record<string, string>} paths
+ * @param {string | null} game
+ * @returns {string | null} null if the game is unknown
+ */
+export function logPathFor(paths, game) {
+  const key = game === null || game === undefined ? DEFAULT_GAME : game;
+  return Object.prototype.hasOwnProperty.call(paths, key) ? paths[key] : null;
+}
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
@@ -160,11 +186,17 @@ function serveStatic(root, pathname, res) {
 
 /**
  * Build the server. Nothing listens until you call .listen().
- * @param {{ root?: string, logPath?: string }} [options]
+ * `logPath` is the older single-log form: it overrides the default game's path
+ * and leaves the rest of the allowlist alone.
+ * @param {{ root?: string, logPath?: string, logPaths?: Record<string, string> }} [options]
  */
 export function createServer(options = {}) {
   const root = path.resolve(options.root ?? REPO_ROOT);
-  const logPath = options.logPath ?? DEFAULT_LOG_PATH;
+  const logPaths =
+    options.logPaths ??
+    (options.logPath === undefined
+      ? LOG_PATHS
+      : { ...LOG_PATHS, [DEFAULT_GAME]: options.logPath });
 
   return http.createServer(async (req, res) => {
     // Base is a placeholder: only pathname and search are ever used.
@@ -174,6 +206,11 @@ export function createServer(options = {}) {
     const rawPathname = req.url.split(/[?#]/, 1)[0];
 
     if (url.pathname === '/api/log') {
+      const logPath = logPathFor(logPaths, url.searchParams.get('game'));
+      if (logPath === null) {
+        sendJson(res, 400, { error: 'unknown game' });
+        return;
+      }
       if (req.method === 'GET') {
         try {
           const events = readLog(logPath, parseTail(url.searchParams.get('tail')));
@@ -229,8 +266,8 @@ export function createServer(options = {}) {
  * Start listening on 127.0.0.1. Pass port 0 for an ephemeral port.
  * @returns {Promise<import('node:http').Server>}
  */
-export function start({ port = DEFAULT_PORT, root, logPath } = {}) {
-  const server = createServer({ root, logPath });
+export function start({ port = DEFAULT_PORT, root, logPath, logPaths } = {}) {
+  const server = createServer({ root, logPath, logPaths });
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, HOST, () => resolve(server));
@@ -245,7 +282,9 @@ if (invokedDirectly) {
   start({ port })
     .then(() => {
       console.log(`Serving ${REPO_ROOT} at http://localhost:${port}/`);
-      console.log(`Log: ${DEFAULT_LOG_PATH}`);
+      for (const [game, file] of Object.entries(LOG_PATHS)) {
+        console.log(`Log (${game}): ${file}`);
+      }
       console.log('Close this window to stop the server.');
     })
     .catch((err) => {
