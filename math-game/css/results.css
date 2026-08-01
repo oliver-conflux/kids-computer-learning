@@ -128,6 +128,23 @@
   color: var(--muted);
 }
 
+/* The one permitted comparison — this session's median against the kid's own
+ * previous one. A quicker session gets the accent; everything else stays muted.
+ * A slower session is NOT styled as an error: no red, no arrow, no weight. A
+ * slower median is often not a worse session, and reading it back as failure
+ * would teach exactly the clock-chasing this game is built to avoid. */
+.results__stat-note--quicker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.results__stat-note--first,
+.results__stat-note--plain,
+.results__stat-note--same,
+.results__stat-note--slower {
+  color: var(--muted);
+}
+
 /* --- bucket movement --------------------------------------------------- */
 
 .results__moves {

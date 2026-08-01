@@ -15,11 +15,15 @@
 // orientations into one.
 //
 // What deliberately does NOT appear: any speed score, any words-per-minute
-// equivalent, any comparison to another person, and any countdown or clock.
-// Latency is reported as "your typical time" and as a bucket colour, never as a
-// score to beat. Speed is a result of accuracy; a kid pushed on speed invents
-// hunt-and-peck and keeps it. The motivator on this screen is the cold-cell
-// count: a small, concrete, visibly shrinking set of remaining work.
+// equivalent, any target or age norm, any comparison to another person, and any
+// countdown or clock. Latency is reported as "your typical time" and as a
+// bucket colour, never as a score to beat. Speed is a result of accuracy; a kid
+// pushed on speed invents hunt-and-peck and keeps it. The motivator on this
+// screen is the cold-cell count: a small, concrete, visibly shrinking set of
+// remaining work.
+//
+// Exactly ONE comparison is permitted, and it is the kid against their own
+// previous session's median — `summary.previousMedianMs`. See comparisonNote.
 
 import { allFacts, answerOf, factId, parseFactId, transposeId } from '../facts.js';
 
@@ -151,16 +155,62 @@ function countBuckets(model) {
  * @param {string} value
  * @param {string} label
  * @param {string} [note]
+ * @param {string} [noteTone] modifier suffix for the note's class
  * @returns {HTMLElement}
  */
-function statBlock(value, label, note) {
+function statBlock(value, label, note, noteTone) {
   const block = el('div', 'results__stat');
   block.append(el('div', 'results__stat-value', value));
   block.append(el('div', 'results__stat-label', label));
   if (note !== undefined) {
-    block.append(el('div', 'results__stat-note', note));
+    const className =
+      noteTone === undefined
+        ? 'results__stat-note'
+        : `results__stat-note results__stat-note--${noteTone}`;
+    block.append(el('div', className, note));
   }
   return block;
+}
+
+/**
+ * The one comparison this screen is allowed to make: the kid against their own
+ * previous session.
+ *
+ * Every other reference point is forbidden by the design — no target time, no
+ * age norm, no other kid — and without this one the median is a number with
+ * nothing to mean. So it is the only one, and it is deliberately lopsided in
+ * tone: a faster session is celebrated, a slower session is stated and shrugged
+ * off. A slower median is frequently not a worse session. The retain window
+ * means an improving kid who has just been promoted onto harder facts posts a
+ * slower median for entirely boring statistical reasons, and beyond that, kids
+ * have bad days. Reading that back to them as failure would teach them to chase
+ * the clock, which is the one habit this whole game exists to avoid.
+ *
+ * The comparison is made on the values as they will be DISPLAYED, not on the
+ * raw ones, so the sentence can never contradict the two numbers next to it by
+ * calling 1.44s and 1.35s different when both render as "1.4s".
+ *
+ * @param {number | null | undefined} medianMs this session
+ * @param {number | null | undefined} previousMedianMs last session, null on a first run
+ * @returns {{text: string, tone: string}}
+ */
+function comparisonNote(medianMs, previousMedianMs) {
+  if (!Number.isFinite(medianMs)) {
+    return { text: 'your middle answer today', tone: 'plain' };
+  }
+  if (previousMedianMs === null || !Number.isFinite(previousMedianMs)) {
+    return { text: 'first session — this is your starting point', tone: 'first' };
+  }
+
+  const now = formatMs(medianMs);
+  const before = formatMs(previousMedianMs);
+  if (now === before) {
+    return { text: `about the same as last time (${before})`, tone: 'same' };
+  }
+  if (medianMs < previousMedianMs) {
+    return { text: `quicker than last time (${before})`, tone: 'quicker' };
+  }
+  return { text: `a bit slower than last time (${before}) — that happens`, tone: 'slower' };
 }
 
 /**
@@ -182,8 +232,10 @@ function renderSummaryStrip(summary) {
       : 'answered before any hint';
   strip.append(statBlock(formatRate(cleanRate), 'from memory', cleanNote));
 
+  // The only comparison on this screen: the kid's own previous session.
+  const comparison = comparisonNote(summary?.medianMs, summary?.previousMedianMs ?? null);
   strip.append(
-    statBlock(formatMs(summary?.medianMs), 'typical time', 'your middle answer today'),
+    statBlock(formatMs(summary?.medianMs), 'typical time', comparison.text, comparison.tone),
   );
 
   return strip;
@@ -407,7 +459,8 @@ function renderDetail(model, id) {
  *
  * @param {HTMLElement} container
  * @param {import('../mastery.js').MasteryModel} model total over all 121 facts
- * @param {object} summary SessionSummary — { session, items, cleanRate, medianMs, moved }
+ * @param {object} summary SessionSummary — { session, items, cleanRate, medianMs,
+ *   previousMedianMs, moved }. `previousMedianMs` is null on a first run.
  * @returns {void}
  */
 export function renderResults(container, model, summary) {
