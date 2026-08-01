@@ -1,0 +1,124 @@
+/*
+ * problem.css — the numerals, the answer slots, the wrong-answer pulse.
+ *
+ * The numerals are the largest thing on screen by a wide margin. Everything
+ * else on this page is sized in `em` relative to them, so the whole problem
+ * scales as one object and the slots can never drift out of proportion with the
+ * digits they sit beside.
+ */
+
+.problem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 1.8vw, 26px);
+
+  font-family: var(--font-display);
+  font-size: clamp(58px, 13vw, 172px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--heading);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The operator and the equals sign are structure, not content — they are held
+   back so the operands and the answer carry the eye. */
+.problem__op,
+.problem__eq {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.62em;
+}
+
+.problem__operand {
+  /* Reserved width so 6 x 7 and 10 x 10 do not shift the slots sideways. */
+  min-width: 1.1ch;
+  text-align: center;
+}
+
+/* ---------- answer slots ---------- */
+
+/*
+ * One slot per answerDigits(fact), filling left to right. This is not
+ * decoration. There is no submit key and no Enter — the answer evaluates the
+ * moment the entry reaches full length — so the slots are what makes that rule
+ * visible. Without them a kid who thinks 10 x 10 = 99 types two digits and sits
+ * waiting on a machine that appears to have ignored them (spec §3).
+ */
+.slots {
+  display: flex;
+  align-items: center;
+  gap: clamp(5px, 1.1vw, 14px);
+  margin-left: 0.06em;
+}
+
+.slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 0.74em;
+  height: 1.04em;
+  border-radius: 0.12em;
+
+  background: var(--surface);
+  box-shadow: inset 0 0 0 0.035em var(--deck);
+  color: var(--heading);
+  font-variant-numeric: tabular-nums;
+
+  transition:
+    box-shadow 140ms ease-out,
+    background-color 140ms ease-out;
+}
+
+/* The slot the next digit will land in. The accent ring is the only positional
+   feedback the kid gets, and it is enough — it moves as they type. */
+.slot[data-state='next'] {
+  box-shadow: inset 0 0 0 0.045em var(--accent);
+}
+
+.slot[data-state='filled'] {
+  box-shadow: inset 0 0 0 0.035em var(--deck);
+}
+
+/*
+ * The 'reveal' rung of the hint ladder: the answer, greyed, INSIDE the slots.
+ * Not in a caption, not off to one side. The hint has to land where the kid is
+ * already looking (spec §5), and this is the entire reason the reveal stage
+ * renders here rather than in the hint region below.
+ */
+.slot[data-state='revealed'] {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+/* ---------- wrong-answer pulse ---------- */
+
+/*
+ * ~400ms of warm amber, then it clears itself. Not a failure ceremony: nothing
+ * is marked red and left standing, and no score is lost (spec §4). The pair of
+ * colours is the typing game's wrong-key flash, unchanged, so "that didn't
+ * land" looks identical across both games.
+ *
+ * Driven by data-pulse on the screen root. The JS restarts it by removing the
+ * attribute, forcing a reflow, and setting it again — an animation will not
+ * replay on an element that already has it applied.
+ */
+.problem-screen[data-pulse='on'] .slot {
+  animation: slot-pulse var(--pulse-ms) ease-out 1;
+}
+
+@keyframes slot-pulse {
+  0%,
+  65% {
+    background: var(--error-fill);
+    color: var(--error-text);
+    box-shadow: inset 0 0 0 0.045em var(--error-text);
+  }
+  100% {
+    background: var(--surface);
+    color: var(--heading);
+    box-shadow: inset 0 0 0 0.035em var(--deck);
+  }
+}

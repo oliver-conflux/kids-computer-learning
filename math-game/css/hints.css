@@ -1,0 +1,84 @@
+/*
+ * hints.css — the hint region: strategy text and the block array.
+ *
+ * THE REGION IS RESERVED SPACE. Its height is fixed at --hint-region-height and
+ * does not depend on what is inside it, so nothing on the page moves when a
+ * stage fires. A layout that jumps under a kid mid-thought is exactly the thing
+ * this is built to avoid, and it is why the height is a constant rather than
+ * min-height on whatever happens to be showing.
+ *
+ * The 'reveal' rung is NOT rendered here — it draws the answer greyed inside
+ * the answer slots (see problem.css), because the hint has to land where the
+ * kid is already looking.
+ */
+
+.hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  height: var(--hint-region-height);
+  /* Fixed height, both ways. Never let content grow or shrink the region. */
+  min-height: var(--hint-region-height);
+  max-height: var(--hint-region-height);
+  overflow: hidden;
+}
+
+/* Visibility is decided in JS by toggling `hidden`, so the stage rules live in
+   one place rather than being half-encoded in selectors here. This makes sure
+   `hidden` beats the display values set below. */
+.hint [hidden] {
+  display: none;
+}
+
+/* ---------- strategy ---------- */
+
+/*
+ * One line, read aloud by a 10-year-old: "6 x 6 = 36, add one more 6". Sized
+ * well below the numerals — it is help, not the problem.
+ */
+.hint__strategy {
+  display: block;
+  max-width: 22ch;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: clamp(21px, 3.4vw, 38px);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--muted);
+}
+
+/* ---------- block array ---------- */
+
+/*
+ * The array, drawn: `a` rows of `b` squares. A conceptual scaffold — re-derive
+ * the fact from what multiplication means — which is why it is a different rung
+ * from reveal and not interchangeable with it.
+ *
+ * Only ever shown when the product is <= config.blocksMaxProduct (25), because
+ * nobody counts 42 blocks.
+ *
+ * The square size is FIXED, not fitted to the grid. A block array only means
+ * anything if every block is the same unit, so 3 x 4 draws the same square as
+ * 10 x 2 and simply takes less room. That fixes the ceiling: the tallest grid
+ * that can reach this rung is 10 rows (10 x 1, 10 x 2), which at 16px squares
+ * and 4px gaps is 196px — inside the 210px reserved region. Grow the square and
+ * you must grow --hint-region-height with it.
+ */
+.hint__blocks {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 1), 16px);
+  grid-auto-rows: 16px;
+  gap: 4px;
+  justify-content: center;
+  align-content: center;
+}
+
+.block {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0.82;
+}
