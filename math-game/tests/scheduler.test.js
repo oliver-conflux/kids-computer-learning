@@ -5,24 +5,19 @@ import { pickNext } from '../js/scheduler.js';
 import { deriveMastery } from '../js/mastery.js';
 import { CONFIG } from '../js/config.js';
 import { allFacts, factId } from '../js/facts.js';
+import { mulberry32 } from '../js/rng.js';
 
 // --- helpers ---------------------------------------------------------------
 
 /**
- * mulberry32 — a small, seeded, deterministic generator in [0,1).
- * Every test drives the scheduler through one of these, so a failure is always
- * reproducible from its seed. The scheduler itself owns no randomness.
+ * Every test drives the scheduler through a seeded generator, so a failure is
+ * always reproducible from its seed. The scheduler itself owns no randomness.
+ *
+ * Imported rather than defined here so the tests and tools/replay.js share ONE
+ * generator — two separately-written PRNGs would make a replay result
+ * unreproducible from the suite that validated the scheduler, silently.
  */
-function seededRng(seed) {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+const seededRng = mulberry32;
 
 /** Build an attempt event. Fields match the AttemptEvent contract. */
 function attempt(a, b, ms, stage, wrong = []) {
