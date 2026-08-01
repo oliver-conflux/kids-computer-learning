@@ -29,7 +29,11 @@ build*. Read the spec section referenced by your task before starting.
   no CDN links. Node built-ins only.
 - **ES modules** (`import`/`export`) throughout. No `window.*` globals, no
   classic script tags.
-- **Node 22+.** Use `node --test` and `node:` prefixed built-ins.
+- **Node 22+.** Use `node:` prefixed built-ins. Run tests with **bare
+  `node --test` from the repo root** — it auto-discovers `*.test.js`. Do not pass
+  a directory path: Node 22.18 treats `--test` positional args as glob patterns,
+  so `node --test math-game/tests/` fails with `MODULE_NOT_FOUND`. The quoted
+  glob `node --test 'math-game/tests/*.test.js'` also works if you need to scope.
 - **The pure core takes no clock.** `mastery`, `scheduler`, `hints`, `engine`,
   and `facts` never call `Date.now()`, `Math.random()` directly, or touch the
   DOM. Time comes in as a `now` parameter; randomness comes in as an injected
@@ -43,6 +47,19 @@ build*. Read the spec section referenced by your task before starting.
   rendering, CSS, or wiring. Task headers state which applies; do not add tests
   to a task marked no-tests.
 - **Commit at the end of each task**, one commit per task, present-tense summary.
+- **Worktree base.** Agent worktrees may be cut from a stale commit that predates
+  the spec and plan. Before starting, verify `math-game/docs/` exists in your
+  worktree; if it does not, run `git merge math-facts-game` to bring the branch
+  to the current tip.
+- **Purity grep hygiene.** The project DoD greps `math-game/js/` for `Date.now`
+  and `Math.random` and expects matches only in `main.js` and `log.js`. Do not
+  write those literal strings in comments in pure modules — say "no clock, no
+  randomness" instead, or the grep reports a false positive.
+- **`allFacts()` order** is row-major with `index === a * 11 + b`; `[0]` is `0×0`
+  and `[120]` is `10×10`. Prefer keying by `factId` over relying on that
+  arithmetic.
+- **`parseFactId` throws** on malformed input rather than returning null, and
+  accepts any non-`:` op token so the four-operation extension needs no change.
 
 ---
 
@@ -287,9 +304,11 @@ given in Shared Contracts. Consumes nothing.
       returns all 121 ordered pairs for operands 0–10 in a stable, documented
       order. `answerDigits` returns the digit count of the product.
 - [ ] Write tests covering: exactly 121 facts, no duplicate ids, `factId` and
-      `parseFactId` round-trip for every fact, `transposeId('*:6x7') === '*:7x6'`,
+      `parseFactId` round-trip for every fact,
+      `transposeId({op:'*',a:6,b:7}) === '*:7x6'` — note `transposeId` takes a
+      **Fact object**, not an id string, per Shared Contracts — and
       `answerDigits` is 1 for `2×2`, 2 for `6×7`, 3 for `10×10`.
-- [ ] Run `node --test math-game/tests/` and confirm green.
+- [ ] Run `node --test` (bare, from the repo root) and confirm green.
 - [ ] Commit.
 
 ---
@@ -615,7 +634,7 @@ Rendering is a pure function of state — the module holds no game state of its 
 
 ## Definition of Done
 
-- `node --test math-game/tests/` is green.
+- `node --test` (bare, from the repo root) is green.
 - `play.command` opens the menu; both games are reachable and playable.
 - A full 20-problem session appends 21 well-formed lines to
   `data/math-log.jsonl`.
