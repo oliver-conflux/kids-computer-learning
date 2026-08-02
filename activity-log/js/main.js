@@ -18,24 +18,31 @@
 // and `render()` is the whole router. It re-derives the open clocks from the
 // event array and lets that answer decide which screen is showing. Nothing about
 // "which clock is running" is ever stored, so there is no second copy of that
-// answer to drift out of step with the log — which is the same reason the bar's
-// Start and Stop handlers are literally the same function. Neither button
-// decides anything; both just ask the log again.
+// answer to drift out of step with the log.
+//
+// THIS PAGE DOES NOT RENDER THE BAR. The bar lives on games-menu.html, where it
+// answers a question that page cannot otherwise answer — is a timer running
+// while I am off picking a game? Here it only ever repeated the screen it sat
+// above, and stacked a second Stop button on top of the real one.
+//
+// Clocking in navigates to the games menu, because going and doing the thing is
+// what she started the timer for. The menu's bar showing her start time when she
+// lands is the receipt.
 //
 // TWO RULES THAT ARE NOT NEGOTIABLE, and the reason the feature exists:
 //
 //   1. The time input is NEVER prefilled. The machine's current time is shown
-//      BESIDE it, in #clock-hint, as a reference she reads and types from.
-//   2. There is NO ticking counter anywhere — not on the bar, not on a screen,
-//      and not even on the hint, which is set once when a screen appears and
-//      then left alone.
+//      BESIDE it — #clock-hint on the start screen, #end-clock-hint on the stop
+//      screen — as a reference she reads and types from.
+//   2. There is NO ticking counter anywhere. The hints are re-read when she
+//      moves into the field beside them and at no other time, so they are true
+//      when she is looking at them and never running on their own.
 //
 // Both exist because measuring the time is the exercise. A prefilled field or a
 // live counter takes the measurement for her and there is nothing left to learn.
 
 import { CONFIG } from './config.js';
 import { serverIsUp, loadEvents, record, flushOutbox } from './log.js';
-import { renderBar } from './bar.js';
 
 import {
   localDate,
@@ -201,13 +208,6 @@ function render() {
   const open = deriveOpenClocks(events);
   const openClock = open.length === 0 ? null : open[0];
 
-  if (dom.bar !== null) {
-    // Both handlers are `render`. The bar is a view of derived state and holds
-    // no opinion about what its own button means; pressing either one just asks
-    // the log again, and the log answers.
-    renderBar(dom.bar, openClock, { onStart: render, onStop: render });
-  }
-
   if (openClock === null) {
     showStartScreen();
   } else {
@@ -227,7 +227,7 @@ function showStartScreen() {
   }
   setMessage(dom.startMessage, '');
 
-  refreshClockHint();
+  refreshClockHint(dom.clockHint);
 
   showScreen('screen-start');
 }
@@ -248,9 +248,9 @@ function showStartScreen() {
  * reference that is sometimes false is worse than no reference, because it can
  * talk her out of a correct measurement.
  */
-function refreshClockHint() {
-  if (dom.clockHint !== null) {
-    dom.clockHint.textContent = clockTime(toWallClock(now()));
+function refreshClockHint(element) {
+  if (element !== null && element !== undefined) {
+    element.textContent = clockTime(toWallClock(now()));
   }
 }
 
@@ -271,6 +271,7 @@ function showStopScreen(openClock) {
   if (dom.endTime !== null) {
     dom.endTime.value = '';
   }
+  refreshClockHint(dom.endClockHint);
 
   // Staleness is decided ONCE, here, on screen load, from the machine clock —
   // never from anything she types. Her answer is validated separately on submit,
@@ -461,7 +462,20 @@ function onClockIn() {
     at,
   });
 
-  render();
+  // Straight to the games, because that is what she started the timer in order
+  // to go and do. Rendering the running-timer screen here instead left her on a
+  // page whose whole job was already finished, with the browser's Back button
+  // as the only way out.
+  //
+  // The menu's bar is the receipt: it will be showing her activity and her
+  // start time when she lands, which says the clock-in was written more
+  // convincingly than a screen saying so could.
+  goToGames();
+}
+
+/** The one place that knows where the games live. */
+function goToGames() {
+  globalThis.location.href = '../games-menu.html';
 }
 
 function onClockOut(openClock) {
@@ -502,9 +516,6 @@ function onClockOut(openClock) {
   // what her measurement came to — which is the only part of this she is here
   // for. "New timer?" is what hands control back to `render`.
   showDoneScreen(openClock.at, endWall, result.minutes);
-  if (dom.bar !== null) {
-    renderBar(dom.bar, null, { onStart: render, onStop: render });
-  }
 }
 
 function onVoid(openClock) {
@@ -570,7 +581,6 @@ function ensureStartMessage() {
 
 function collectDom() {
   return {
-    bar: document.getElementById('timer-bar'),
 
     activity: document.getElementById('activity-select'),
     description: document.getElementById('description-input'),
@@ -583,6 +593,7 @@ function collectDom() {
     stopDescription: document.getElementById('stop-description'),
     stopStarted: document.getElementById('stop-started'),
     endTime: document.getElementById('end-time-input'),
+    endClockHint: document.getElementById('end-clock-hint'),
     stopMessage: document.getElementById('stop-message'),
     clockOutBtn: document.getElementById('btn-clock-out'),
     voidBtn: document.getElementById('btn-void'),
@@ -601,11 +612,15 @@ function collectDom() {
  * clock-out for a clock that is no longer running.
  */
 function wire() {
+  // Not a tick: `focus` fires when she deliberately moves into a field, which is
+  // the moment the reading beside it has to be true. It never fires on its own,
+  // so this cannot become a counter. Both fields, because she is doing the same
+  // job twice and a hint that is stale on only one screen is worse than none.
   if (dom.startTime !== null) {
-    // Not a tick: `focus` fires when she deliberately moves into the field,
-    // which is the moment the reading beside it has to be true. It never fires
-    // on its own, so this cannot become a counter.
-    dom.startTime.addEventListener('focus', refreshClockHint);
+    dom.startTime.addEventListener('focus', () => refreshClockHint(dom.clockHint));
+  }
+  if (dom.endTime !== null) {
+    dom.endTime.addEventListener('focus', () => refreshClockHint(dom.endClockHint));
   }
   if (dom.clockInBtn !== null) {
     dom.clockInBtn.addEventListener('click', onClockIn);

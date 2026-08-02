@@ -18,16 +18,16 @@
       <h1 class="page__title">⏱️ Activity Timer</h1>
 
       <!--
-        BAR MOUNT. Deliberately empty and deliberately unstyled by
-        css/style.css: activity-log/js/bar.js renders into this node and ships
-        its own CSS, because games-menu.html mounts the same bar without ever
-        loading this stylesheet. Anything styled here would exist on this page
-        and vanish on the menu.
+        NO BAR MOUNT HERE, on purpose. The bar belongs on games-menu.html, where
+        it answers a question the page cannot otherwise answer: is a timer
+        running while I am off picking a game?
 
-        The bar shows a START TIME, never a ticking counter. See the note on the
-        start-time field below — it is the same rule.
+        On this page it only ever repeated what the screen already said —
+        "Typing · started Sunday at 6:24 PM" sitting directly above a card
+        saying the same thing — and it put a red "Stop timer!" immediately above
+        the green "Stop my timer!", two buttons for one action, the louder of
+        them the one that just scrolls you to the other.
       -->
-      <div id="timer-bar"></div>
 
       <!--
         THREE SCREENS, exactly one visible at a time, swapped with the `hidden`
@@ -155,8 +155,16 @@
             different-day path main.js names the day in #stop-message ("What
             time did you finish on Tuesday?"), and a static label that assumed
             today would contradict it.
+
+            #end-clock-hint is the same reference reading the start screen
+            gives her, in the same place and the same style — she is doing the
+            identical job twice and should not have to learn the screen twice.
+            BESIDE the field, never inside it, and never written into the input.
           -->
-          <input class="field__input field__input--time" id="end-time-input" type="time" />
+          <div class="field__row">
+            <input class="field__input field__input--time" id="end-time-input" type="time" />
+            <p class="hint" id="end-clock-hint"></p>
+          </div>
         </div>
 
         <!--
@@ -196,10 +204,29 @@
         -->
         <p class="summary" id="done-summary"></p>
 
+        <!--
+          Going to pick a game is the likelier next thing than starting a second
+          timer, so it leads. "New timer?" stays for the case where she is
+          logging two activities back to back.
+        -->
         <div class="actions">
-          <button class="btn btn--go" id="btn-new-timer" type="button">New timer?</button>
+          <a class="btn btn--go" href="../games-menu.html">Go pick a game!</a>
+          <button class="btn btn--quiet" id="btn-new-timer" type="button">New timer?</button>
         </div>
       </section>
+
+      <!--
+        THE WAY OUT, on every screen.
+
+        Without this she is stranded: clocking in lands on "Your timer is
+        running" and the browser Back button is the only exit from a page whose
+        entire purpose is to be visited on the way to doing something else. A
+        plain link, because it is a navigation and nothing about it should look
+        like it changes the timer.
+      -->
+      <p class="wayhome">
+        <a class="wayhome__link" href="../games-menu.html">← Back to the games</a>
+      </p>
     </div>
 
     <!--
