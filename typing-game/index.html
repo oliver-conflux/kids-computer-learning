@@ -1,117 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Petra & Miriam's Typing Game</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Typing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/keyboard.css">
+<link rel="stylesheet" href="css/hands.css">
+<link rel="stylesheet" href="css/results.css">
 </head>
 <body>
-    <div class="game-container">
-        <header>
-            <h1>🎮 Typing Game 🎮</h1>
-            <div class="stats">
-                <div class="stat">
-                    <span class="label">Score:</span>
-                    <span id="score">0</span>
-                </div>
-                <div class="stat">
-                    <span class="label">Level:</span>
-                    <span id="level">Beginner</span>
-                </div>
-                <div class="stat">
-                    <span class="label">Streak:</span>
-                    <span id="streak">0</span>
-                </div>
-            </div>
-        </header>
-
-        <main class="game-area">
-            <div class="feedback" id="feedback"></div>
-
-            <div class="word-display">
-                <div id="current-word">cat</div>
-            </div>
-        </main>
-
-        <div class="level-selector hidden" id="level-selector">
-            <h3>Choose Difficulty:</h3>
-            <button class="level-option" data-level="firsttime">👶 First Time (Finger Training)</button>
-            <button class="level-option" data-level="beginner">🐣 Beginner (3-4 letters)</button>
-            <button class="level-option" data-level="intermediate">🌟 Intermediate (5-7 letters)</button>
-            <button class="level-option" data-level="advanced">🚀 Advanced (8+ letters)</button>
-        </div>
-
-        <div class="keyboard-container" id="keyboard-container">
-            <div class="hands-display">
-                <div class="hand left-hand">
-                    <div class="finger pinky" data-finger="left-pinky">🤙</div>
-                    <div class="finger ring" data-finger="left-ring">💍</div>
-                    <div class="finger middle" data-finger="left-middle">🖕</div>
-                    <div class="finger index" data-finger="left-index">👆</div>
-                </div>
-                <div class="hand right-hand">
-                    <div class="finger index" data-finger="right-index">👆</div>
-                    <div class="finger middle" data-finger="right-middle">🖕</div>
-                    <div class="finger ring" data-finger="right-ring">💍</div>
-                    <div class="finger pinky" data-finger="right-pinky">🤙</div>
-                </div>
-                <div class="thumbs">
-                    <div class="finger thumb" data-finger="left-thumb">👍</div>
-                    <div class="finger thumb" data-finger="right-thumb">👍</div>
-                </div>
-            </div>
-
-            <div class="keyboard" id="keyboard">
-                <div class="row">
-                    <div class="key" data-key="q" data-finger="left-pinky">Q</div>
-                    <div class="key" data-key="w" data-finger="left-ring">W</div>
-                    <div class="key" data-key="e" data-finger="left-middle">E</div>
-                    <div class="key" data-key="r" data-finger="left-index">R</div>
-                    <div class="key" data-key="t" data-finger="left-index">T</div>
-                    <div class="key" data-key="y" data-finger="right-index">Y</div>
-                    <div class="key" data-key="u" data-finger="right-index">U</div>
-                    <div class="key" data-key="i" data-finger="right-middle">I</div>
-                    <div class="key" data-key="o" data-finger="right-ring">O</div>
-                    <div class="key" data-key="p" data-finger="right-pinky">P</div>
-                </div>
-                <div class="row">
-                    <div class="key home-key" data-key="a" data-finger="left-pinky">A</div>
-                    <div class="key home-key" data-key="s" data-finger="left-ring">S</div>
-                    <div class="key home-key" data-key="d" data-finger="left-middle">D</div>
-                    <div class="key home-key" data-key="f" data-finger="left-index">F</div>
-                    <div class="key" data-key="g" data-finger="left-index">G</div>
-                    <div class="key" data-key="h" data-finger="right-index">H</div>
-                    <div class="key home-key" data-key="j" data-finger="right-index">J</div>
-                    <div class="key home-key" data-key="k" data-finger="right-middle">K</div>
-                    <div class="key home-key" data-key="l" data-finger="right-ring">L</div>
-                    <div class="key home-key" data-key=";" data-finger="right-pinky">;</div>
-                </div>
-                <div class="row">
-                    <div class="key" data-key="z" data-finger="left-pinky">Z</div>
-                    <div class="key" data-key="x" data-finger="left-ring">X</div>
-                    <div class="key" data-key="c" data-finger="left-middle">C</div>
-                    <div class="key" data-key="v" data-finger="left-index">V</div>
-                    <div class="key" data-key="b" data-finger="left-index">B</div>
-                    <div class="key" data-key="n" data-finger="right-index">N</div>
-                    <div class="key" data-key="m" data-finger="right-index">M</div>
-                    <div class="key" data-key="," data-finger="right-middle">,</div>
-                    <div class="key" data-key="." data-finger="right-ring">.</div>
-                    <div class="key" data-key="/" data-finger="right-pinky">/</div>
-                </div>
-                <div class="row">
-                    <div class="key spacebar" data-key=" " data-finger="thumbs">SPACE</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="controls">
-            <button id="start-btn" class="btn primary">Start Game</button>
-            <button id="level-btn" class="btn secondary">Change Level</button>
-            <button id="reset-btn" class="btn secondary">Reset</button>
-        </div>
+  <header class="topbar">
+    <h1 id="lesson-title" class="lesson-title">Home row</h1>
+    <div class="progress">
+      <span id="progress-count" class="progress-count">0 / 10</span>
+      <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
     </div>
+  </header>
 
-    <script src="script.js"></script>
+  <section class="prompt-row">
+    <div class="character" aria-hidden="true">
+      <div class="character-face"></div>
+    </div>
+    <p id="prompt" class="prompt">Ready when you are.</p>
+  </section>
+
+  <section class="typing-lines">
+    <div id="target" class="line line-target"></div>
+    <div id="typed" class="line line-typed"></div>
+  </section>
+
+  <section id="stage" class="stage">
+    <div id="keyboard" class="keyboard"></div>
+    <svg id="hands" class="hands" viewBox="0 0 924 385" aria-hidden="true"></svg>
+  </section>
+
+  <div id="name-prompt" class="overlay hidden">
+    <div class="overlay-card">
+      <h2>What should I call you?</h2>
+      <input id="name-input" type="text" maxlength="20" autocomplete="off" placeholder="Your name">
+      <div class="overlay-actions">
+        <button id="name-skip">Skip</button>
+        <button id="name-save" class="primary">That's me</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="menu" class="overlay hidden">
+    <div class="overlay-card overlay-wide">
+      <h2>Pick something to type</h2>
+      <div class="track"><h3>Letters</h3><div id="track-letters" class="rungs"></div></div>
+      <div class="track"><h3>Numbers</h3><div id="track-numbers" class="rungs"></div></div>
+      <div class="track"><h3>Practice</h3><div id="practice-tabs" class="rungs"></div></div>
+    </div>
+  </div>
+
+  <div id="results" class="results hidden"></div>
+
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>
