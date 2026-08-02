@@ -24,8 +24,16 @@
 //
 // Exactly ONE comparison is permitted, and it is the kid against their own
 // previous session's median — `summary.previousMedianMs`. See comparisonNote.
+//
+// This screen is a HUB, not a terminus. A session is about three minutes and a
+// good sitting is ten to fifteen, and the mechanism for the longer sitting is
+// frictionless continuation rather than a longer bar — so both continuations
+// are offered after BOTH modes, one click away, and neither is taken
+// automatically. The renderer never navigates or starts anything itself; it
+// reports which button was pressed through onResultsAction and main.js decides.
 
 import { allFacts, answerOf, factId, parseFactId, transposeId } from '../facts.js';
+import { isLearnable } from '../learn.js';
 
 const OPERANDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
@@ -33,11 +41,35 @@ const OPERANDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 // rendering `moved`; movement is NOT monotonic, so `from` may outrank `to`.
 const BUCKET_RANK = { cold: 0, warm: 1, hot: 2 };
 
-const BUCKET_WORD = {
+// FOUR DISPLAY STATES OVER THREE BUCKETS (spec §6).
+//
+// `bucket` in the mastery model is still exactly cold | warm | hot and nothing
+// here changes that — the scheduler and the mastery thresholds are untouched.
+// "Shown how" is a DISPLAY state, derived from `bucket === 'cold' && taught`:
+// the fact has a route the kid has been walked through in learn mode but no
+// clean drill answers yet. Three states cannot separate "no idea where to
+// start" from "has a route, needs reps", and that difference is exactly what
+// says which mode to run next, so the grid says it.
+//
+// `taught` only ever modifies the cold case. A warm or hot fact very often has
+// `taught: true` as well — that is the normal path — and it must still render
+// as getting there / from memory. Mastery outranks instruction.
+const STATE_WORD = {
   cold: 'not started',
+  shown: 'shown how',
   warm: 'getting there',
   hot: 'from memory',
 };
+
+/**
+ * The display state of one fact. See STATE_WORD.
+ *
+ * @param {{bucket: string, taught: boolean}} stats
+ * @returns {'cold' | 'shown' | 'warm' | 'hot'}
+ */
+function displayStateOf(stats) {
+  return stats.bucket === 'cold' && stats.taught === true ? 'shown' : stats.bucket;
+}
 
 // Long form, for the detail panel.
 const STAGE_TEXT = {
@@ -138,14 +170,19 @@ function neighbourWithProduct(fact, wrong) {
  * The headline: how much is left, stated as a countable set rather than a
  * percentage. "Nine cold squares left" is a finishable job; "84%" is a grade.
  *
+ * Counts are per DISPLAY state, so `cold` here means not-started-and-untaught.
+ * `coldTotal` is the two cold states together, which is what the headline
+ * counts — see renderResults.
+ *
  * @param {import('../mastery.js').MasteryModel} model
- * @returns {{cold: number, warm: number, hot: number}}
+ * @returns {{cold: number, shown: number, warm: number, hot: number, coldTotal: number}}
  */
-function countBuckets(model) {
-  const counts = { cold: 0, warm: 0, hot: 0 };
+function countStates(model) {
+  const counts = { cold: 0, shown: 0, warm: 0, hot: 0, coldTotal: 0 };
   for (const fact of allFacts()) {
-    counts[model.byId.get(factId(fact)).bucket] += 1;
+    counts[displayStateOf(model.byId.get(factId(fact)))] += 1;
   }
+  counts.coldTotal = counts.cold + counts.shown;
   return counts;
 }
 
@@ -214,15 +251,41 @@ function comparisonNote(medianMs, previousMedianMs) {
 }
 
 /**
- * The session strip: problems done, clean rate, typical time.
+ * The session strip.
+ *
+ * DRILL: problems done, clean rate, typical time — unchanged from v1.
+ *
+ * LEARN: neither of the other two drill stats means anything here, and both
+ * would lie. Learn mode has no `clean` rung by construction, so its clean rate
+ * is always exactly 0 and would render as "0% from memory" — a failure grade
+ * for a session that cannot produce anything else. And a learn median measures
+ * how long a derivation took, which is a different scale from retrieval speed
+ * (spec §5); putting it beside `previousMedianMs` would compare the two, which
+ * is the one thing §5 forbids. So learn shows what it actually did: how many
+ * problems were worked through, and how many squares now have a route.
  *
  * @param {object} summary SessionSummary
+ * @param {{cold: number, shown: number, warm: number, hot: number}} counts
  * @returns {HTMLElement}
  */
-function renderSummaryStrip(summary) {
+function renderSummaryStrip(summary, counts) {
   const items = Number.isFinite(summary?.items) ? summary.items : 0;
   const cleanRate = summary?.cleanRate;
   const strip = el('div', 'results__stats');
+
+  if (summary?.mode === 'learn') {
+    strip.append(statBlock(String(items), 'answers', 'worked through with the strategy on screen'));
+    strip.append(
+      statBlock(
+        String(counts.shown),
+        'shown how',
+        counts.shown === 1
+          ? 'square has a route now — drill is what warms it up'
+          : 'squares have a route now — drill is what warms them up',
+      ),
+    );
+    return strip;
+  }
 
   strip.append(statBlock(String(items), 'problems', 'done this session'));
 
@@ -250,10 +313,11 @@ function renderSummaryStrip(summary) {
  * word about why it happened. Direction is computed from the two buckets; `from`
  * is never assumed to be the worse one.
  *
+ * @param {import('../mastery.js').MasteryModel} model
  * @param {object} summary SessionSummary
  * @returns {HTMLElement}
  */
-function renderMoves(summary) {
+function renderMoves(model, summary) {
   const section = el('section', 'results__moves');
   section.append(el('h2', 'results__h2', 'What moved'));
 
@@ -263,7 +327,9 @@ function renderMoves(summary) {
       el(
         'p',
         'results__empty',
-        'No squares changed colour this session. That happens — the colours only move when the last five tries say so.',
+        summary?.mode === 'learn'
+          ? 'Learn sessions never move the colours — they hand you the route. Drill is what turns a square from shown how to getting there.'
+          : 'No squares changed colour this session. That happens — the colours only move when the last five tries say so.',
       ),
     );
     return section;
@@ -276,12 +342,20 @@ function renderMoves(summary) {
     const down = BUCKET_RANK[move.to] < BUCKET_RANK[move.from];
     const direction = up ? 'up' : down ? 'down' : 'flat';
 
+    // Movement is between BUCKETS; the words are DISPLAY states. A taught fact
+    // that drops back to cold reads "getting there → shown how", not "→ not
+    // started", because the route it was taught did not evaporate.
+    const taught = model.byId.get(move.id)?.taught === true;
+    const stateOf = (bucket) => (bucket === 'cold' && taught ? 'shown' : bucket);
+
     const item = el('li', `results__move results__move--${direction}`);
     item.append(el('span', 'results__move-arrow', up ? '↑' : down ? '↓' : '→'));
     item.append(el('span', 'results__move-fact', `${factLabel(fact)} = ${answerOf(fact)}`));
 
-    const from = el('span', `results__pill results__pill--${move.from}`, BUCKET_WORD[move.from]);
-    const to = el('span', `results__pill results__pill--${move.to}`, BUCKET_WORD[move.to]);
+    const fromState = stateOf(move.from);
+    const toState = stateOf(move.to);
+    const from = el('span', `results__pill results__pill--${fromState}`, STATE_WORD[fromState]);
+    const to = el('span', `results__pill results__pill--${toState}`, STATE_WORD[toState]);
     const change = el('span', 'results__move-change');
     change.append(from, el('span', 'results__move-to', '→'), to);
     item.append(change);
@@ -335,9 +409,14 @@ function renderGrid(model) {
       const id = factId(fact);
       const stats = model.byId.get(id);
       const mirror = model.byId.get(transposeId(fact));
+      // Mismatch stays a BUCKET comparison. Two cold cells where only one has
+      // been taught are not a drilling finding — the wedge means "these two
+      // orientations are at different levels of mastery", and instruction is
+      // not mastery.
       const mismatched = a !== b && mirror.bucket !== stats.bucket;
+      const state = displayStateOf(stats);
 
-      const cell = el('div', `results__cell results__cell--${stats.bucket}`);
+      const cell = el('div', `results__cell results__cell--${state}`);
       cell.setAttribute('role', 'gridcell');
       cell.tabIndex = -1;
       cell.dataset.id = id;
@@ -354,8 +433,8 @@ function renderGrid(model) {
       cell.textContent = String(answerOf(fact));
       cell.setAttribute(
         'aria-label',
-        `${a} times ${b} is ${answerOf(fact)}, ${BUCKET_WORD[stats.bucket]}${
-          mismatched ? `, but ${b} times ${a} is ${BUCKET_WORD[mirror.bucket]}` : ''
+        `${a} times ${b} is ${answerOf(fact)}, ${STATE_WORD[state]}${
+          mismatched ? `, but ${b} times ${a} is ${STATE_WORD[displayStateOf(mirror)]}` : ''
         }`,
       );
       row.append(cell);
@@ -376,11 +455,11 @@ function renderDetail(model, id) {
   const fact = stats.fact;
   const panel = el('div', 'results__detail-body');
 
+  const state = displayStateOf(stats);
+
   const heading = el('h3', 'results__detail-title');
   heading.append(el('span', 'results__detail-fact', `${factLabel(fact)} = ${answerOf(fact)}`));
-  heading.append(
-    el('span', `results__pill results__pill--${stats.bucket}`, BUCKET_WORD[stats.bucket]),
-  );
+  heading.append(el('span', `results__pill results__pill--${state}`, STATE_WORD[state]));
   panel.append(heading);
 
   const line =
@@ -389,16 +468,38 @@ function renderDetail(model, id) {
       : `${stats.cleanCount} straight from memory, typically ${formatMs(stats.medianCleanMs)}.`;
   panel.append(el('p', 'results__detail-line', line));
 
+  // Which mode to send this fact to next — the whole reason the fourth state
+  // exists. Eligibility is asked of learn.js rather than re-derived here.
+  if (state === 'shown') {
+    panel.append(
+      el(
+        'p',
+        'results__detail-line',
+        'You have been shown a way to work this one out. Drill is what makes it quick.',
+      ),
+    );
+  } else if (state === 'cold' && isLearnable(fact)) {
+    panel.append(
+      el('p', 'results__detail-line', 'Learn mode can show you a way to work this one out.'),
+    );
+  }
+
   // The mirror. Only interesting when the two orientations disagree, which is
   // exactly the case the grid is built to make visible.
   if (fact.a !== fact.b) {
     const mirror = model.byId.get(transposeId(fact));
+    const mirrorState = displayStateOf(mirror);
     const mirrorLine = el('p', 'results__mirror');
-    if (mirror.bucket === stats.bucket) {
-      mirrorLine.textContent = `${factLabel(mirror.fact)} is ${BUCKET_WORD[mirror.bucket]} too — both ways round match.`;
-    } else {
+    if (mirror.bucket !== stats.bucket) {
+      // The finding: different levels of mastery in the two directions.
       mirrorLine.classList.add('is-mismatched');
-      mirrorLine.textContent = `Same numbers the other way round, ${factLabel(mirror.fact)}, is ${BUCKET_WORD[mirror.bucket]}. Worth drilling the slower direction.`;
+      mirrorLine.textContent = `Same numbers the other way round, ${factLabel(mirror.fact)}, is ${STATE_WORD[mirrorState]}. Worth drilling the slower direction.`;
+    } else if (mirrorState === state) {
+      mirrorLine.textContent = `${factLabel(mirror.fact)} is ${STATE_WORD[mirrorState]} too — both ways round match.`;
+    } else {
+      // Same bucket, different display state: one direction has been taught and
+      // the other has not. Not a drilling finding, so it is stated flatly.
+      mirrorLine.textContent = `${factLabel(mirror.fact)} is at the same level — ${STATE_WORD[mirrorState]}.`;
     }
     panel.append(mirrorLine);
   }
@@ -455,44 +556,145 @@ function renderDetail(model, id) {
 }
 
 /**
+ * The continuation row. Both continuations appear after BOTH modes: the screen
+ * that ends a session is also the one that starts the next, because the way to
+ * a fifteen-minute sitting is one more three-minute block, not a longer bar.
+ *
+ * Nothing here starts anything. The buttons carry a `data-results-action` and
+ * that is all; main.js owns every state transition and decides what "learn"
+ * means. See onResultsAction.
+ *
+ * Learn is offered unless `summary.canLearn` is explicitly false, which means
+ * every strategy-bearing fact is already hot and there is nothing left to
+ * teach — a button that leads nowhere is worse than no button.
+ *
+ * @param {object} summary SessionSummary
+ * @returns {HTMLElement}
+ */
+function renderActions(summary) {
+  const row = el('nav', 'results__actions');
+  row.setAttribute('aria-label', 'What next');
+
+  const button = (action, label, kind) => {
+    const node = el('button', `results__action results__action--${kind}`, label);
+    node.type = 'button';
+    node.dataset.resultsAction = action;
+    return node;
+  };
+
+  // The two continuations are weighted equally. Which one is the better next
+  // step depends on the kid, not on which mode just finished, and the screen
+  // does not presume to know.
+  if (summary?.canLearn !== false) {
+    row.append(button('learn', 'Learn 3 facts', 'go'));
+  }
+  row.append(button('drill', 'Drill 20', 'go'));
+  row.append(button('done', 'Done', 'quiet'));
+
+  return row;
+}
+
+/** @type {WeakMap<HTMLElement, (event: Event) => void>} */
+const ACTION_LISTENERS = new WeakMap();
+
+/**
+ * Register the handler for the continuation row. Delegated on `container`, so it
+ * survives any number of re-renders of the screen inside it, and re-registering
+ * REPLACES the previous handler rather than stacking a second one.
+ *
+ * The handler is called with exactly one of `'learn' | 'drill' | 'done'`.
+ *
+ * @param {HTMLElement} container
+ * @param {(action: 'learn' | 'drill' | 'done') => void} handler
+ * @returns {void}
+ */
+export function onResultsAction(container, handler) {
+  const existing = ACTION_LISTENERS.get(container);
+  if (existing !== undefined) {
+    container.removeEventListener('click', existing);
+  }
+  const listener = (event) => {
+    const button = event.target.closest('[data-results-action]');
+    if (button !== null && container.contains(button)) {
+      handler(button.dataset.resultsAction);
+    }
+  };
+  ACTION_LISTENERS.set(container, listener);
+  container.addEventListener('click', listener);
+}
+
+/**
+ * The headline over the grid.
+ *
+ * It counts BOTH cold states, because both mean the same thing about the fact:
+ * it has never come back from memory. "Shown how" is progress, not completion,
+ * and shrinking the headline for it would be claiming a fact is done when the
+ * kid has only watched it being worked out — the number would stop meaning
+ * "work left" and the grid would stop being trustworthy.
+ *
+ * The learn session still visibly registers, because the two cold states are
+ * named separately underneath: after a learn session three squares move from
+ * not started to shown how and both halves of the sentence change, even though
+ * the total does not.
+ *
+ * @param {{cold: number, shown: number, coldTotal: number}} counts
+ * @returns {string}
+ */
+function headline(counts) {
+  const { cold, shown, coldTotal } = counts;
+  if (coldTotal === 0) {
+    return 'No cold squares left. Every fact has been answered from memory at least once.';
+  }
+  const total = `${coldTotal} cold ${coldTotal === 1 ? 'square' : 'squares'} left`;
+  if (shown === 0) {
+    return `${total}.`;
+  }
+  if (cold === 0) {
+    return `${total} — all of them shown how, ready to drill.`;
+  }
+  return `${total} — ${shown} shown how, ${cold} not started.`;
+}
+
+/**
  * Render the results screen into `container`, replacing whatever was there.
  *
  * @param {HTMLElement} container
  * @param {import('../mastery.js').MasteryModel} model total over all 121 facts
- * @param {object} summary SessionSummary — { session, items, cleanRate, medianMs,
- *   previousMedianMs, moved }. `previousMedianMs` is null on a first run.
+ * @param {object} summary SessionSummary — { session, mode, items, cleanRate,
+ *   medianMs, previousMedianMs, moved, canLearn }. `previousMedianMs` is null on
+ *   a first run.
  * @returns {void}
  */
 export function renderResults(container, model, summary) {
   const root = el('section', 'results');
+  const counts = countStates(model);
 
   const header = el('header', 'results__header');
   header.append(el('h1', 'results__title', 'Session done'));
-  root.append(header);
-
-  root.append(renderSummaryStrip(summary));
-  root.append(renderMoves(summary));
-
-  const gridSection = el('section', 'results__grid-section');
-  const counts = countBuckets(model);
-  const gridHead = el('div', 'results__grid-head');
-  gridHead.append(el('h2', 'results__h2', 'Your table'));
-  gridHead.append(
+  header.append(
     el(
       'p',
-      'results__coldcount',
-      counts.cold === 0
-        ? 'No cold squares left. Every fact has been answered from memory at least once.'
-        : `${counts.cold} cold ${counts.cold === 1 ? 'square' : 'squares'} left.`,
+      'results__subtitle',
+      summary?.mode === 'learn' ? 'Learn session' : 'Drill session',
     ),
   );
+  root.append(header);
+
+  root.append(renderSummaryStrip(summary, counts));
+  root.append(renderActions(summary));
+  root.append(renderMoves(model, summary));
+
+  const gridSection = el('section', 'results__grid-section');
+  const gridHead = el('div', 'results__grid-head');
+  gridHead.append(el('h2', 'results__h2', 'Your table'));
+  gridHead.append(el('p', 'results__coldcount', headline(counts)));
   gridSection.append(gridHead);
 
   const legend = el('div', 'results__legend');
-  for (const bucket of ['cold', 'warm', 'hot']) {
+  for (const state of ['cold', 'shown', 'warm', 'hot']) {
     const entry = el('span', 'results__legend-entry');
-    entry.append(el('span', `results__swatch results__swatch--${bucket}`));
-    entry.append(el('span', 'results__legend-text', `${BUCKET_WORD[bucket]} (${counts[bucket]})`));
+    entry.append(el('span', `results__swatch results__swatch--${state}`));
+    entry.append(el('span', 'results__legend-text', `${STATE_WORD[state]} (${counts[state]})`));
     legend.append(entry);
   }
   const mismatchKey = el('span', 'results__legend-entry');
