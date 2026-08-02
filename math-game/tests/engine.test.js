@@ -6,6 +6,7 @@ import {
   typeDigit,
   backspace,
   tick,
+  revealAnswer,
   toAttemptEvent,
 } from '../js/engine.js';
 import { CONFIG } from '../js/config.js';
@@ -18,6 +19,11 @@ const ZERO_SEVEN = { op: '*', a: 0, b: 7 }; // 0, one digit
 const FULL = ['clean', 'strategy', 'blocks', 'reveal'];
 const TEN_YEAR_OLD = ['clean', 'strategy', 'reveal'];
 const SHORT = ['clean', 'reveal'];
+
+// The two v2 ladders (plan, Shared Contracts). DRILL is `SHORT` under its real
+// name; LEARN is what the engine recognises by its first rung.
+const DRILL = ['clean', 'reveal'];
+const LEARN = ['strategy', 'reveal'];
 
 /**
  * Run `fn` and assert it did not touch the state handed to it. Every engine
@@ -56,6 +62,7 @@ test('startProblem parks the ladder at its first stage with an empty entry', () 
     resolvedAt: null,
     status: 'active',
     pulse: false,
+    revealed: false,
   });
 });
 
@@ -329,6 +336,116 @@ test('a wrong answer resets the dwell clock so the next hint is a full delay awa
   assert.equal(tick(state, 3000, 2000).stage, 'blocks');
 });
 
+// --- revealAnswer -----------------------------------------------------------
+
+test('revealAnswer jumps to the last rung and sets revealed', () => {
+  const state = startProblem(SIX_SEVEN, LEARN, 1000);
+  assert.equal(state.stage, 'strategy');
+  assert.equal(state.revealed, false);
+
+  const shown = withoutMutating(state, (s) => revealAnswer(s, 2500));
+  assert.equal(shown.stage, 'reveal');
+  assert.equal(shown.revealed, true);
+  assert.equal(shown.stageAt, 2500, 'the new stage begins when the button was pressed');
+  assert.notEqual(shown, state);
+});
+
+test('revealAnswer goes to the FINAL stage, not the next one', () => {
+  // On the two-rung v2 ladders these coincide. On a longer one they do not, and
+  // the button promises the answer rather than the next hint.
+  const shown = revealAnswer(startProblem(SIX_SEVEN, FULL, 0), 500);
+  assert.equal(shown.stage, 'reveal');
+  assert.equal(shown.ladder.indexOf(shown.stage), shown.ladder.length - 1);
+});
+
+test('revealAnswer is a no-op BY REFERENCE at the final stage', () => {
+  const shown = revealAnswer(startProblem(SIX_SEVEN, LEARN, 0), 500);
+  const again = withoutMutating(shown, (s) => revealAnswer(s, 900));
+  assert.equal(again, shown, 'returns the same state by reference');
+  assert.equal(again.stage, 'reveal');
+  assert.equal(again.stageAt, 500, 'stageAt is untouched when nothing moved');
+});
+
+test('revealAnswer on a one-rung ladder is a no-op by reference', () => {
+  const state = startProblem(TWO_TWO, ['reveal'], 0);
+  assert.equal(revealAnswer(state, 100), state);
+});
+
+test('revealAnswer clears the pulse left by a wrong answer', () => {
+  // Pressing the button is its own transition; it must not re-fire the shake
+  // animation that the wrong answer already ran.
+  const wrong = type(startProblem(SIX_SEVEN, LEARN, 0), '48', [100, 200]);
+  assert.equal(wrong.pulse, true);
+  assert.equal(revealAnswer(wrong, 300).pulse, false);
+});
+
+test('revealAnswer does not disturb the entry, history or wrong list', () => {
+  let state = startProblem(SIX_SEVEN, LEARN, 0);
+  state = type(state, '4', [100]);
+  const shown = withoutMutating(state, (s) => revealAnswer(s, 200));
+  assert.equal(shown.typed, '4');
+  assert.deepEqual(shown.history, ['4']);
+  assert.deepEqual(shown.wrong, []);
+  assert.equal(shown.status, 'active');
+});
+
+test('a revealed problem still resolves normally when the answer is typed', () => {
+  let state = startProblem(SIX_SEVEN, LEARN, 1000);
+  state = withoutMutating(state, (s) => revealAnswer(s, 2000));
+  state = type(state, '42', [2400, 2600]);
+  assert.equal(state.status, 'correct');
+  assert.equal(state.resolvedAt, 2600);
+  assert.equal(state.revealed, true, 'revealed survives the resolve');
+  assert.equal(state.stage, 'reveal');
+});
+
+test('revealed stays false when the kid never presses the button', () => {
+  const state = type(startProblem(SIX_SEVEN, LEARN, 0), '42', [100, 200]);
+  assert.equal(state.revealed, false);
+  assert.equal(state.stage, 'strategy', 'and the ladder never moved');
+});
+
+// --- learn-mode wrong answers do not advance --------------------------------
+
+test('a wrong answer on a DRILL ladder advances one stage', () => {
+  const state = type(startProblem(SIX_SEVEN, DRILL, 1000), '48', [1100, 1200]);
+  assert.equal(state.stage, 'reveal');
+  assert.equal(state.stageAt, 1200);
+});
+
+test('a wrong answer on a LEARN ladder does NOT advance', () => {
+  const state = type(startProblem(SIX_SEVEN, LEARN, 1000), '48', [1100, 1200]);
+  assert.equal(state.stage, 'strategy', 'the answer stays behind the button');
+  assert.equal(state.stageAt, 1000, 'stageAt is untouched when the stage did not change');
+  assert.equal(state.revealed, false);
+});
+
+test('a wrong answer in learn still pulses, clears the entry and records the value', () => {
+  const state = type(startProblem(SIX_SEVEN, LEARN, 0), '48', [100, 200]);
+  assert.equal(state.pulse, true);
+  assert.equal(state.typed, '');
+  assert.deepEqual(state.wrong, [48]);
+  assert.deepEqual(state.history, ['4', '48', '']);
+  assert.equal(state.status, 'active');
+});
+
+test('no number of wrong answers in learn ever reaches reveal', () => {
+  let state = startProblem(SIX_SEVEN, LEARN, 0);
+  for (const value of ['48', '49', '36', '12', '99']) {
+    state = type(state, value);
+    assert.equal(state.stage, 'strategy');
+  }
+  assert.deepEqual(state.wrong, [48, 49, 36, 12, 99]);
+  assert.equal(state.revealed, false);
+});
+
+test('the learn rule keys on the ladder, not on ladder length', () => {
+  // A two-rung ladder starting 'clean' is drill and must still advance; the
+  // discriminator is the first rung, not the shape.
+  assert.equal(type(startProblem(TWO_TWO, ['clean', 'reveal'], 0), '9').stage, 'reveal');
+  assert.equal(type(startProblem(TWO_TWO, ['strategy', 'reveal'], 0), '9').stage, 'strategy');
+});
+
 // --- history ----------------------------------------------------------------
 
 test('history captures every intermediate string including ones later cleared', () => {
@@ -410,7 +527,7 @@ test('a correct answer never pulses', () => {
 test('toAttemptEvent builds the full AttemptEvent for a clean solve', () => {
   let state = startProblem(SIX_SEVEN, TEN_YEAR_OLD, 1_700_000_000_000);
   state = type(state, '42', [1_700_000_000_400, 1_700_000_001_100]);
-  const event = withoutMutating(state, (s) => toAttemptEvent(s, CONFIG, 's_1a2b'));
+  const event = withoutMutating(state, (s) => toAttemptEvent(s, CONFIG, 's_1a2b', 'drill'));
 
   assert.deepEqual(event, {
     type: 'attempt',
@@ -424,6 +541,7 @@ test('toAttemptEvent builds the full AttemptEvent for a clean solve', () => {
     stage: 'clean',
     typed: ['4', '42'],
     wrong: [],
+    mode: 'drill',
   });
 });
 
@@ -465,6 +583,80 @@ test('toAttemptEvent throws on an unresolved problem', () => {
   assert.throws(() => toAttemptEvent(state, CONFIG, 's_0000'));
 });
 
+// --- toAttemptEvent: mode and revealed --------------------------------------
+
+test('toAttemptEvent writes the mode it is handed', () => {
+  const drilled = type(startProblem(TWO_TWO, DRILL, 0), '4', [200]);
+  const learned = type(startProblem(TWO_TWO, LEARN, 0), '4', [200]);
+  assert.equal(toAttemptEvent(drilled, CONFIG, 's_0001', 'drill').mode, 'drill');
+  assert.equal(toAttemptEvent(learned, CONFIG, 's_0001', 'learn').mode, 'learn');
+});
+
+test('toAttemptEvent omits revealed entirely for a drill attempt', () => {
+  const state = type(startProblem(TWO_TWO, DRILL, 0), '4', [200]);
+  const event = toAttemptEvent(state, CONFIG, 's_0002', 'drill');
+  assert.equal('revealed' in event, false, 'absent means not applicable, not false');
+  assert.equal(event.mode, 'drill');
+});
+
+test('toAttemptEvent carries revealed for a learn attempt', () => {
+  let shown = startProblem(SIX_SEVEN, LEARN, 0);
+  shown = revealAnswer(shown, 100);
+  shown = type(shown, '42', [200, 300]);
+  const shownEvent = toAttemptEvent(shown, CONFIG, 's_0003', 'learn');
+  assert.equal(shownEvent.revealed, true);
+  assert.equal(shownEvent.mode, 'learn');
+
+  const unaided = type(startProblem(SIX_SEVEN, LEARN, 0), '42', [200, 300]);
+  const unaidedEvent = toAttemptEvent(unaided, CONFIG, 's_0003', 'learn');
+  assert.equal('revealed' in unaidedEvent, true);
+  assert.equal(unaidedEvent.revealed, false, 'answered without pressing the button');
+});
+
+test("a learn attempt's stage is never 'clean'", () => {
+  // Mastery's "clean means retrieval" rule excludes learn attempts by
+  // construction, before the explicit mode filter is even consulted.
+  const unaided = type(startProblem(SIX_SEVEN, LEARN, 0), '42', [100, 200]);
+  const wrongThenRight = type(type(startProblem(SIX_SEVEN, LEARN, 0), '48'), '42');
+  const revealedFirst = type(revealAnswer(startProblem(SIX_SEVEN, LEARN, 0), 50), '42');
+  for (const state of [unaided, wrongThenRight, revealedFirst]) {
+    assert.notEqual(toAttemptEvent(state, CONFIG, 's_0004', 'learn').stage, 'clean');
+  }
+});
+
+test('toAttemptEvent defaults to drill when no mode is passed', () => {
+  // The log's own rule: an absent `mode` means 'drill' (spec §5). The default is
+  // for v1 callers; new ones pass it explicitly.
+  const state = type(startProblem(TWO_TWO, DRILL, 0), '4', [200]);
+  const event = toAttemptEvent(state, CONFIG, 's_0005');
+  assert.equal(event.mode, 'drill');
+  assert.equal('revealed' in event, false);
+});
+
+test('mode does not disturb any other field of the event', () => {
+  const state = type(startProblem(TWO_TWO, DRILL, 1_700_000_000_000), '4', [1_700_000_000_500]);
+  const drill = toAttemptEvent(state, CONFIG, 's_0006', 'drill');
+  const learn = toAttemptEvent(state, CONFIG, 's_0006', 'learn');
+
+  delete drill.mode;
+  delete learn.mode;
+  delete learn.revealed;
+  assert.deepEqual(drill, learn, 'mode and revealed are the only difference');
+  assert.deepEqual(Object.keys(drill), [
+    'type',
+    't',
+    'build',
+    'session',
+    'op',
+    'a',
+    'b',
+    'ms',
+    'stage',
+    'typed',
+    'wrong',
+  ]);
+});
+
 // --- purity -----------------------------------------------------------------
 
 test('no engine function mutates the state passed to it', () => {
@@ -499,6 +691,32 @@ test('no engine function mutates the state passed to it', () => {
 
   // The very first state object is still exactly as it was created.
   assert.deepEqual(startProblem(SIX_SEVEN, FULL, 1000), original);
+});
+
+test('no engine function mutates the state passed to it — learn path', () => {
+  let state = startProblem(SIX_SEVEN, LEARN, 1000);
+  const original = structuredClone(state);
+
+  const calls = [
+    (s) => typeDigit(s, '4', 1200),
+    (s) => typeDigit(s, '9', 1300),
+    (s) => backspace(s, 1400),
+    (s) => revealAnswer(s, 1500),
+    (s) => revealAnswer(s, 1600),
+    (s) => tick(s, 9999, 2000),
+    (s) => typeDigit(s, '4', 1700),
+    (s) => typeDigit(s, '2', 1800),
+  ];
+
+  for (const call of calls) {
+    state = withoutMutating(state, call);
+  }
+
+  assert.equal(state.status, 'correct');
+  assert.deepEqual(state.wrong, [49]);
+  assert.equal(state.stage, 'reveal', 'moved only by the button');
+  assert.equal(state.revealed, true);
+  assert.deepEqual(startProblem(SIX_SEVEN, LEARN, 1000), original);
 });
 
 test('nested arrays are copied, not shared, between successive states', () => {
