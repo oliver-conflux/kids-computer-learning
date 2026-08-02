@@ -183,6 +183,25 @@
   color: var(--muted);
 }
 
+/*
+ * The homophone flash: the whole word, shown once while it is spoken, then taken
+ * away (js/homophones.js, js/ui/word.js flashWord).
+ *
+ * FULL STRENGTH, NOT GREY. A revealed letter is help and is muted to say so.
+ * This is the QUESTION — for `sea` the sound alone does not choose between the
+ * spellings, so the word on screen is the only complete statement of what is
+ * being asked. Muting it would style the question as though it were a
+ * concession.
+ *
+ * No animation. It appears with the audio and is gone a beat later; a fade would
+ * eat the reading time it exists to provide, and a kid who blinks would lose the
+ * word entirely.
+ */
+.slot[data-state='flash'] {
+  color: var(--heading);
+  box-shadow: inset 0 0 0 0.035em var(--accent);
+}
+
 /* ---------- wrong-answer pulse ---------- */
 
 /*

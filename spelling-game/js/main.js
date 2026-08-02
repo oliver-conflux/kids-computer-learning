@@ -19,6 +19,7 @@ import { activeWindow } from './frontier.js';
 import { typingCost, KEYMAP } from './typing-cost.js';
 import { pickLearnFamily, buildLearnSession } from './learn.js';
 import { createAudio } from './audio.js';
+import { hasHomophone } from './homophones.js';
 import { serverIsUp, loadEvents, record, flushOutbox } from './log.js';
 
 import { deriveMastery } from '../../core/mastery.js';
@@ -32,6 +33,7 @@ import {
   revealLadder,
   revealedCount,
   revealDelayMs,
+  flashWord,
 } from './ui/word.js';
 import { mountLearnScreen, renderLearn, onShowWord, learnLadder } from './ui/learn.js';
 import { renderResults, onResultsAction } from './ui/results.js';
@@ -51,6 +53,31 @@ const TICK_MS = 100;
 
 const engine = createEngine(spellingSpace);
 const audio = createAudio();
+
+/**
+ * The player the word screen is given: `audio`, with every outcome reported.
+ *
+ * THE SCREEN IS THE ONLY THING THAT SPEAKS A PROBLEM. It used to be both — this
+ * file called `audio.play` and `renderWord` called it again through
+ * `speakNewWord`, so every word was played twice back to back and the second
+ * call `stop()`ed the first. Inaudible, because the two were milliseconds apart,
+ * and exactly the class of thing that produced a silent game this morning.
+ *
+ * The reason the duplicate existed is that `reportAudio` lives here: the screen
+ * knew how to speak and this file knew how to notice silence. Wrapping the
+ * player rather than calling it twice gives the screen both.
+ */
+const screenAudio = {
+  play: (word) => audio.play(word).then(reportSpoken),
+  preload: (word) => audio.preload(word),
+  stop: () => audio.stop(),
+};
+
+/** Report an outcome and hand it back, so callers can still read it. */
+function reportSpoken(outcome) {
+  reportAudio(outcome);
+  return outcome;
+}
 
 /**
  * The spine we actually draw from: SPINE trimmed to words with a pronunciation
@@ -273,10 +300,39 @@ function onReveal() {
  *
  * @returns {Promise<object>} the attempt event
  */
-function runProblem(id, model, mode, container) {
+async function runProblem(id, model, mode, container) {
   const item = model.byId.get(id).item;
   const bucket = model.byId.get(id).bucket;
   const ladder = mode === 'learn' ? learnLadder() : revealLadder(item.word);
+
+  // THE HOMOPHONE FLASH — a fix to the QUESTION, not help with the answer.
+  //
+  // Drill plays a sound and shows empty boxes. For `sea` that is not a question:
+  // `see` is an equally correct reading of everything the kid was told, so she
+  // can be entirely right and be marked wrong. No improvement to the audio fixes
+  // it. Eight such sets are in the spine today (docs/next-steps.md item 1).
+  //
+  // So for those words only, the word is shown while it is spoken, then taken
+  // away and spelled from memory.
+  //
+  // BEFORE `startProblem`, WHICH IS THE WHOLE POINT OF DOING IT HERE. The clock
+  // starts when the problem does, so reading time is not response time —
+  // otherwise every homophone would look slow against `hotMs`, never go hot,
+  // and sit in the frontier for ever. Nothing about the flash reaches the
+  // engine: `revealed` stays 0 and the attempt can still be `clean`.
+  //
+  // Learn mode is excluded because the word is already on screen there
+  // throughout, so a flash would be showing her what she is looking at.
+  const flashed = mode === 'drill' && hasHomophone(item.word);
+  if (flashed) {
+    flashWord(container, item.word);
+    // Spoken explicitly, because the screen's own `speakNewWord` fires off a
+    // ProblemState and there is not one yet — that is the point of flashing
+    // before the problem starts. Not awaited: the word is already on screen and
+    // the sound should land under it, not after it.
+    screenAudio.play(item.word);
+    await hold(CONFIG.homophoneFlashMs);
+  }
 
   return new Promise((resolve) => {
     active = {
@@ -303,14 +359,27 @@ function runProblem(id, model, mode, container) {
         // read off the same ladder index.
         event.revealed = revealedCount(state, mode);
 
+        // Recorded so the log can tell the two prompts apart. NOT a hint count
+        // and deliberately not folded into `revealed`: the flash states the
+        // question, it does not help with the answer, and a replay that treated
+        // it as scaffolding would score every homophone as assisted for ever.
+        if (flashed) {
+          event.flashed = true;
+        }
+
         resolve(event);
       },
     };
 
+    // This speaks the word: renderWord -> speakNewWord, once per ProblemState,
+    // through screenAudio so the outcome is still reported. There is no second
+    // call here any more; see screenAudio.
+    //
+    // A flashed word is therefore said twice — once under the word while it
+    // shows, and again as the empty slots appear. That is deliberate. The second
+    // one lands on "now spell it", which for a homophone is the moment the
+    // question actually gets asked.
     renderWord(container, active.state, mode);
-    // Not awaited — the word is already on screen and the kid can start typing.
-    // But the OUTCOME is acted on: see reportAudio.
-    audio.play(item.word).then(reportAudio);
     if (mode === 'drill') {
       startTickLoop(mode, bucket, container);
     }
@@ -365,12 +434,12 @@ async function runSession(mode) {
     order = buildLearnSession(family.words, CONFIG);
     const mounted = mountLearnScreen(stage);
     container = mounted.wordContainer;
-    mountWordScreen(container, { audio });
+    mountWordScreen(container, { audio: screenAudio });
     onShowWord(stage, onReveal);
   } else {
     order = null; // drill picks each word as it goes, against the live model
     container = stage;
-    mountWordScreen(container, { audio });
+    mountWordScreen(container, { audio: screenAudio });
   }
 
   const total = mode === 'learn' ? order.length : CONFIG.sessionLength;

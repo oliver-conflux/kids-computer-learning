@@ -163,6 +163,50 @@ export function renderWord(container, state, mode = 'drill') {
 }
 
 /**
+ * Show a whole word in the slots, with no problem running.
+ *
+ * The homophone flash (js/homophones.js). Drill plays a sound and shows empty
+ * boxes, which for `sea` is not a question — `see` is an equally correct reading
+ * of everything the kid was told. For those words only, the word is shown once
+ * while it is spoken, and then taken away.
+ *
+ * IT IS PART OF THE PROMPT, NOT PART OF THE HELP, and every design choice here
+ * follows from that:
+ *
+ *   - it renders from a WORD, not from a ProblemState, and is called before the
+ *     problem starts. The engine never learns that flashing exists, `revealed`
+ *     stays 0, and the attempt can still be `clean`. Counting it as a reveal
+ *     would mean a homophone could never go hot, so it would sit in the frontier
+ *     for ever — help the kid did not ask for, permanently punished.
+ *   - the problem's clock starts AFTER the flash, so reading time is not
+ *     response time. Otherwise every homophone would look slow against `hotMs`
+ *     and, again, never leave the window.
+ *   - `data-state="flash"` rather than `revealed`, so the two are distinguishable
+ *     in the DOM and in a screenshot.
+ *
+ * The screen is mounted if it is not already, so this can be the first thing
+ * drawn for a problem.
+ *
+ * @param {Element} container the element mountWordScreen was given
+ * @param {string} word
+ * @returns {void}
+ */
+export function flashWord(container, word) {
+  const screen =
+    container.querySelector('.word-screen') ??
+    mountWordScreen(container, { audio: players.get(container) });
+
+  const slots = find(screen, 'slots');
+  const letters = typeof word === 'string' ? word.length : 0;
+
+  slots.textContent = '';
+  for (let i = 0; i < letters; i += 1) {
+    slots.append(el('span', 'slot', { state: 'flash' }, word[i]));
+  }
+  slots.style.setProperty('--letters', String(Math.max(letters, 1)));
+}
+
+/**
  * The progress strip: `done` of `total` words, plus the bar's fill.
  *
  * `done` counts words COMPLETED. It starts at 0 and reaches `total` only when

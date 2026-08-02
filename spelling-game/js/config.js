@@ -77,6 +77,24 @@ export const CONFIG = {
   // word handed over letter by letter is still partly retrieved.
   letterStepMs: 1200,
 
+  // How long a homophone is shown before the kid has to spell it.
+  //
+  // THIS IS PROMPT TIME, NOT HELP TIME. For `sea` the sound alone is not a
+  // question — `see` is an equally correct reading of everything she was told —
+  // so the word on screen IS the question, and this is how long she gets to read
+  // it. Only words in js/homophones.js are flashed, and only in drill; learn
+  // already has the word on screen throughout.
+  //
+  // 1500ms: long enough to read a short word twice at seven years old, and long
+  // enough to cover the ~500ms pronunciation so the sound and the spelling are
+  // seen together, which is the association worth building. Short enough that
+  // the word is gone well before she finishes typing, so this stays spelling
+  // rather than copying.
+  //
+  // The problem's clock starts AFTER this, so it costs her nothing against
+  // `hotMs` — see runProblem.
+  homophoneFlashMs: 1500,
+
   weights: { cold: 6, warm: 3, hot: 1 },
 
   // The floor on the typing-difficulty dial. An awkward word is served about a
