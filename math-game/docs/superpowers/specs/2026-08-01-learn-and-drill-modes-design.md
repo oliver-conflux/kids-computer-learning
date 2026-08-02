@@ -249,15 +249,41 @@ screen *shows* and never specified a control to start another session, so the
 session ended in a dead end requiring a page reload. The typing game spec has
 `[ Again ] [ Next → ]` in its results mockup; it was not carried over.
 
-The results screen gains:
+**The same results screen ends both modes**, and always offers both continuations:
 
 ```
-[ Drill again ]   [ Learn 3 facts ]   [ Done ]
+[ Learn 3 facts ]   [ Drill 20 ]   [ Done ]
 ```
 
-"Learn 3 facts" appears only when at least one eligible cold fact exists. Making
-the next mode a one-click choice off the results screen is how the two modes stay
-connected in use rather than being two separate things a kid has to know about.
+"Learn 3 facts" is hidden only when no eligible fact remains — every strategy-
+bearing fact is already `hot`. Otherwise both buttons are always present,
+whichever mode just finished.
+
+### Chaining is the session-length mechanism
+
+A session is ~3 minutes; a good sitting is more like 10–15. **The answer is not
+longer sessions, it is frictionless continuation.** Short blocks with a one-click
+continue reach fifteen minutes without prescribing it, and let a kid stop at a
+natural break instead of enduring a long bar. "One more" motivates better than a
+progress bar that will not end.
+
+So the results screen is the hub, not a terminus, and `sessionLength` stays small
+and tunable rather than growing to fill a sitting.
+
+### No special "drill the facts you just learned" mode
+
+The pedagogically strong sequence is acquire-then-retrieve while the route is
+fresh, and it might look like the drill button after a learn session should be
+scoped to those three facts.
+
+It should not, because **it already is, by construction**. Facts just taught in
+learn mode have no clean drill attempts, so they are still `cold`, so the
+scheduler's weighting (cold 6, warm 3, hot 1) serves them most often anyway.
+Ordinary interleaved drill emphasises exactly the right facts with no new mode,
+no scoping parameter, and no blocked-practice compromise on retention.
+
+Nothing is chained automatically. The good sequence is one click away, and
+whether to take it stays the kid's choice.
 
 ## 9. Timing
 
@@ -354,8 +380,13 @@ Two things worth settling when it is built:
 
 - Whether "shown how" is the right label for a kid. It has to read as progress,
   not as a consolation state.
-- Whether a learn session should end by offering an immediate short drill on the
-  same three facts — pedagogically strong, since acquisition wants to be followed
-  by retrieval, but it lengthens the sitting.
 - Whether `revealed: true` should influence which facts learn mode picks next.
   Probably, eventually; it needs real data first.
+- **How to encourage longer sittings.** Deliberately left alone for now. The
+  chaining buttons (§8) make a long sitting *possible*; nothing yet makes it
+  attractive. Worth solving only once the logs show what actually happens — how
+  many sessions a sitting really contains, and whether they stop at a natural
+  point or drift off. Guessing at a motivator before seeing that would mean
+  designing for an imagined kid. Whatever the answer is, it must not become a
+  streak or a target: the same reasoning that keeps a clock off the drill screen
+  applies to anything that punishes a day off.
