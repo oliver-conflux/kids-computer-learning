@@ -9,6 +9,31 @@
 // `build` is the version tag written onto every logged event. Bump it whenever
 // scheduler weights, hint delays, or bucket thresholds change, so before/after
 // comparison across the log is a filter rather than a guess.
+//
+// WHICH KEYS THE SHARED CORE READS. Since the extraction, some of these keys are
+// read by `core/` and some are math's alone. NOTHING MOVED OUT OF THIS TABLE and
+// nothing should: each game keeps one complete tunables table, because a config
+// split across two files is a config you cannot read in one sitting, and because
+// the two games want different values for the same key. The grouping below is a
+// contract, not a relocation — the spelling game's table must supply every
+// core-read key, and may set them to different values.
+//
+//   core/mastery.js   retain, hotMs, maxPlausibleMs
+//   core/scheduler.js weights, noRepeatWithin, governorWindow, governorFloor
+//   core/engine.js    build
+//   core/log.js       logTail
+//   game-only         mode, sessionLength, learnFacts, learnPasses, delays,
+//                     blocksMaxProduct
+//
+// `delays` is game-only despite looking shared: the engine takes `delayMs` as a
+// parameter and never reads the table, so each game decides for itself how a
+// bucket becomes a duration. Spelling needs that freedom — it steps one letter
+// at a time where math reveals once.
+//
+// The one value the two games are known to disagree on is `hotMs`. Math uses
+// 1500ms because a multiplication fact is one keystroke or two. Spelling cannot:
+// typing "friend" takes longer than that even when the kid knows it cold, so a
+// shared threshold would report fluent spellers as permanently warm.
 
 export const CONFIG = {
   build: 'm2',
