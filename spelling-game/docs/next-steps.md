@@ -10,73 +10,98 @@ bugs and playing is what found them.
 
 ---
 
-## 1. Eight homophone sets are unanswerable — **measured, live now**
+## 1. Homophones — **flash shipped; 17 more sets found and not yet added**
 
 **The bug.** The game plays a sound and asks for a spelling. For a homophone
 that is not a question. The kid can be completely right and be marked wrong.
 
-Already in the shipped list, both words playable today:
+**Fixed for the sets we know about.** `homophones.js` holds 25 sets and drill
+mode flashes the word once while saying it (commit `fde89da`), which makes the
+question answerable without turning every word into copying.
+
+**The list is incomplete, and we now have a cheap way to find the rest.**
+Whisper round-tripping all 995 generated mp3s surfaced 43 words it spelled
+differently from the target. 16 were already covered. **These 17 are real,
+typable rival words and are NOT in `homophones.js`:**
 
 ```
-to / too / two      see / sea       hear / here     their / there
-know / no           right / write   for / four      read / red
+which / witch     been / bin        piece / peace     passed / past
+week / weak       base / bass       meet / meat       whether / weather
+sail / sale       hole / whole      wrote / rote      plains / planes
+cents / sense     board / bored     tied / tide       weight / wait
+led / lead
 ```
 
-Eight live sets. `our / are` is dormant only because `are` has no audio.
+Every one is a word the kid could plausibly type, so every one is a problem she
+can answer correctly and be marked wrong on.
 
-**Nothing is broken in the code.** The engine compares typed letters to the
-target and does so correctly. The PROMPT is insufficient: audio alone cannot say
-which homophone is wanted. No amount of better audio fixes it — a perfect
-recording of /siː/ still does not distinguish `see` from `sea`.
+**Deliberately excluded from that list**, and the reasons are the criteria to
+apply next time:
 
-**Three ways out, all raised by Oliver, in increasing cost:**
+- **Proper nouns** — `mat/Matt`, `carry/Carrie`, `check/Czech`, `main/Maine`.
+  Not words she would write here.
+- **Letter names** — `are/r`, `why/y`, `eye/i`, `oh/o`. Typable, but not words,
+  and the existing rule is that the rival spelling must be a real typable word.
+- **`except/accept`** — commonly confused, not actually homophones. A different
+  problem with a different fix.
 
-1. **Flash the word once while it is said.** Cheapest by far, and it needs no new
-   content — the word already exists on screen in learn mode. Show it for a beat
-   at the start of the problem, then hide it and let her spell. Turns drill into
-   something between recall and copying, which is a real cost; possibly right as
-   a *homophone-only* behaviour rather than a global one.
-2. **A sentence.** "I swam in the **sea**." Unambiguous, and it is what a
-   classroom spelling test actually does. Cost is content: a sentence per
-   homophone, hand-written, plus audio for it — and the audio problem gets worse,
-   because now a whole sentence has to be spoken.
+**Why this is worth doing rather than leaving.** The `than`/`then` bug found
+during the TTS work was this exact failure with the flash *not* firing: the audio
+was wrong, so she would have been marked wrong for hearing correctly. For a true
+homophone the audio is *right* and she is still marked wrong — which is worse,
+because nothing is broken and nothing would ever show up in a log as a defect.
+
+**Where to start.** Add the 17 to `homophones.js`; `hasHomophone` and the flash
+need no change. Re-run the detector after any spine growth:
+`speech-transcribe --expect words.txt <dir>` on the GPU box — its mismatches are
+a homophone list, not a failure list.
+
+**Nothing is broken in the code**, and that is the point. The engine compares
+typed letters to the target and does so correctly. The PROMPT is insufficient:
+audio alone cannot say which homophone is wanted, and no amount of better audio
+fixes it — a perfect recording of /siː/ still does not distinguish `see` from
+`sea`. Generating our own audio did not help here and never could have.
+
+**The three ways out, in increasing cost. The first one shipped:**
+
+1. ~~**Flash the word once while it is said.**~~ **Done.** Homophone-only rather
+   than global, so ordinary drill words stay recall rather than copying. That
+   scoping was the right call and should hold as the list grows.
+2. **A sentence.** "I swam in the **sea**." Unambiguous, and what a classroom
+   spelling test actually does. **Cheaper than it was** — the audio objection
+   ("a whole sentence has to be spoken") is gone now that we generate our own,
+   and `say.py` takes arbitrary text, not just words. What remains is the
+   content cost: a hand-written sentence per homophone.
 3. **A graphic.** Strongest for a young kid and needs no reading at all, which
    matters when the whole point is that she cannot yet spell. Cost is an image
-   per word and a licensing question the rest of this project has carefully
-   avoided.
+   per word plus a licensing question the rest of this project has avoided.
 
-**Worth noticing:** 1 is a change to the word screen, 2 and 3 are changes to the
-CONTENT MODEL — a word gains a sentence or a picture, so `spine.js` entries stop
-being `{word, rank, dolch}`. That is the decision to make first, because it also
-governs whether homophones can ever be added deliberately rather than tolerated
-accidentally.
+**Worth noticing:** 1 was a change to the word screen; 2 and 3 change the CONTENT
+MODEL — a word gains a sentence or a picture, so `spine.js` entries stop being
+`{word, rank, dolch}`. That is still the decision to make before any deliberate
+homophone teaching, as opposed to the tolerating we do now.
 
-**Interim option, cheap:** drop one of each colliding pair from the spine until
-this is solved. It costs eight words and removes eight guaranteed-unfair
-problems. Not obviously right — `their/there` is exactly the pair a kid most
-needs — but it is honest, whereas shipping them today is not.
+The old interim suggestion — drop one of each colliding pair from the spine — is
+**withdrawn**. The flash makes those words answerable, and `their`/`there` is
+exactly the pair a kid most needs.
 
 ---
 
-## 2. Twenty-eight words have no audio — **measured**
+## 2. ~~Twenty-eight words have no audio~~ — **DONE 2026-08-02**
 
-`sat ran had got fed is was are words were said these has been did made came
-does went men thought saw those children feet began took later`
+Solved by leaving Merriam-Webster and generating every word ourselves with
+Kokoro-82M (commit `2da52f3`). Coverage went from 594 of 995 playable to **995
+of 995**, and the words recovered are exactly the ones this item was about:
+`is was said had has did got were been`.
 
-Merriam-Webster files inflections under the base headword, so these return an
-entry with no pronunciation of its own. Verified against BOTH references;
-Intermediate rescued only `the`, `have` and `found`.
-
-Currently handled by trimming: `GET /api/audio` lists what is on disk and the
-game never serves anything else, so nothing is unanswerable — the words simply
-do not appear. Full reasoning in `docs/audio-sourcing.md`.
-
-That is a holding position, not a fix. They are high-frequency words a
-seven-year-old needs.
+`playableSpine` still exists and now trims nothing — it is the guard against a
+partial cache rather than a load-bearing filter. Full account, including the
+three audits and the `than` → "then" bug that only the phoneme check caught, is
+in `docs/audio-sourcing.md`.
 
 ---
 
-## 3. Morphology is the next content, and TTS gates it — **measured**
+## 3. Morphology is the next content — **measured; no longer blocked**
 
 **The gap.** Every pattern tag in the game today is a rime, a digraph, a blend,
 or `irregular`. **There is not one suffix.** `-ing` matches only `thing`,
@@ -102,14 +127,20 @@ actual complaint.
 
 It should also shrink item 4.
 
-**The blocker, checked rather than assumed.** Queried both references for
-`hopping stopped running hopped cats wishes biggest happier`: **not one exists in
-either**, and mostly as "no entry" rather than "no audio". So the neural-TTS
-pipeline sketched in `docs/audio-sourcing.md` is a PREREQUISITE for this
-expansion, not a quality upgrade alongside it.
+**The blocker is gone as of 2026-08-02.** It used to be that M-W had no entry at
+all for `hopping stopped running hopped cats wishes biggest happier` — checked,
+not assumed — which made a TTS pipeline a PREREQUISITE for this expansion rather
+than a quality upgrade alongside it.
 
-Convenient ordering, at least: the TTS work fixes item 2 retroactively and
-unlocks item 3.
+We now generate our own audio, so **any word we can spell we can say**. This item
+is no longer gated on anything external; it is purely a content decision about
+which suffixed forms to add and in what order.
+
+One caution carried over from the TTS work: new words must go through
+`tools/gen-audio.js` and pass its audits before they are playable, and a suffixed
+form is exactly where a mispronunciation would hide — `hopping` and `hoping`
+differ by one phoneme, and the whole point of adding them is that discrimination.
+Listen to those pairs specifically rather than trusting the audit alone.
 
 ---
 
@@ -164,9 +195,13 @@ deliberate reloads between sessions.
 
 ## 7. Carried forward from the Gate B review
 
+The first three concern `fetch-words.js`, which **no longer runs** — the game
+left Merriam-Webster on 2026-08-02 (item 2). The file is kept as the record of
+that path. Fix these only if it is ever revived; none of them can affect play.
+
 - **`fetch-words.js` re-fetches M-W-missing words forever.** A word absent from
-  both references writes no file, so every subsequent run asks again. With 28
-  such words that is 28 wasted calls per run against a 1000/day cap. Fix: write a
+  both references writes no file, so every subsequent run asks again. With 37
+  such words that is 37 wasted calls per run against a 1000/day cap. Fix: write a
   negative-cache record rather than nothing.
 - **`--limit` counts WORDS, not API calls.** A word can cost two calls now that
   the fallthrough is on missing audio (fixed 2026-08-02), so `--limit=500` can
