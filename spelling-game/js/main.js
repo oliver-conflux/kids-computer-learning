@@ -15,14 +15,14 @@
 import { CONFIG } from './config.js';
 import { SPINE, playableSpine } from './spine.js';
 import { spellingSpace } from './space.js';
-import { activeWindow } from './frontier.js';
-import { typingCost, KEYMAP } from './typing-cost.js';
 import { pickLearnFamily, buildLearnSession } from './learn.js';
 import { createAudio } from './audio.js';
 import { hasHomophone } from './homophones.js';
 import { serverIsUp, loadEvents, record, flushOutbox } from './log.js';
 
 import { deriveMastery } from '../../core/mastery.js';
+import { activeWindow } from '../../core/frontier.js';
+import { typingCost, KEYMAP } from '../../core/typing-cost.js';
 import { pickNext } from '../../core/scheduler.js';
 import { createEngine } from '../../core/engine.js';
 
@@ -402,7 +402,7 @@ async function runSession(mode) {
   // stale exactly when it mattered.
   let model = deriveMastery(sittingEvents, CONFIG, spellingSpace);
   const startBuckets = new Map([...model.byId].map(([id, stats]) => [id, stats.bucket]));
-  let frontierIds = activeWindow(PLAYABLE, model, CONFIG.windowSize);
+  let frontierIds = activeWindow(PLAYABLE, model, CONFIG.windowSize, spellingSpace);
 
   // THE WHOLE SPINE IS HOT. `activeWindow` returns [] and core's `pickNext`
   // throws on an empty candidate set — deliberately, because for the math game
@@ -487,7 +487,7 @@ async function runSession(mode) {
     // evidence. core/scheduler.js documents the measurement.
     model = deriveMastery(sittingEvents, CONFIG, spellingSpace);
     if (mode === 'drill') {
-      frontierIds = activeWindow(PLAYABLE, model, CONFIG.windowSize);
+      frontierIds = activeWindow(PLAYABLE, model, CONFIG.windowSize, spellingSpace);
       if (frontierIds.length === 0) {
         break; // she finished the spine mid-session; the results screen still runs
       }

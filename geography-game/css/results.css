@@ -1,0 +1,664 @@
+/* Results screen: the session summary, the frontier and the countries in play.
+ *
+ * Every selector in this file is scoped under `.results`, so nothing here can
+ * reach the prompt screen's stylesheet or be reached by it. The palette comes
+ * from base.css's tokens — `--page`, `--accent`, `--heading`, `--muted`,
+ * `--error-fill`, `--error-text`, `--surface`, `--deck` — and no raw hex appears
+ * below except for the MASTERY STATE colours, which base.css has no tokens for.
+ *
+ * THOSE ARE COPIED FROM spelling-game/css/results.css DELIBERATELY, values and
+ * contrast notes included, under the same rule base.css states for the palette:
+ * copy, never edit in place. A kid moving between the games reads the same
+ * colours for the same states, and the values were tuned for AA against their
+ * own fills — re-deriving them from `--accent` would quietly lose that. If one
+ * changes, change it in all of them.
+ *
+ * THREE STATES, NOT THE SPELLING SCREEN'S FOUR. Its fourth, "shown how", means
+ * cold-but-taught, and this game has no learn mode for anything to be taught in;
+ * `taught` is false for every item here by construction. A legend entry that can
+ * never light up is worse than no legend entry, so the `--shown-*` values are
+ * simply absent rather than carried and unused.
+ *
+ * State colours differ in hue AND lightness, and each is backed by a non-colour
+ * cue, so the states still read for a colour-blind kid or a parent looking over
+ * a shoulder:
+ *
+ *   not started    dashed border all the way round, grey
+ *   getting there  solid 1px border all the way round
+ *   from memory    filled
+ *
+ * NOTHING IN THIS FILE ANIMATES A CLOCK. There is one bar, and it measures
+ * position on the country list. It is not a timer, not a countdown and not a
+ * speed gauge, and nothing here should ever be repurposed into one.
+ */
+
+.results {
+  /* base.css disables selection globally, which is right while a kid is typing
+     but wrong here: this screen is also the parent-facing diagnostic, and a list
+     you cannot copy out is less useful than one you can. */
+  -webkit-user-select: text;
+  user-select: text;
+
+  /* The mastery state colours. See the header. */
+  --cold-fill: #e3e6ec;
+  --cold-line: #b9c0cc;
+  --cold-text: #565d69; /* AA at 13px on the cold fill */
+  --warm-fill: #f3c98d;
+  --warm-line: #dda85c;
+  --warm-text: #7a4f16;
+  --hot-fill: #6455c4; /* the accent darkened: the raw --accent is 4.27:1 with white, AA needs 4.5 */
+  --hot-line: #6a5ac6;
+  --hot-text: #ffffff;
+
+  /* A clean answer — no letters given — is the only attempt shape worth marking
+     out, because it is the only evidence of retrieval the model counts. Not a
+     mastery state: it describes one try, not an item. */
+  --clean-fill: #ded9f2;
+  --clean-line: #8f7fd0;
+
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 24px 20px 64px;
+  color: var(--heading);
+  font-family: var(--font-ui);
+}
+
+.results *,
+.results *::before,
+.results *::after {
+  box-sizing: border-box;
+}
+
+.results h1,
+.results h2,
+.results h3,
+.results h4,
+.results p,
+.results ul {
+  margin: 0;
+}
+
+.results ul {
+  padding: 0;
+  list-style: none;
+}
+
+/* --- header ------------------------------------------------------------ */
+
+.results__title {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 6vw, 40px);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.results__subtitle {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.results__h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.results__h4 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.results__caption,
+.results__empty {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.results__empty {
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+/* --- session stats ----------------------------------------------------- */
+
+.results__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.results__stat {
+  flex: 1 1 150px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border-radius: 14px;
+}
+
+.results__stat-value {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--accent);
+}
+
+.results__stat-label {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.results__stat-note {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* One of the two permitted comparisons — this session's median against the
+ * kid's own previous one. A quicker session gets the accent; everything else
+ * stays muted. A slower session is NOT styled as an error: no red, no arrow, no
+ * extra weight. A slower median is often not a worse session, and reading it
+ * back as failure would teach exactly the clock-chasing this game avoids. */
+.results__stat-note--quicker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.results__stat-note--first,
+.results__stat-note--plain,
+.results__stat-note--same,
+.results__stat-note--slower {
+  color: var(--muted);
+}
+
+/* --- continuation row --------------------------------------------------- */
+
+/* Sits directly under the stats, above the fold, because it is the decision
+ * point: the sitting continues or it does not, and scrolling past everything to
+ * find out is exactly the friction that keeps a short session from becoming a
+ * long one. Done is a quiet ghost so that stopping is easy and unpunished but
+ * never the thing the eye lands on. */
+.results__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.results__action {
+  flex: 1 1 auto;
+  min-height: 52px;
+  padding: 14px 22px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.results__action--go {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--surface);
+}
+
+.results__action--quiet {
+  flex: 0 1 auto;
+  background: transparent;
+  border-color: var(--cold-line);
+  color: var(--muted);
+}
+
+.results__action:focus-visible {
+  outline: 3px solid var(--heading);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .results__action--go:hover {
+    background: var(--hot-fill);
+    border-color: var(--hot-fill);
+  }
+
+  .results__action--quiet:hover {
+    border-color: var(--muted);
+    color: var(--heading);
+  }
+}
+
+.results__action:active {
+  transform: translateY(1px);
+}
+
+/* --- bucket movement --------------------------------------------------- */
+
+.results__moves {
+  margin-top: 28px;
+}
+
+.results__move-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.results__move {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--surface);
+  border-radius: 12px;
+  border-left: 4px solid var(--cold-line);
+}
+
+.results__move--up {
+  border-left-color: var(--accent);
+}
+
+/* A regression is shown as plainly as a promotion. Movement is not one-way:
+ * quick answers age out of the retain window and an item drops back. That is
+ * information, not a failure, so it is warm-toned rather than alarming. */
+.results__move--down {
+  border-left-color: var(--error-text);
+}
+
+.results__move-arrow {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.results__move--up .results__move-arrow {
+  color: var(--accent);
+}
+
+.results__move--down .results__move-arrow {
+  color: var(--error-text);
+}
+
+.results__move-name {
+  min-width: 140px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.results__move-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.results__move-to {
+  color: var(--muted);
+}
+
+.results__move-why {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--error-text);
+}
+
+.results__pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.results__pill--cold {
+  background: var(--cold-fill);
+  color: var(--cold-text);
+  border: 1px dashed var(--cold-line);
+}
+
+.results__pill--warm {
+  background: var(--warm-fill);
+  color: var(--warm-text);
+  border: 1px solid var(--warm-line);
+}
+
+.results__pill--hot {
+  background: var(--hot-fill);
+  color: var(--hot-text);
+  border: 1px solid var(--hot-line);
+}
+
+/* --- the frontier ------------------------------------------------------- */
+
+/* The one number that answers "is she progressing?". It gets the largest type
+ * on the screen after the title, because it is the thing the whole derived-level
+ * design exists to produce and the only place it is ever visible. */
+.results__frontier {
+  margin-top: 28px;
+}
+
+.results__frontier-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.results__frontier-position {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 8vw, 44px);
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.results__frontier-of {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.results__frontier-note {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.results__frontier-note--forward {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* The frontier moving BACKWARDS is the mastery model working — a hot item cooled
+ * and came back into the window. Stated, not flagged: muted like every other
+ * neutral note, with no red and no arrow. */
+.results__frontier-note--back,
+.results__frontier-note--first,
+.results__frontier-note--plain,
+.results__frontier-note--same {
+  color: var(--muted);
+}
+
+/* A POSITION BAR, NOT A TIMER. It fills as the kid moves down the country list
+ * and changes only between sessions. Nothing animates it during play, because it
+ * is not on screen during play. */
+.results__spine {
+  position: relative;
+  height: 12px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: var(--deck);
+  overflow: hidden;
+}
+
+.results__spine-fill {
+  width: calc(var(--reached, 0) * 100%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+/* Where the frontier stood at the end of the last session, so the movement is
+ * visible rather than only asserted in the sentence above. */
+.results__spine-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--at, 0) * 100%);
+  width: 2px;
+  background: var(--heading);
+  opacity: 0.45;
+}
+
+.results__frontier-mastered {
+  margin-top: 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* --- the countries in play ---------------------------------------------- */
+
+.results__window {
+  margin-top: 30px;
+}
+
+.results__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Chips are sized off the name, not fixed-width: a country list is read, and a
+ * grid of padded boxes would make `Chad` and `Papua New Guinea` the same shape.
+ *
+ * EACH CHIP NAMES A COUNTRY *AND* A PROMPT, because those are separate items
+ * with separate mastery. `Belize` appears twice and must be two chips a parent
+ * can tell apart at a glance — hence the small second line rather than a
+ * tooltip. */
+.results__item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.results__item-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.results__item-kind {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
+}
+
+.results__item--cold {
+  background: var(--cold-fill);
+  color: var(--cold-text);
+  border: 1px dashed var(--cold-line);
+}
+
+.results__item--warm {
+  background: var(--warm-fill);
+  color: var(--warm-text);
+  border: 1px solid var(--warm-line);
+}
+
+.results__item--hot {
+  background: var(--hot-fill);
+  color: var(--hot-text);
+  border: 1px solid var(--hot-line);
+}
+
+.results__item.is-selected {
+  outline: 3px solid var(--heading);
+  outline-offset: 1px;
+}
+
+.results__item:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.results__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.results__legend-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.results__swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+.results__swatch--cold {
+  background: var(--cold-fill);
+  border: 1px dashed var(--cold-line);
+}
+
+.results__swatch--warm {
+  background: var(--warm-fill);
+  border: 1px solid var(--warm-line);
+}
+
+.results__swatch--hot {
+  background: var(--hot-fill);
+  border: 1px solid var(--hot-line);
+}
+
+/* --- detail panel ------------------------------------------------------- */
+
+.results__detail {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--surface);
+  border-radius: 14px;
+  min-height: 132px;
+}
+
+.results__detail-hint {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.results__detail-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.results__detail-name {
+  letter-spacing: 0.02em;
+}
+
+.results__detail-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.results__block {
+  margin-top: 14px;
+}
+
+.results__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.results__chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--page);
+  border: 1px solid var(--cold-line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* See --clean-fill: the only attempt shape worth marking out. */
+.results__chip--clean {
+  background: var(--clean-fill);
+  border-color: var(--clean-line);
+}
+
+.results__chip.is-latest {
+  box-shadow: 0 0 0 2px var(--deck);
+}
+
+.results__chip-ms {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--heading);
+}
+
+.results__chip-wrong {
+  color: var(--error-text);
+  letter-spacing: 0.02em;
+}
+
+.results__wrongs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.results__wrong {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: var(--error-fill);
+  color: var(--error-text);
+  font-size: 12px;
+}
+
+.results__wrong-value {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+@media (max-width: 420px) {
+  .results {
+    padding: 16px 12px 48px;
+  }
+
+  .results__action {
+    padding: 13px 16px;
+    font-size: 17px;
+  }
+}

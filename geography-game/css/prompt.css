@@ -1,0 +1,325 @@
+/*
+ * prompt.css — the map, the flag, the name slots, and the wrong-answer pulse.
+ *
+ * This is spelling-game/css/word.css with the audio prompt line replaced by a
+ * picture, and it enforces the same rule that file exists to enforce:
+ *
+ *   THE NAME MUST NOT MOVE VERTICALLY WHEN ANYTHING APPEARS OR DISAPPEARS.
+ *
+ * A row of slots that jumps when a letter arrives makes a kid lose their place
+ * mid-thought, and a letter arriving is the one thing guaranteed to happen while
+ * they are mid-thought. Three things keep it still:
+ *
+ *   1. `.prompt` IS A FIXED HEIGHT, and it is the same height for a map and for
+ *      a flag. This is the whole reason the flag is sized off its height rather
+ *      than its width: a 4:3 flag and a 1:1 map are different shapes, and if
+ *      each took its natural size the slots would sit at two different heights
+ *      depending on which question was asked. They are two questions about the
+ *      same country and they must not look like two different screens.
+ *   2. A revealed letter is drawn INSIDE a slot that was already there. No node
+ *      appears, no node grows, and the row has the same height empty as full.
+ *   3. The type scale is a function of the name's LENGTH (`--letters`), fixed
+ *      for the whole problem. The slots never wrap, so the block is always
+ *      exactly one line tall.
+ *
+ * THE MAP'S HIGHLIGHT LIVES HERE AND NOWHERE ELSE. js/ui/map.js sets two class
+ * names and no colour at all. The one visual decision this game makes — how much
+ * a lit country stands out from forty neighbours — is therefore a value in this
+ * file, which is the file you can change in front of a child.
+ */
+
+.country-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(12px, 3vh, 32px);
+  width: 100%;
+}
+
+/* ---------- the prompt ---------- */
+
+/*
+ * A FIXED SQUARE BOX. Both prompts are drawn to its height, so the slots below
+ * never move between a map question and a flag question. See the header.
+ *
+ * Sized against the viewport's SHORTER axis in effect — `50vh` on a laptop,
+ * `82vw` on a phone held upright — because a map that overflows the fold is a
+ * map with the answer cropped off it.
+ */
+.prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+
+  width: 100%;
+  height: min(82vw, 50vh);
+}
+
+/*
+ * The map. The viewBox is square (js/viewbox.js), so `height: 100%` with an auto
+ * width makes it exactly fill the prompt box.
+ *
+ * The background is the ocean. Nothing draws water — there is no sea polygon and
+ * there does not need to be one, because water is definitionally everywhere the
+ * land is not, and a country's coastline is then the edge between its fill and
+ * this colour.
+ */
+.map {
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  background: var(--ocean);
+  border-radius: 14px;
+}
+
+/*
+ * Every country on screen except the one being asked about.
+ *
+ * `vector-effect: non-scaling-stroke` is load-bearing, not polish. The viewBox
+ * spans anything from 120 to 900 projected units depending on the country, so a
+ * stroke measured in those units would be a hairline around Russia and a thick
+ * band around Malta — the borders would look like a different map at every
+ * scale. This pins the stroke to device pixels, so a coastline reads the same
+ * whatever is being asked.
+ */
+.country {
+  fill: var(--land);
+  stroke: var(--coast);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+/*
+ * The country the question is about.
+ *
+ * COLOUR IS NOT THE ONLY CUE. The fill changes AND the outline gets darker and
+ * heavier, so the target is still the obvious one in greyscale, on a washed-out
+ * screen in daylight, or for a colour-blind kid. A highlight carried by hue
+ * alone would work on the developer's monitor and fail on the boat.
+ */
+.country--target {
+  fill: var(--target);
+  stroke: var(--heading);
+  stroke-width: 1.75;
+}
+
+/*
+ * The flag. Height-driven for the same reason the map is — see the header —
+ * with a max-width so a wide flag on a narrow phone shrinks rather than
+ * overflowing.
+ *
+ * The border matters: several flags are white at the edge (Japan, Finland,
+ * Poland, Nigeria) and would otherwise bleed into the page with no shape at all.
+ */
+.flag {
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 1px var(--deck),
+    0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- the name slots ---------- */
+
+/*
+ * One slot per letter, grouped into the name's words. This is not decoration.
+ * There is no submit key and no Enter — the name evaluates the moment the entry
+ * reaches full length — so the slots are what makes that rule visible. Without
+ * them a kid who types `belgum` for `belgium` sits waiting on a machine that
+ * appears to have ignored them.
+ *
+ * THE GAP BETWEEN GROUPS IS THE ENTIRE MULTI-WORD ANSWER. The engine's target is
+ * `costarica`, letters only, which is what lets this game reuse core/engine.js
+ * unchanged. The kid sees `Costa` and `Rica` because this rule sets the gap
+ * between `.slot-group`s five times the gap between slots. Nothing else is
+ * needed and nothing else is done: there is no space character, no separator
+ * node, no punctuation slot. The space bar types nothing (js/main.js), so the
+ * gap can never be something a kid tries to fill.
+ *
+ * The two gaps must stay clearly different sizes. If they converged, a
+ * three-word name would read as one long run and the kid would be back to
+ * guessing where the break falls, which is the thing the grouping exists to
+ * stop.
+ *
+ * THE TYPE SCALE IS A FUNCTION OF THE NAME'S LENGTH. `--letters` is set by
+ * country.js from the target itself; the second term of the `min()` is the size
+ * at which that many slots still fit across the viewport. `Chad` and
+ * `Central African Republic` are therefore both one line, both centred, and
+ * neither wraps — a wrapped name would be two rows tall and the map above it
+ * would move.
+ *
+ * `nowrap` is load-bearing rather than defensive: if the calculation is ever
+ * wrong it must overflow visibly, not silently reflow into a second line and
+ * shift the whole screen.
+ */
+.slots {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em; /* between words — see the header */
+
+  font-family: var(--font-display);
+  /* Declared twice on purpose. The second form divides by a custom property,
+     which is valid CSS and works in every browser this runs on — but if it ever
+     is not understood, the whole declaration is dropped and the slots would fall
+     back to the 16px body size, which is not a smaller name but a broken screen.
+     The first line is what they fall back to instead.
+
+     The 1.02 divisor is spelling's 0.9 plus the word gaps this game adds: the
+     longest name in the spine is 22 letters across three groups, and it has to
+     fit at whatever size that takes. */
+  font-size: clamp(22px, 9vw, 76px);
+  font-size: min(clamp(22px, 9vw, 76px), calc(88vw / (var(--letters, 7) * 1.02)));
+  font-weight: 700;
+  line-height: 1;
+  color: var(--heading);
+}
+
+.slot-group {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.1em; /* between letters of one word */
+}
+
+.slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 0.78em;
+  height: 1.08em;
+  border-radius: 0.12em;
+
+  background: var(--surface);
+  box-shadow: inset 0 0 0 0.035em var(--deck);
+  color: var(--heading);
+
+  transition:
+    box-shadow 140ms ease-out,
+    background-color 140ms ease-out;
+}
+
+/* The slot the next letter will land in. The accent ring is the only positional
+   feedback the kid gets, and it moves as they type — including across a word
+   gap, which is how they learn where the break is without being told. */
+.slot[data-state='next'] {
+  box-shadow: inset 0 0 0 0.045em var(--accent);
+}
+
+.slot[data-state='filled'] {
+  box-shadow: inset 0 0 0 0.035em var(--deck);
+}
+
+/*
+ * A revealed letter: greyed, INSIDE the slot. Not in a caption, not off to one
+ * side. The help has to land where the kid is already looking, which is the
+ * whole reason the reveal renders here rather than under the name.
+ *
+ * Greyed but deliberately NOT faint. This is the help of last resort, so it has
+ * to be the most readable grey on the screen rather than the least. Do not stack
+ * opacity on top of --muted here; the math game did, computed 1.79:1 against the
+ * slot, and made the final help the hardest thing on screen to read.
+ */
+.slot[data-state='revealed'] {
+  color: var(--muted);
+}
+
+/* ---------- wrong-answer pulse ---------- */
+
+/*
+ * ~400ms of warm amber, then it clears itself. Not a failure ceremony: nothing
+ * is marked red and left standing, no score is lost, and one more letter arrives
+ * — a wrong answer buys help. The pair of colours is the typing game's wrong-key
+ * flash and the math and spelling games' wrong-answer flash, unchanged, so
+ * "that didn't land" looks identical across all four games.
+ *
+ * Driven by data-pulse on the screen root. country.js restarts it by removing
+ * the attribute, forcing a reflow and setting it again — an animation will not
+ * replay on an element that already has it applied.
+ *
+ * The MAP DOES NOT PULSE. Only the slots do. The wrong answer was about the
+ * name, and flashing the picture would read as the picture having changed.
+ */
+.country-screen[data-pulse='on'] .slot {
+  animation: slot-pulse var(--pulse-ms) ease-out 1;
+}
+
+@keyframes slot-pulse {
+  0%,
+  65% {
+    background: var(--error-fill);
+    color: var(--error-text);
+    box-shadow: inset 0 0 0 0.045em var(--error-text);
+  }
+  100% {
+    background: var(--surface);
+    color: var(--heading);
+    box-shadow: inset 0 0 0 0.035em var(--deck);
+  }
+}
+
+/* ---------- the "I don't know" button ---------- */
+
+/*
+ * The bar holds its height when the button goes, so the slots do not jump
+ * upward the moment the kid presses it. Hiding the BUTTON leaves the bar; the
+ * descendant selector is what makes that work.
+ */
+.reveal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
+}
+
+.reveal-bar[hidden],
+.reveal-bar [hidden] {
+  display: none;
+}
+
+/*
+ * Deliberately quiet, and lifted wholesale from the math game's. It is an
+ * offer, not the goal — a big filled button would read as the thing you are
+ * supposed to press, and the thing you are supposed to do is have a go first.
+ * A kid moving between the two games should meet the same button.
+ */
+.reveal-bar__button {
+  padding: 0 22px;
+  height: 44px;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: var(--surface);
+
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--accent);
+  cursor: pointer;
+
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.reveal-bar__button:hover {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+/* The kid types straight at the document, so the button is reachable by
+   keyboard but must never look like it has swallowed the input. The focus ring
+   is the only cue a keyboard user gets, so it stays. */
+.reveal-bar__button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}

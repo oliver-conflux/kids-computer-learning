@@ -1,0 +1,123 @@
+/*
+ * base.css — reset, palette, type.
+ *
+ * The shared palette exactly as math, typing and spelling carry it, plus one
+ * block this game adds at the end: the four map colours, which no other game has
+ * any use for.
+ *
+ * The note in the other three copies says the extraction into a shared theme is
+ * overdue and is still not being done, because a shared stylesheet is a shared
+ * failure mode across games two children use daily. A fourth copy does not
+ * change that argument either way, and wiring a new game was not the change to
+ * introduce it in. Extract it on its own, with all four games playable in front
+ * of you to check against. See spelling-game/docs/next-steps.md.
+ *
+ * Until then the rule is COPY, NEVER EDIT IN PLACE. If a value in the shared
+ * block changes, change it in all four or the games stop reading as one family —
+ * which is the whole point of the palette being fixed.
+ */
+
+:root {
+  /* The six required values, exact. Do not approximate these. */
+  --page: #eef0f3; /* page background */
+  --accent: #7b6bd6; /* progress fill, the '=' and the filled slot underline */
+  --heading: #2f3742; /* numerals and any text that must be read */
+  --muted: #7b8493; /* the counter, the strategy line, the revealed answer */
+  --error-fill: #f4c9c2; /* wrong-answer pulse fill */
+  --error-text: #d98a7d; /* wrong-answer pulse text */
+
+  /* Two surface neutrals, also from the typing game's design reference: its
+     "key face" and "keyboard deck". They keep the slots and the progress track
+     reading as the same physical material as that game's keys. */
+  --surface: #ffffff;
+  --deck: #d9dde3;
+
+  /*
+   * Baloo 2 (display) and Nunito (UI) are the design's fonts, but they are
+   * Google Fonts and this project takes no CDN link of any kind — so they are
+   * named FIRST and used if the machine happens to have them installed, with a
+   * rounded-to-neutral system stack behind them otherwise. Nothing is fetched.
+   * If we ever want them guaranteed, the fix is to vendor the woff2 files into
+   * the repo and add an @font-face here, not a <link> to fonts.googleapis.com.
+   */
+  --font-display: 'Baloo 2', 'Trebuchet MS', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --font-ui: 'Nunito', 'Avenir Next', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+
+  /* The wrong-answer pulse, ~400ms. Shared by prompt.css so the flash and the
+     JS timer that clears the class cannot drift apart. */
+  --pulse-ms: 400ms;
+
+  /*
+   * THE MAP, and the only part of this file the other three games do not have.
+   *
+   * Four values, and the whole visual argument of the map prompt is in the gap
+   * between two of them. `--land` and `--target` must be separable at a glance
+   * and from across a room, because the question is "which one is lit"; ocean
+   * and land must be separable too, because a coastline a kid cannot find is a
+   * coastline that carries no information.
+   *
+   * The land is deliberately QUIET — a warm off-white a shade above the page —
+   * rather than a saturated colour. Every country on screen is a neighbour and
+   * there may be forty of them; anything louder and the target has to shout over
+   * a crowd instead of simply being the only coloured thing.
+   *
+   * `--target` is the shared accent, unchanged. It is the colour that means
+   * "this is the thing" in all four games, and the map is not the place to
+   * introduce a second one.
+   */
+  --ocean: #cfdeeb;
+  --land: #f3efe7;
+  --coast: #a9b2bf;
+  --target: var(--accent);
+}
+
+/* ---------- reset ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+h1,
+h2,
+p,
+figure {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  min-height: 100%;
+  background: var(--page);
+  color: var(--heading);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* The kid types straight at the document; there is no input element and no
+   submit key, so a stray drag-select on the numerals is only ever noise. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
