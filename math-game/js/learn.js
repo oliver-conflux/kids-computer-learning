@@ -13,8 +13,8 @@
 //      returns null for anything with a 0 or 1 operand, because there is no
 //      route to teach for "anything times zero" — it is a rule you either know
 //      or do not. So the trivial facts cannot enter learn mode by construction
-//      rather than by a separate filter someone could delete. 78 of the 121
-//      facts are eligible. Squares (6x6, 7x7, 8x8) are excluded for the same
+//      rather than by a separate filter someone could delete. 81 of the 121
+//      facts are eligible. Only the 0x and 1x rows are excluded, for the same
 //      reason from the other end: they are the anchors the other strategies
 //      lever off, so there is nothing shorter to derive them from.
 //
@@ -115,7 +115,9 @@ export function isLearnable(fact) {
 /**
  * How hard this fact is to memorise: the sum of both operands' pattern-support
  * scores. Higher is harder. Range 0..10; the hardest eligible facts are 6x7 and
- * 7x8 at 9, and 7x7 would top the table at 10 if it had a strategy to teach.
+ * 7x8 at 9, and 7x7 tops the table at 10 — the hardest fact in the set, and
+ * until strategy text was added for the three squares, the one fact learn mode
+ * could never reach.
  *
  * @param {Fact} fact
  * @returns {number}
@@ -158,14 +160,14 @@ function eligibleFacts() {
  *      discriminates not at all, so without this the selection falls through to
  *      table order and opens with 2x2, 2x3, 2x4 — the three easiest facts in
  *      the set, and precisely backwards for a mode whose job is the hard ones.
- *      With it, a fresh log opens on 6x7, 7x6, 7x8.
+ *      With it, a fresh log opens on 7x7, 6x7, 7x6.
  *
  * Selection is a stable partition over a pre-sorted list, so it is fully
  * deterministic: no randomness, no clock, no hidden state, and the same model
  * always yields the same facts in the same order.
  *
  * Returns fewer than `learnFacts` only when fewer learnable facts exist in
- * total, which cannot happen for the current table (78 learnable, 3 wanted) but
+ * total, which cannot happen for the current table (81 learnable, 3 wanted) but
  * is the honest answer if the learnable set is ever narrowed.
  *
  * Neither `model` nor `config` is mutated.
