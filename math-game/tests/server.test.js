@@ -7,7 +7,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { start, createServer, HOST, DEFAULT_TAIL, resolveSafe } from '../../server/serve.js';
+import {
+  start,
+  createServer,
+  HOST,
+  DEFAULT_TAIL,
+  resolveSafe,
+  logPathFor,
+  LOG_PATHS,
+  REPO_ROOT,
+  DEFAULT_GAME,
+} from '../../server/serve.js';
 
 /** Raw request so `..` segments survive — fetch() would normalise them away. */
 function request(port, options, body) {
@@ -337,6 +347,103 @@ test('an unknown game is rejected on POST too, and writes nothing', async () => 
   });
   assert.equal(res.status, 400);
   assert.deepEqual(fs.readdirSync(dir), []);
+
+  await close(server);
+});
+
+// --- the spelling game joins the allowlist ----------------------------------
+
+test('LOG_PATHS names a spelling log, and every log path stays inside the repo root', () => {
+  assert.equal(LOG_PATHS.spelling, path.join(REPO_ROOT, 'data', 'spelling-log.jsonl'));
+  for (const [game, file] of Object.entries(LOG_PATHS)) {
+    assert.equal(path.resolve(file), file, `${game} is not an absolute resolved path`);
+    assert.ok(file.startsWith(REPO_ROOT + path.sep), `${game} escapes the repo root`);
+  }
+});
+
+test('GET and POST ?game=spelling touch the spelling log and nothing else', async () => {
+  const dir = freshTempDir();
+  const mathLog = path.join(dir, 'math-log.jsonl');
+  const typingLog = path.join(dir, 'typing-log.jsonl');
+  const spellingLog = path.join(dir, 'spelling-log.jsonl');
+
+  const server = createServer({
+    root: dir,
+    logPaths: { math: mathLog, typing: typingLog, spelling: spellingLog },
+  });
+  const base = await listen(server);
+
+  const post = await fetch(`${base}/api/log?game=spelling`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'attempt', word: 'friend', stage: 'clean', revealed: 0 }),
+  });
+  assert.equal(post.status, 204);
+  assert.ok(fs.readFileSync(spellingLog, 'utf8').includes('friend'));
+  assert.equal(fs.existsSync(mathLog), false, 'the math log must be untouched');
+  assert.equal(fs.existsSync(typingLog), false, 'the typing log must be untouched');
+
+  const body = await (await fetch(`${base}/api/log?game=spelling&tail=10`)).json();
+  assert.equal(body.events.length, 1);
+  assert.equal(body.events[0].word, 'friend');
+
+  await close(server);
+});
+
+test('logPathFor resolves allowlisted games only — inherited keys name nothing', () => {
+  // The HTTP-level tests above prove the status code. This proves the reason for
+  // it: the lookup itself returns null rather than resolving to some path that a
+  // later change might start honouring.
+  const paths = { math: '/m', typing: '/t', spelling: '/s' };
+
+  assert.equal(logPathFor(paths, 'spelling'), '/s');
+  assert.equal(logPathFor(paths, 'math'), '/m');
+  assert.equal(logPathFor(paths, 'typing'), '/t');
+
+  // An absent ?game= is the one and only fallback, and it is to the default game.
+  assert.equal(logPathFor(paths, null), paths[DEFAULT_GAME]);
+  assert.equal(logPathFor(paths, undefined), paths[DEFAULT_GAME]);
+
+  // Everything Object.prototype carries is reachable with `in` or a truthiness
+  // check and must not be reachable here.
+  for (const key of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf']) {
+    assert.equal(logPathFor(paths, key), null, `${key} must not name a path`);
+  }
+  for (const key of ['', 'spelling ', 'Spelling', 'spell', '../secrets', 'spelling-log']) {
+    assert.equal(logPathFor(paths, key), null, `${key} must not name a path`);
+  }
+});
+
+test('an unknown ?game= is a 400 rather than a fallback to a real log', async () => {
+  const dir = freshTempDir();
+  const spellingLog = path.join(dir, 'spelling-log.jsonl');
+  const server = createServer({ root: dir, logPaths: { spelling: spellingLog } });
+  const base = await listen(server);
+
+  // The known game works on this very server, so a 400 below is the allowlist
+  // rejecting the name, not the endpoint being broken.
+  const ok = await fetch(`${base}/api/log?game=spelling`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'attempt', word: 'cat' }),
+  });
+  assert.equal(ok.status, 204);
+  const beforeSize = fs.statSync(spellingLog).size;
+
+  for (const game of ['__proto__', 'constructor', 'nope', 'spelling-log', '', 'math']) {
+    const get = await fetch(`${base}/api/log?game=${encodeURIComponent(game)}`);
+    assert.equal(get.status, 400, `GET game=${game} must be rejected`);
+
+    const post = await fetch(`${base}/api/log?game=${encodeURIComponent(game)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'attempt', word: 'sneaky' }),
+    });
+    assert.equal(post.status, 400, `POST game=${game} must be rejected`);
+  }
+
+  assert.equal(fs.statSync(spellingLog).size, beforeSize, 'a rejected game wrote somewhere');
+  assert.deepEqual(fs.readdirSync(dir), ['spelling-log.jsonl']);
 
   await close(server);
 });
