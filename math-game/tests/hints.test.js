@@ -112,9 +112,12 @@ test('ladderFor does not mutate the fact or the config', () => {
 // --- delayMsFor -----------------------------------------------------------
 
 test('delayMsFor reads the delays table', () => {
-  assert.equal(delayMsFor('cold', CONFIG), 2000);
-  assert.equal(delayMsFor('warm', CONFIG), 4000);
-  assert.equal(delayMsFor('hot', CONFIG), 6000);
+  // v2: these are no longer the gap between hint rungs. Drill has exactly one
+  // transition, so the value is the whole retrieval window before the answer
+  // appears. Raised accordingly when the hint rungs were removed.
+  assert.equal(delayMsFor('cold', CONFIG), 4000);
+  assert.equal(delayMsFor('warm', CONFIG), 6000);
+  assert.equal(delayMsFor('hot', CONFIG), 8000);
 });
 
 test('THE DELAY GROWS WITH MASTERY: hot waits longer than cold', () => {
