@@ -734,7 +734,57 @@ appears.**
 
 ---
 
-## ▶ GATE C — wave review
+## ▶ GATE C — PASSED WITH ONE ITEM UNVERIFIED 2026-08-02
+
+183 spelling tests green. Both modes were played in a browser against a real
+server writing a real log.
+
+**Observed, not assumed:**
+
+- **Progressive reveal.** Letters grey into the slots left to right, first after
+  `delays[bucket]`, then one per `letterStepMs`. Watched `pan` fill in `p`, `pa`,
+  `pan`.
+- **A wrong answer reveals exactly one letter.** Screenshotted mid-pulse: all
+  three slots amber (`--error-fill`), the entry cleared, exactly one letter
+  greyed in. Not two, not the rest of the word.
+- **The word does not move vertically** when letters, the pulse or the family
+  appear. Slot positions were identical across all three states.
+- **Press-and-hold.** The target word appears IN ITS PLACE in the family row
+  while held (`at cat hat bat`) and disappears on release (`cat hat bat`) — the
+  word is shown among its rhyming siblings rather than alone, and the space is
+  reserved so nothing shifts. Better than what the plan asked for.
+- **The family stays visible after the target hides**, and the target is
+  EXCLUDED from the family list while being asked for — showing `at` while asking
+  for `at` would be copying.
+- **Learn mode is blocked**: `at cat hat bat`, `at cat hat bat`, `at cat hat bat`.
+- **Learn results screen**, in full: names the activity ("LEARNING A WORD
+  FAMILY"), offers both continuations plus Done, shows the frontier as "1 of 338
+  words", and explains that learn sessions never move the colours rather than
+  rendering an empty "what moved" list as though the kid had achieved nothing.
+- **The log was read, not assumed.** Every attempt carries `revealed`. `wrong`
+  values stay STRINGS (`["zzz"]`), uncoerced. `patterns` is non-empty on every
+  line. The session event carries `frontier`.
+- **`stage === 'clean'` iff `revealed === 0`: 0 violations across 12 drill
+  attempts.** Learn is exempt BY CONSTRUCTION and this is worth writing down —
+  its ladder is `strategy -> reveal` and has no `clean` rung at all, so the rule
+  is a DRILL rule. A naive check across both modes reports 12 false violations.
+
+**NOT VERIFIED: the drill results screen.** Learn's was seen in full and the two
+share a component, but the drill branch — the clean-rate strip and the
+"what moved" list with real bucket movement — was never rendered in front of me.
+Playing 20 drill words needs the timed reveal, and every attempt ran in a hidden
+browser tab where Chrome clamps `setInterval` and `setTimeout` to roughly one
+tick a minute. Two automated driver scripts also raced each other into the same
+input buffer, which produced garbage keystrokes that looked like a game bug and
+were not. Verify this by hand, in a visible window, before letting a kid near it.
+
+**Worth knowing, not a defect:** the reveal loop genuinely stops advancing in a
+hidden tab. That is arguably correct — a kid who switches away should not have
+letters handed to her while gone — and `maxPlausibleMs` already discards the
+inflated latency. The math game hits the same thing through `requestAnimationFrame`
+and documents it in `mastery.js`.
+
+### The original gate criteria
 
 - **Play both modes end to end**, and say what was actually observed.
 - Confirm specifically: the amber pulse paints; press-and-hold hides on release;
