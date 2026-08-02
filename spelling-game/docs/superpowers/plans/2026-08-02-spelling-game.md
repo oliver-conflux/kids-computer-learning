@@ -656,6 +656,14 @@ appears.**
       active window and `itemWeight` as a function backed by `typingCost`. This
       is the only place the two dials meet, and it is easy to build everything
       else correctly and never connect them.
+- [ ] **Handle an empty active window.** Found at Gate B: `activeWindow` returns
+      `[]` when every word in the spine is hot, and core's `pickNext` throws on an
+      empty candidate set rather than returning something arbitrary — deliberately,
+      because for math an empty set really is a caller bug. Here it is a real
+      state a kid can reach by mastering the spine. Do not "fix" it in the core
+      or by letting the window fall back silently to the whole spine, which would
+      re-serve mastered words forever with no signal. Detect it here and end the
+      session with something that says she has finished what exists.
 - [ ] Emit the session event at the end, including `frontier`.
 - [ ] `record` fires without being awaited. The kid never waits on I/O.
 - [ ] Flush the outbox once at startup.
