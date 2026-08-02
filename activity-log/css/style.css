@@ -1,0 +1,432 @@
+/*
+  Activity Timer — the whole stylesheet.
+  Loaded by activity-log/index.html and by nothing else.
+
+  Palette, type and card shapes are lifted from games-menu.html on purpose: the
+  timer is entered from that menu, so it has to look like the same place. The
+  values are duplicated rather than shared because there is no shared
+  stylesheet in this repo and inventing one for two files is not worth it. If a
+  third consumer ever appears, that is the moment to extract it.
+
+      background   linear-gradient(135deg, #667eea, #764ba2)
+      cards        #fff, 20px radius, 0 10px 30px rgba(0,0,0,.2)
+      go button    #4CAF50 / #45a049, 50px radius
+      headings     #333        body copy   #666
+
+  NOTHING HERE STYLES #timer-bar OR ANYTHING INSIDE IT. The bar is rendered by
+  activity-log/js/bar.js and carries its own CSS, because games-menu.html mounts
+  the same bar without loading this file. A rule here would make the bar look
+  one way on this page and another on the menu.
+
+  Sized for a seven-year-old: 20px base, nothing under 1.1rem, every target at
+  least 60px tall.
+*/
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/*
+  Screens are swapped with the `hidden` attribute (see index.html). Several of
+  the elements that get hidden are flex or grid containers, and a `display`
+  rule beats the browser's default `[hidden] { display: none }` — so without
+  this, hiding a screen would silently do nothing. !important because that is
+  the only way it beats a later `display` on the same element.
+*/
+[hidden] {
+  display: none !important;
+}
+
+html {
+  font-size: 20px;
+}
+
+body {
+  font-family: 'Comic Sans MS', 'Arial', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  padding: 20px;
+  color: #333;
+  line-height: 1.4;
+}
+
+/*
+  The page column. `gap` is what separates the bar from the screens, so the
+  spacing lives on the container and not on #timer-bar — see the note above
+  about leaving the bar alone.
+*/
+.page {
+  max-width: 800px;
+  margin: 0 auto;
+  display: grid;
+  gap: 30px;
+}
+
+.page__title {
+  text-align: center;
+  color: #fff;
+  font-size: 2.4rem;
+  text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* ------------------------------- cards -------------------------------- */
+
+.card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 30px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.card__title {
+  font-size: 1.6rem;
+  color: #333;
+  margin-bottom: 25px;
+  text-align: center;
+}
+
+/* Screens are grids so their children space themselves evenly. */
+.screen {
+  display: grid;
+  gap: 25px;
+}
+
+.screen .card__title {
+  margin-bottom: 0;
+}
+
+/* ------------------------------- fields ------------------------------- */
+
+.field {
+  display: grid;
+  gap: 10px;
+}
+
+.field__label {
+  font-size: 1.2rem;
+  color: #333;
+  font-weight: bold;
+}
+
+.field__note {
+  color: #888;
+  font-weight: normal;
+  font-size: 0.95rem;
+}
+
+.field__input {
+  font-family: inherit;
+  font-size: 1.3rem;
+  color: #333;
+  background: #f7f8fb;
+  border: 3px solid #d9dde3;
+  border-radius: 14px;
+  padding: 16px 18px;
+  width: 100%;
+  min-height: 64px;
+}
+
+.field__input:focus {
+  outline: none;
+  border-color: #667eea;
+  background: #fff;
+}
+
+.field__input::placeholder {
+  color: #aab0ba;
+}
+
+/*
+  Time fields are narrower than text fields — the widget renders fixed AM/PM
+  segments, so a full-width box is mostly empty space that makes the field look
+  like it wants a sentence. They stay large: the digits are what she is typing.
+*/
+.field__input--time {
+  width: auto;
+  min-width: 12rem;
+  font-size: 1.6rem;
+  letter-spacing: 0.03em;
+}
+
+/*
+  THE ROW THAT MATTERS.
+
+  The time field and #clock-hint are siblings laid out side by side. The hint is
+  never moved inside the field, never turned into a placeholder, and never
+  copied into its value. She reads a clock and types what she read; the hint is
+  a reference she can check herself against, and a reference has to sit outside
+  the thing it is checking or it stops being one.
+
+  On a narrow screen it wraps UNDER the field rather than shrinking into it —
+  still beside, in reading order, still not inside.
+*/
+.field__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+}
+
+.hint {
+  font-size: 1.1rem;
+  color: #666;
+  background: #fff8dc;
+  border: 2px dashed #ffd700;
+  border-radius: 14px;
+  padding: 10px 16px;
+}
+
+/* No empty dashed box before main.js writes the current time into it. */
+.hint:empty {
+  display: none;
+}
+
+/* ------------------------------ read-outs ----------------------------- */
+
+.readout {
+  display: grid;
+  gap: 12px;
+  background: #f7f8fb;
+  border-radius: 14px;
+  padding: 20px 22px;
+}
+
+.readout__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: baseline;
+}
+
+.readout__label {
+  font-size: 1rem;
+  color: #888;
+  min-width: 7rem;
+}
+
+.readout__value {
+  font-size: 1.25rem;
+  color: #333;
+  font-weight: bold;
+}
+
+/*
+  The description is optional, so its value can legitimately be ''. Hide the
+  whole row in that case rather than leaving a labelled blank.
+*/
+.readout__row:has(.readout__value:empty) {
+  display: none;
+}
+
+/* ------------------------------- message ------------------------------ */
+
+/*
+  #stop-message. Every word in it comes from main.js — the different-day
+  explanation, the end-before-start rejection, the over-maximum copy. This is
+  only the box it arrives in, and the box disappears when there is nothing to
+  say.
+*/
+.message {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: #5a4a00;
+  background: #fff8dc;
+  border-left: 8px solid #ffd700;
+  border-radius: 14px;
+  padding: 18px 22px;
+}
+
+.message:empty {
+  display: none;
+}
+
+/* ------------------------------- summary ------------------------------ */
+
+/*
+  The arithmetic on the done screen: "10:00 AM → 11:15 AM = 1 hour 15 minutes".
+  Big, because it is the answer she just worked out how to ask for.
+*/
+.summary {
+  font-size: 1.7rem;
+  text-align: center;
+  color: #333;
+  background: #eef7ee;
+  border-radius: 14px;
+  padding: 26px 20px;
+  line-height: 1.5;
+}
+
+.summary:empty {
+  display: none;
+}
+
+/* ------------------------------- buttons ------------------------------ */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Also worn by an <a> — "Go pick a game!" is a navigation, not an action, but
+   it is the primary thing to do on the done screen and should not look
+   demoted for being a link. The flex centring and `text-decoration: none` are
+   what an anchor needs to sit level with a real <button>. */
+.btn {
+  font-family: inherit;
+  font-size: 1.3rem;
+  font-weight: bold;
+  border: none;
+  border-radius: 50px;
+  padding: 18px 42px;
+  min-height: 68px;
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.btn:focus-visible {
+  outline: 4px solid #667eea;
+  outline-offset: 3px;
+}
+
+.btn--go {
+  background: #4caf50;
+  color: #fff;
+}
+
+.btn--go:hover {
+  background: #45a049;
+  transform: scale(1.05);
+}
+
+/*
+  "Throw it away" appends a clock-void; it never deletes anything. Quiet on
+  purpose — it sits next to the button she actually wants, and a child should
+  have to mean it. Deliberately not red: nothing here is dangerous, and a red
+  button next to a green one reads as a warning she does not need.
+*/
+.btn--quiet {
+  background: #fff;
+  color: #7b8493;
+  border: 3px solid #d9dde3;
+}
+
+.btn--quiet:hover {
+  background: #f2f4f7;
+  color: #5c6472;
+}
+
+/* ---------------------------- startup notice --------------------------- */
+
+/*
+  Shown by the file:// guard in index.html, which replaces the whole body. Same
+  wording and shape as the spelling game's, so a kid who opens the wrong file
+  sees the same page whichever game she was aiming for.
+*/
+.startup-notice {
+  max-width: 34rem;
+  margin: 4rem auto;
+  padding: 2rem 2.5rem;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  color: #2f3742;
+}
+
+.startup-notice h1 {
+  margin: 0 0 0.75rem;
+  font-size: 1.7rem;
+}
+
+.startup-notice p {
+  color: #7b8493;
+  line-height: 1.6;
+  margin-bottom: 0.75rem;
+}
+
+.startup-notice code {
+  background: #d9dde3;
+  color: #2f3742;
+  padding: 0.15em 0.4em;
+  border-radius: 6px;
+}
+
+/* -------------------------------- small -------------------------------- */
+
+@media (max-width: 640px) {
+  html {
+    font-size: 18px;
+  }
+
+  body {
+    padding: 12px;
+  }
+
+  .card {
+    padding: 22px 18px;
+  }
+
+  .page__title {
+    font-size: 1.9rem;
+  }
+
+  /* One button per row, full width — easier to hit, harder to mis-hit. */
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn {
+    width: 100%;
+  }
+
+  .field__input--time {
+    width: 100%;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The way home
+   ---------------------------------------------------------------------------
+   Sits outside the cards and below all three screens, so it is in the same
+   place whichever screen she is on. Quiet on purpose: it must be findable
+   from the running-timer screen without competing with "Stop my timer!".
+*/
+.wayhome {
+  text-align: center;
+  margin-top: 28px;
+}
+
+.wayhome__link {
+  font-size: 1.15rem;
+  font-weight: bold;
+  color: #fff;
+  text-decoration: none;
+  padding: 12px 24px;
+  border-radius: 50px;
+  /* Legible on the purple page background without becoming a fourth button. */
+  background: rgba(255, 255, 255, 0.18);
+  display: inline-block;
+}
+
+.wayhome__link:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.wayhome__link:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}

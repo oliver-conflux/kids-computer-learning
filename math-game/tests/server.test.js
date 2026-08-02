@@ -455,6 +455,134 @@ test('an unknown ?game= is a 400 rather than a fallback to a real log', async ()
   await close(server);
 });
 
+// --- the activity timeclock joins the allowlist -----------------------------
+//
+// The timeclock is a fourth log behind the same route. Its whole server-side
+// cost is one LOG_PATHS entry, so what is worth pinning is not that the entry
+// exists but that adding it changed nothing else: the allowlist still rejects
+// what it rejected before, and an absent ?game= still means math.
+
+test('LOG_PATHS names an activity log, and adding it did not disturb the others', () => {
+  assert.equal(LOG_PATHS.activity, path.join(REPO_ROOT, 'data', 'activity-log.jsonl'));
+  assert.equal(LOG_PATHS.math, path.join(REPO_ROOT, 'data', 'math-log.jsonl'));
+  assert.equal(LOG_PATHS.typing, path.join(REPO_ROOT, 'data', 'typing-log.jsonl'));
+  assert.equal(LOG_PATHS.spelling, path.join(REPO_ROOT, 'data', 'spelling-log.jsonl'));
+
+  // The design joins her clock-in's `activity` value to a game's log by name, so
+  // the allowlist keys ARE the timeclock's activity vocabulary. A renamed key
+  // would silently break that join, and nothing else in the repo would notice.
+  //
+  // `geography` joined the list when that game landed, and it belongs in this
+  // assertion rather than being excused from it: the vocabulary grew, which is
+  // the intended consequence — she can now clock in to geography the same way
+  // she clocks in to spelling. This deep-equal is what forces that to be a
+  // decision someone makes rather than a thing that quietly happens.
+  assert.deepEqual(
+    Object.keys(LOG_PATHS).sort(),
+    ['activity', 'geography', 'math', 'spelling', 'typing'],
+  );
+
+  for (const [game, file] of Object.entries(LOG_PATHS)) {
+    assert.equal(path.resolve(file), file, `${game} is not an absolute resolved path`);
+    assert.ok(file.startsWith(REPO_ROOT + path.sep), `${game} escapes the repo root`);
+  }
+});
+
+test('GET and POST ?game=activity touch the activity log and nothing else', async () => {
+  const dir = freshTempDir();
+  const mathLog = path.join(dir, 'math-log.jsonl');
+  const typingLog = path.join(dir, 'typing-log.jsonl');
+  const spellingLog = path.join(dir, 'spelling-log.jsonl');
+  const activityLog = path.join(dir, 'activity-log.jsonl');
+
+  const server = createServer({
+    root: dir,
+    logPaths: { math: mathLog, typing: typingLog, spelling: spellingLog, activity: activityLog },
+  });
+  const base = await listen(server);
+
+  // A clock-in is the shape the route has to carry: `at` is local wall-clock
+  // text with no Z, `t` is the machine instant with one. The server stores the
+  // line verbatim, so this asserts it does not reformat either of them.
+  const event = {
+    type: 'clock-in',
+    t: '2026-08-04T17:00:31.482Z',
+    id: 'a_7f3c',
+    activity: 'typing',
+    description: 'Lesson 4',
+    at: '2026-08-04T10:00',
+  };
+  const post = await fetch(`${base}/api/log?game=activity`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(event),
+  });
+  assert.equal(post.status, 204);
+  assert.equal(fs.existsSync(mathLog), false, 'the math log must be untouched');
+  assert.equal(fs.existsSync(typingLog), false, 'the typing log must be untouched');
+  assert.equal(fs.existsSync(spellingLog), false, 'the spelling log must be untouched');
+
+  const body = await (await fetch(`${base}/api/log?game=activity&tail=10`)).json();
+  assert.equal(body.events.length, 1);
+  assert.deepEqual(body.events[0], event);
+
+  await close(server);
+});
+
+test('logPathFor resolves activity, and a fourth key did not become a new fallback', () => {
+  const paths = { math: '/m', typing: '/t', spelling: '/s', activity: '/a' };
+
+  assert.equal(logPathFor(paths, 'activity'), '/a');
+  assert.equal(logPathFor(paths, 'math'), '/m');
+  assert.equal(logPathFor(paths, 'typing'), '/t');
+  assert.equal(logPathFor(paths, 'spelling'), '/s');
+
+  // Still exactly one fallback, and it is still the default game.
+  assert.equal(logPathFor(paths, null), paths[DEFAULT_GAME]);
+  assert.equal(logPathFor(paths, undefined), paths[DEFAULT_GAME]);
+
+  for (const key of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf']) {
+    assert.equal(logPathFor(paths, key), null, `${key} must not name a path`);
+  }
+  for (const key of ['', 'activity ', 'Activity', 'activities', 'activity-log', '../data/activity-log']) {
+    assert.equal(logPathFor(paths, key), null, `${key} must not name a path`);
+  }
+});
+
+test('with activity allowlisted, an unknown game is still a 400 and not a fallback', async () => {
+  const dir = freshTempDir();
+  const activityLog = path.join(dir, 'activity-log.jsonl');
+  const server = createServer({ root: dir, logPaths: { activity: activityLog } });
+  const base = await listen(server);
+
+  // The known game works on this very server, so a 400 below is the allowlist
+  // rejecting the name, not the endpoint being broken.
+  const ok = await fetch(`${base}/api/log?game=activity`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'clock-in', id: 'a_0001', activity: 'math', at: '2026-08-04T10:00' }),
+  });
+  assert.equal(ok.status, 204);
+  const beforeSize = fs.statSync(activityLog).size;
+
+  for (const game of ['__proto__', 'constructor', 'nope', 'activity-log', '', 'math', 'Activity']) {
+    const get = await fetch(`${base}/api/log?game=${encodeURIComponent(game)}`);
+    assert.equal(get.status, 400, `GET game=${game} must be rejected`);
+
+    const post = await fetch(`${base}/api/log?game=${encodeURIComponent(game)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'clock-in', id: 'a_sneak' }),
+    });
+    assert.equal(post.status, 400, `POST game=${game} must be rejected`);
+  }
+
+  assert.equal(fs.statSync(activityLog).size, beforeSize, 'a rejected game wrote somewhere');
+  assert.deepEqual(fs.readdirSync(dir), ['activity-log.jsonl']);
+
+  await close(server);
+});
+
 // The header above says no exhaustive MIME coverage, and this is not that — it
 // is one type, pinned because it is the one whose absence is INAUDIBLE. Served
 // as application/octet-stream an mp3 may still play, because browsers sniff; it

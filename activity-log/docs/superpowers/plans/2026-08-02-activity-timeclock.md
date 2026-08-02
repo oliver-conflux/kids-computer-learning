@@ -317,7 +317,18 @@ Start the server, open the menu, and actually run these through the UI, checking
 4. End time before start time → rejected, nothing written.
 5. A 6-hour span → the "split it into two timers" copy.
 6. Throw one away → a `clock-void` line appears; nothing is deleted.
-7. Stop the server, then clock in. The app refuses to start.
+7. Confirm the app refuses to run without somewhere to save.
+
+   **Not by stopping the server and reloading** — that outcome cannot exist. The
+   server that would serve the page is the one that is down, so the browser shows
+   `ERR_CONNECTION_REFUSED` and none of the app's code ever runs. Real play
+   proved this; the wording here used to ask for something impossible.
+
+   The two reachable paths, both of which must refuse visibly:
+   - **`file://`** — she double-clicks `index.html` in Finder. The classic-script
+     guard fires before any module loads.
+   - **Page served, `/api/log` unreachable** — the case `showNotice()` was
+     actually written for. The start form must be absent, not merely disabled.
 
 For the stale path, hand-append a `clock-in` dated yesterday to the log, reload,
 and confirm the "you probably forgot to clock out" screen with a correct hour
@@ -349,6 +360,54 @@ green. Then update `activity-log/docs/superpowers/specs/` with anything real
 play changed about the design, and commit.
 
 ---
+
+## Follow-up: add `geography` to the dropdown
+
+A geography game is being built in parallel. It should become a fourth
+verifiable activity — but **only once it registers a `geography` key in
+`LOG_PATHS`** (`server/serve.js`). The activity `value` strings must equal the
+log keys; adding `geography` before its log exists produces a dropdown entry
+with nothing to check against.
+
+Once that key lands, this is a one-line addition to `CONFIG.activities` in
+`activity-log/js/config.js`:
+
+```js
+{ value: 'geography', label: 'Geography' },
+```
+
+Do it at Wave 3 close-out if geography's log exists by then; otherwise carry it
+as a standing follow-up.
+
+## Findings from real play
+
+- **`cache-control: no-store` on every response** (`server/serve.js:148`)
+  disqualifies every page here from Chrome's back/forward cache. The menu's
+  `pageshow`/`persisted` handler therefore never fires as the app is served —
+  Back is always a fresh load, which redraws the bar correctly anyway. The
+  handler is correct and harmless, and becomes live the moment those headers
+  change. Verified by direct event dispatch, not by a real bfcache restore.
+- **The wall-clock format must stay one fact.** It briefly lived in three files
+  and the third copy — hardcoded slice offsets in `bar.js` — would have rendered
+  `started undefined at NaN: PM` on the games menu if core's pattern were ever
+  relaxed, with nothing thrown. `core/timeclock.js` now exports `wallParts`.
+
+## Findings from Wave 0 that later waves must honour
+
+- **`validateClockOut` cannot report a blank end-time field.** There is no
+  fourth reason code, and the wrong-day check runs first, so an empty or
+  unparseable reading comes back as `'wrong-day'`. **Agent 1C must guard the
+  empty field before calling it** — otherwise a child who submits a blank form
+  is told she typed the wrong date.
+- **`OpenClock.description` is always a string** (`''` when absent). 1C need not
+  guard it.
+- **`formatDuration` emits words** ("hour", "minute"), a deliberate narrow
+  exception to the no-copy-in-`core` rule: it is a number formatter that makes
+  no decision, and the frozen interface puts it in `core`. Not a defect.
+- **The fold runs in log order, not sorted by `t`.** If the offline outbox ever
+  flushed a `clock-out` ahead of its `clock-in`, that close would be dropped and
+  the clock would stay open. Single-writer append makes this unlikely; noted
+  because it is the one place log order and `t` order can genuinely diverge.
 
 ## Deliberately not in this plan
 

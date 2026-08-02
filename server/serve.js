@@ -24,6 +24,7 @@ export const LOG_PATHS = {
   typing: path.join(REPO_ROOT, 'data', 'typing-log.jsonl'),
   spelling: path.join(REPO_ROOT, 'data', 'spelling-log.jsonl'),
   geography: path.join(REPO_ROOT, 'data', 'geography-log.jsonl'),
+  activity: path.join(REPO_ROOT, 'data', 'activity-log.jsonl'),
 };
 
 export const DEFAULT_LOG_PATH = LOG_PATHS.math;
