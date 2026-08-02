@@ -586,6 +586,13 @@ state = {
   wrong:       'e' | null,     // block mode only — sticky red char
   keystrokes:  18,
   errors:      2,
+  misses:      [ { expected: 'd', actual: 'x', pos: 2 } ],
+
+  // `misses` is recorded by the engine in BOTH modes and must not be derived
+  // from `entries`. In block mode a wrong press appends no entry at all, so
+  // filtering entries for ok:false yields [] — and since block mode is the
+  // default, deriving it that way collects nothing from almost every kid.
+
   streak:      3,
   bestStreak:  9,
   startedAt:   null,           // set by the FIRST keystroke, not by start()

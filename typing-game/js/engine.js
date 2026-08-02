@@ -25,6 +25,7 @@ export function start(text, opts) {
     wrong: null,
     keystrokes: 0,
     errors: 0,
+    misses: [],
     streak: 0,
     bestStreak: 0,
     wrongShiftSide: false,
@@ -73,12 +74,24 @@ export function press(state, input) {
 
   if (input.key !== expected) {
     const errors = state.errors + 1;
+    // Recorded HERE, in both modes, rather than derived by the caller from
+    // `entries`. In block mode a mismatch appends no entry, so a caller
+    // filtering entries for ok:false gets an empty array — and block mode is
+    // the default, so that silently loses the per-key accuracy data the log
+    // exists to collect. Every wrong press is its own observation, including a
+    // second one at the same position.
+    const misses = [
+      ...state.misses,
+      { expected, actual: input.key, pos: state.entries.length },
+    ];
+
     if (state.blockOnError) {
       return {
         ...state,
         wrong: input.key,
         keystrokes,
         errors,
+        misses,
         streak: 0,
         startedAt,
       };
@@ -90,6 +103,7 @@ export function press(state, input) {
       wrong: null,
       keystrokes,
       errors,
+      misses,
       streak: 0,
       startedAt,
       finishedAt: entries.length >= state.text.length ? input.at : null,

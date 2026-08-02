@@ -177,6 +177,72 @@ test('presses after completion are ignored', () => {
   assert.deepEqual(after, s);
 });
 
+// --- misses ---------------------------------------------------------------
+//
+// The engine is the ONLY thing that sees a wrong press. In block mode a
+// mismatch appends no entry — it parks in `wrong` — so a caller cannot recover
+// misses by filtering entries. Deriving them that way silently produced an
+// empty array for every kid on the default setting, which would have quietly
+// gutted the per-key accuracy data the log exists to collect.
+
+test('block mode records a miss even though no entry is appended', () => {
+  let s = start('cat', { blockOnError: true });
+  s = press(s, { key: 'x', at: T0 });
+  assert.deepEqual(s.entries, [], 'block mode still appends nothing');
+  assert.deepEqual(s.misses, [{ expected: 'c', actual: 'x', pos: 0 }]);
+});
+
+test('pass-through mode records the same miss shape', () => {
+  let s = start('cat', { blockOnError: false });
+  s = press(s, { key: 'x', at: T0 });
+  assert.deepEqual(s.misses, [{ expected: 'c', actual: 'x', pos: 0 }]);
+});
+
+test('both wrong presses are recorded when a kid misses twice at one position', () => {
+  let s = start('cat', { blockOnError: true });
+  s = press(s, { key: 'x', at: T0 });
+  s = press(s, { key: 'v', at: T0 + 100 });
+  assert.equal(s.misses.length, 2, 'each wrong press is a separate observation');
+  assert.deepEqual(s.misses.map((m) => m.actual), ['x', 'v']);
+  assert.deepEqual(s.misses.map((m) => m.pos), [0, 0], 'both at the same position');
+});
+
+test('pos tracks the caret, so misses land on the right character', () => {
+  let s = start('cat', { blockOnError: true });
+  s = press(s, { key: 'c', at: T0 });
+  s = press(s, { key: 'z', at: T0 + 100 });
+  assert.deepEqual(s.misses, [{ expected: 'a', actual: 'z', pos: 1 }]);
+});
+
+test('clean typing records no misses', () => {
+  let s = start('cat', { blockOnError: true });
+  s = typeAll(s, 'cat');
+  assert.deepEqual(s.misses, []);
+  assert.equal(s.errors, 0);
+});
+
+test('backspace does not erase a recorded miss', () => {
+  let s = start('cat', { blockOnError: false });
+  s = press(s, { key: 'x', at: T0 });
+  s = backspace(s);
+  assert.equal(s.misses.length, 1, 'the mistake happened; undoing it does not unhappen it');
+});
+
+test('a wrong-side shift is NOT a miss — the character was correct', () => {
+  let s = start('Cat', { blockOnError: true });
+  s = press(s, { key: 'C', shiftSide: 'ShiftLeft', at: T0 });
+  assert.deepEqual(s.misses, []);
+});
+
+test('misses count matches errors count in both modes', () => {
+  for (const blockOnError of [true, false]) {
+    let s = start('cat', { blockOnError });
+    s = press(s, { key: 'x', at: T0 });
+    s = press(s, { key: 'y', at: T0 + 100 });
+    assert.equal(s.misses.length, s.errors, `mode blockOnError=${blockOnError}`);
+  }
+});
+
 // --- stats ----------------------------------------------------------------
 
 test('accuracy is (keystrokes - errors) / keystrokes', () => {
