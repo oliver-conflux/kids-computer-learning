@@ -217,6 +217,7 @@ export function pickLearnFamily(model, window, config) {
   /** @type {{id: string, word: string, rank: number, lessons: number, position: number}[]} */
   let bestMembers = [];
   let bestScore = Infinity;
+  let bestLessons = Infinity;
 
   for (const [pattern, members] of families) {
     if (members.length < MIN_FAMILY_SIZE) {
@@ -251,9 +252,25 @@ export function pickLearnFamily(model, window, config) {
     // yields — but a family taught over and over does eventually give way, which
     // is exactly the property that was missing. Insertion order remains the last
     // resort and still breaks toward the easier end of the spine.
+    // AND THEN lessons AGAIN, as a genuine tie-break behind the sum.
+    //
+    // This is not the discarded first attempt. That one used lessons as a
+    // secondary key behind RANK, where it never fired because raw ranks
+    // effectively never tie. Behind the SUM it fires on the one shape that
+    // reaches an exact tie, and that shape is reachable on purpose: hot words
+    // are excluded from the window, so every score sits between 0 and 2, and a
+    // cold untaught family that has had one lesson (rank 1 + 1 lesson) lands
+    // exactly on an untouched warm one (rank 2 + 0). Without this the tie went
+    // to insertion order, which favours the earlier family — the one just
+    // taught — and the same lesson came up twice in a row.
+    //
+    // Verified: cold `-at` first in the window against warm `-ig` gave -at, -at,
+    // -ig. With this it gives -at, -ig. Two clicks of "learn a word" now never
+    // teach the same family twice while another family qualifies.
     const score = rank + lessons;
-    if (score < bestScore) {
+    if (score < bestScore || (score === bestScore && lessons < bestLessons)) {
       bestScore = score;
+      bestLessons = lessons;
       bestPattern = pattern;
       bestMembers = members;
     }

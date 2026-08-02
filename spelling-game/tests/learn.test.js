@@ -455,3 +455,32 @@ test('a model with no taughtCount field at all still picks a family', () => {
   assert.equal(family.pattern, '-at');
   assert.deepEqual(family.words.map((w) => w.word), ['at', 'cat']);
 });
+
+test('two clicks of learn never teach the same family twice while another qualifies', () => {
+  // The one shape that reaches an EXACT tie, and it is reachable on purpose.
+  // Hot words are excluded from the window, so every score sits between 0 and 2.
+  // A cold untaught family given one lesson scores rank 1 + 1 lesson = 2, landing
+  // exactly on an untouched warm family at rank 2 + 0. The tie then went to
+  // insertion order, which favours the EARLIER family — the one just taught — so
+  // clicking "learn a word" twice taught -at both times.
+  const stats = (word, bucket, taughtCount) => [
+    `w:${word}`,
+    { id: `w:${word}`, item: { word }, bucket, taught: taughtCount > 0, taughtCount,
+      attempts: [], cleanCount: 0, medianCleanMs: null },
+  ];
+  const window = ['w:cat', 'w:bat', 'w:big', 'w:dig'];
+  const modelWith = (atLessons) => ({
+    byId: new Map([
+      stats('cat', 'cold', atLessons), stats('bat', 'cold', atLessons),
+      stats('big', 'warm', 0), stats('dig', 'warm', 0),
+    ]),
+    confusions: new Map(),
+  });
+
+  const first = pickLearnFamily(modelWith(0), window, CONFIG).pattern;
+  const second = pickLearnFamily(modelWith(1), window, CONFIG).pattern;
+
+  assert.equal(first, '-at', 'the cold family is taught first');
+  assert.notEqual(second, first, 'the same family came back on the very next click');
+  assert.equal(second, '-ig');
+});
