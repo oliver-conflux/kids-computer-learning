@@ -1,7 +1,27 @@
 .claude/worktrees/
 
-# The typing log records the kid's name alongside their per-keystroke mistakes.
-# The math log is committed, but this one is deliberately not: this repo has an
-# origin, and a child's name and error history should not follow it there.
-# Flip this if the remote is private and you want the history versioned.
-data/typing-log.jsonl
+# NO GAME LOG IS TRACKED. Every log records a real child playing: the typing log
+# carries their name alongside their per-keystroke mistakes, and the math and
+# spelling logs carry a timestamped record of exactly what they could not do.
+# This repo has an origin, and none of that should follow it there.
+#
+# It is also the practical thing. The logs are the largest and fastest-growing
+# files in the repo and nothing reads them across machines, so tracking them
+# means cloning a stranger's child's history to play a game. Clone the code, play
+# on your own machine, build your own log.
+#
+# This reverses math spec §14, which committed data/math-log.jsonl deliberately
+# so the derivation could be checked against real data. That was right while the
+# game was a spike and one person had the repo. It stops being right the moment
+# a third game arrives and the repo is meant to be cloned.
+#
+# The file remains in the history of commits before 2026-08-02. Untracking it now
+# stops it growing; it does not erase it.
+data/*.jsonl
+
+# Merriam-Webster's terms forbid duplicating or redistributing their data, and
+# committing a cache to a repo with a public origin is redistribution. Each
+# clone brings its own MW_KEY and builds its own cache via tools/fetch-words.js.
+# The game is fully playable with neither — audio falls back to local TTS.
+data/audio/
+data/words/
