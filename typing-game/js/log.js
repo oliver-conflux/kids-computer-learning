@@ -106,6 +106,29 @@ async function post(event) {
 // --- public API -----------------------------------------------------------
 
 /**
+ * Whether the log endpoint is actually reachable.
+ *
+ * This exists because loadEvents() deliberately cannot answer the question: it
+ * returns [] both for "server is down" and for "first run on a new machine",
+ * and conflating those is right for it but wrong at boot. Without this, a game
+ * served without its API plays perfectly and quietly banks every round into an
+ * outbox that may never flush — the kid sees their stars, and then does not.
+ *
+ * @returns {Promise<boolean>}
+ */
+export async function serverIsUp() {
+  try {
+    const res = await fetch(`${LOG_URL}&tail=1`, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Read the tail of the log. Resolves to [] on any failure — a missing log is a
  * first run, not an error, and the game must start on a machine that has never
  * played.

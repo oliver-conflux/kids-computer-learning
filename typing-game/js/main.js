@@ -15,7 +15,7 @@ import { start, press, backspace, isComplete, nextChar } from './engine.js';
 import { renderKeyboard, flashWrong } from './keyboard.js';
 import { renderHands } from './hands.js';
 import { loadSettings, saveSettings } from './settings.js';
-import { loadEvents, record, flushOutbox } from './log.js';
+import { loadEvents, record, flushOutbox, serverIsUp } from './log.js';
 import { allProgress, starsFor } from './progress.js';
 import {
   renderLines, renderPrompt, renderProgress, applyGuidance,
@@ -273,7 +273,34 @@ function openMenu() {
   });
 }
 
+/**
+ * Refuse to start rather than play without somewhere to save.
+ *
+ * The kid would otherwise get a game that works perfectly and forgets
+ * everything — stars appear at the end of a round and are gone next launch.
+ * A blunt "not started yet" is kinder than silent amnesia, and it names the
+ * thing to double-click rather than describing a fault.
+ *
+ * @returns {void}
+ */
+function showServerDown() {
+  document.body.innerHTML =
+    '<div class="startup-notice">' +
+    '<h1>Start the game first</h1>' +
+    '<p>This game needs its little server running so it can remember how you did.</p>' +
+    '<p><b>Double-click <code>play.command</code></b> in the games folder, ' +
+    'then pick the typing game from the menu that opens.</p>' +
+    '</div>';
+}
+
 async function boot() {
+  // Checked before ANY rendering: a half-drawn keyboard behind an error is
+  // worse than a clean message.
+  if (!(await serverIsUp())) {
+    showServerDown();
+    return;
+  }
+
   renderKeyboard(document.getElementById('keyboard'));
   renderHands(document.getElementById('hands'));
   scaleStage();

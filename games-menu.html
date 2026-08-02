@@ -181,5 +181,26 @@
             </div>
         </div>
     </div>
+    <!--
+      Guard for file:// — the menu itself renders fine from a double-clicked
+      file, but every link from it leads to a game that needs the server, so
+      the failure would only show up one click later and look like the game is
+      broken rather than not started. Catch it here, at the entry point.
+    -->
+    <script>
+      if (location.protocol === 'file:') {
+        document.body.innerHTML =
+          '<div style="max-width:34rem;margin:4rem auto;padding:2rem 2.5rem;background:#fff;' +
+          'border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.1);text-align:center;' +
+          'font-family:system-ui,sans-serif;color:#2f3742">' +
+          '<h1 style="margin:0 0 .75rem">Start the games first</h1>' +
+          '<p style="color:#7b8493;line-height:1.6">The games need their little server running ' +
+          'so they can remember how you did.</p>' +
+          '<p style="color:#7b8493;line-height:1.6">Double-click ' +
+          '<code style="background:#d9dde3;color:#2f3742;padding:.15em .4em;border-radius:6px">' +
+          'play.command</code> in this folder instead — it opens this menu for you.</p>' +
+          '</div>';
+      }
+    </script>
 </body>
 </html>

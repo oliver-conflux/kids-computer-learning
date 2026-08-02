@@ -61,6 +61,25 @@
 
   <div id="results" class="results hidden"></div>
 
+  <!--
+    Guard for file:// — deliberately a CLASSIC script, not a module.
+
+    ES modules are blocked over file:// (origin null fails CORS), so the module
+    below never executes and the page would otherwise sit there as dead HTML
+    with a keyboard that does nothing. A module-based check cannot catch this,
+    because the module is exactly what does not run. This one does.
+  -->
+  <script>
+    if (location.protocol === 'file:') {
+      document.body.innerHTML =
+        '<div class="startup-notice">' +
+        '<h1>Start the game first</h1>' +
+        '<p>This game needs its little server running so it can remember how you did.</p>' +
+        '<p><b>Double-click <code>play.command</code></b> in the games folder, ' +
+        'then pick the typing game from the menu that opens.</p>' +
+        '</div>';
+    }
+  </script>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

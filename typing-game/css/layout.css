@@ -51,3 +51,25 @@
 .rungs { display: flex; flex-wrap: wrap; gap: .5rem; }
 .rung { display: flex; flex-direction: column; align-items: flex-start; gap: .2rem; }
 .rung-stars { color: var(--accent); font-size: .8rem; }
+
+/* Shown instead of the game when it cannot save — see main.js showServerDown
+   and the file:// guard in index.html. Deliberately calm and instructional
+   rather than alarming; a kid may well be the one reading it. */
+.startup-notice {
+  max-width: 34rem;
+  margin: 4rem auto;
+  padding: 2rem 2.5rem;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .10);
+  text-align: center;
+}
+.startup-notice h1 { font-family: var(--display); font-size: 1.6rem; margin-bottom: .75rem; }
+.startup-notice p { color: var(--muted); line-height: 1.6; margin-bottom: .6rem; }
+.startup-notice code {
+  font-family: var(--mono);
+  background: var(--deck);
+  color: var(--heading);
+  padding: .15em .4em;
+  border-radius: 6px;
+}
