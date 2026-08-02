@@ -119,6 +119,28 @@ function rankOf(stats) {
 }
 
 /**
+ * The members a session built on this family would ACTUALLY teach: the neediest
+ * `learnWords` of them, coldest first and ties by window position.
+ *
+ * Scoring and selection both go through this, and they must. A family can be
+ * larger than `learnWords` — `irregular` reached eight members in real play
+ * against a limit of four — and scoring the whole family while teaching only
+ * part of it makes the untaught leftovers hold the mean down. Measured: one
+ * lesson moved `irregular`'s mean lessons by 0.25 instead of 1, so it stayed
+ * cheapest and came up twice in a row while every small family moved a full
+ * step per lesson.
+ *
+ * @param {{id: string, word: string, rank: number, lessons: number, position: number}[]} members
+ * @param {number} learnWords
+ * @returns {{id: string, word: string, rank: number, lessons: number, position: number}[]}
+ */
+function sessionMembers(members, learnWords) {
+  return [...members]
+    .sort((left, right) => left.rank - right.rank || left.position - right.position)
+    .slice(0, Math.max(1, learnWords));
+}
+
+/**
  * Group the active window into families, one entry per pattern tag.
  *
  * Iteration follows `window` order, which is spine order, so the returned Map's
@@ -223,8 +245,12 @@ export function pickLearnFamily(model, window, config) {
     if (members.length < MIN_FAMILY_SIZE) {
       continue;
     }
-    const rank = members.reduce((total, member) => total + member.rank, 0) / members.length;
-    const lessons = members.reduce((total, member) => total + member.lessons, 0) / members.length;
+    // Scored on the words a session would actually teach, not on every member —
+    // see sessionMembers. A family bigger than learnWords would otherwise be
+    // scored partly on words the lesson never reaches.
+    const teachable = sessionMembers(members, config.learnWords);
+    const rank = teachable.reduce((total, member) => total + member.rank, 0) / teachable.length;
+    const lessons = teachable.reduce((total, member) => total + member.lessons, 0) / teachable.length;
 
     // ATTENTION ALREADY SPENT = TEMPERATURE + LESSONS. This sum is why learn
     // mode advances at all, and the lessons term is the half that was missing.
@@ -285,9 +311,7 @@ export function pickLearnFamily(model, window, config) {
   // members first. PRESENTATION is back in window order, so the words appear on
   // screen in spine order and the family header reads the way a kid would write
   // it out — `cat bat hat`, not whichever three happened to be coldest.
-  const words = [...bestMembers]
-    .sort((left, right) => left.rank - right.rank || left.position - right.position)
-    .slice(0, Math.max(1, config.learnWords))
+  const words = sessionMembers(bestMembers, config.learnWords)
     .sort((left, right) => left.position - right.position)
     .map((member) => ({ id: member.id, word: member.word }));
 

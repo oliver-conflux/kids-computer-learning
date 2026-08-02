@@ -484,3 +484,57 @@ test('two clicks of learn never teach the same family twice while another qualif
   assert.notEqual(second, first, 'the same family came back on the very next click');
   assert.equal(second, '-ig');
 });
+
+test('clicking learn repeatedly never repeats a family back to back', () => {
+  // The question Oliver asked: does pressing "learn a word" twice in a row show
+  // the same lesson? Run against the REAL spine and config, because the two
+  // shapes that broke this were both structural rather than contrived:
+  //
+  //   - a cold family given one lesson lands exactly on an untouched warm one
+  //     (scores are bounded by 2, hot words being excluded from the window), and
+  //     the tie went to insertion order — which favours the family just taught.
+  //   - a family bigger than learnWords was scored on members a session would
+  //     not reach, so its mean moved a fraction of a step per lesson while every
+  //     small family moved a whole one. `irregular` reached eight members
+  //     against a limit of four and came up twice running.
+  const events = [];
+  const picked = [];
+
+  for (let session = 1; session <= 15; session += 1) {
+    const model = deriveMastery(events, GAME_CONFIG, spellingSpace);
+    const family = pickLearnFamily(
+      model,
+      activeWindow(SPINE, model, GAME_CONFIG.windowSize),
+      GAME_CONFIG,
+    );
+    picked.push(family.pattern);
+    for (let pass = 0; pass < GAME_CONFIG.learnPasses; pass += 1) {
+      for (const word of family.words) {
+        events.push(learnAttempt(word.word, `s${session}`));
+      }
+    }
+  }
+
+  const repeats = picked.filter((pattern, index) => index > 0 && pattern === picked[index - 1]);
+  assert.deepEqual(repeats, [], `taught the same family twice running: ${picked.join(' ')}`);
+});
+
+test('the words taught are exactly the members the score was computed on', () => {
+  // Scoring and selection must not drift: if they use different member sets,
+  // the picker optimises for a session it does not then run.
+  const stats = (word, bucket) => [
+    `w:${word}`,
+    { id: `w:${word}`, item: { word }, bucket, taught: false, taughtCount: 0,
+      attempts: [], cleanCount: 0, medianCleanMs: null },
+  ];
+  const model = {
+    byId: new Map([
+      stats('cat', 'hot'), stats('bat', 'cold'), stats('hat', 'cold'),
+      stats('sat', 'cold'), stats('mat', 'cold'), stats('rat', 'hot'),
+    ]),
+    confusions: new Map(),
+  };
+  const family = pickLearnFamily(model, ['w:cat','w:bat','w:hat','w:sat','w:mat','w:rat'], CONFIG);
+  assert.deepEqual(family.words.map((w) => w.word), ['bat', 'hat', 'sat', 'mat'],
+    'the hot members should be the ones dropped');
+});
