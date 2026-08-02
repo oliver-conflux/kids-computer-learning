@@ -1,85 +1,99 @@
-// The hint ladder.
+// The hint ladders — one per mode.
 //
-// Not a fixed sequence. The ladder is an ordered list of stages where each
-// stage carries its own predicate saying whether it applies to a given problem,
-// and `ladderFor` resolves that list against one fact. 6 x 7 gets
-// clean -> strategy -> reveal because 42 blocks is not a picture anyone counts;
-// 2 x 3 gets a blocks rung because six blocks is. Same engine, different
-// applicable set.
+// v1 had a single ladder whose middle rungs appeared or vanished per fact:
+// clean -> strategy -> blocks -> reveal, advanced by a timer. Playing it exposed
+// the fault. A strategy hint is not a CUE, it is a TASK — "6 x 6 = 36, add one
+// more 6" means recall 36, hold it, add 6, which is comparable work to the
+// original problem. Putting a task on a rescue timer is self-defeating: the
+// clock that is meant to help is simultaneously counting down to the reveal that
+// makes the effort pointless. Blocks are a smaller task, but counting a
+// 20-square array against a clock is still work.
 //
-// This is the mechanism that makes adding subtraction or division a content
-// change rather than a rewrite: a new operation supplies new predicates and new
-// strategy text, and every consumer of `ladderFor` keeps working untouched. Do
-// not replace the predicate list with a hard-coded sequence.
+// So the modes split, and the ladders with them:
+//
+//   drill -> ['clean', 'reveal']      no help of any kind, for all 121 facts
+//   learn -> ['strategy', 'reveal']   help from the first frame, no clock
+//
+// Both are FIXED. No predicates, no per-fact variation. That uniformity is the
+// point in drill: keeping blocks would have made the game behave differently for
+// 53 facts than for the other 68 for a reason no kid can perceive — 4 x 5 offers
+// help, 6 x 7 does not — which reads as arbitrary rather than consistent. Drill
+// asks one question ("got it or not"), so it shows one thing.
+//
+// In learn mode the initial stage IS 'strategy'. It is not revealed by a timer;
+// it is on screen from the start, because a kid with no route to 6 x 7 will not
+// invent one by staring at it. 'reveal' is reached by the kid pressing the
+// button, never by elapsed time.
+//
+// Stage names are REUSED from v1, not extended. Blocks are no longer a stage at
+// all — they are a second REPRESENTATION rendered alongside the strategy in
+// learn mode, and the renderer asks `blocksApply` directly. Blocks and prose are
+// alternatives for different developmental stages (see the quantity vs. derive
+// from an anchor), not degrees of the same help, which is exactly what v1's
+// ladder got wrong by making them rungs.
 //
 // Pure module: no DOM, no network, no clock, no randomness.
 
 import { answerOf } from './facts.js';
-import { strategyFor } from './strategies.js';
 
 /**
- * The full ladder in order, each rung with its applicability predicate.
+ * The fixed ladder for each mode, in order.
  *
- * 'blocks' and 'reveal' are different kinds of help and deliberately not
- * interchangeable: blocks are a conceptual scaffold (re-derive it from what
- * multiplication means), reveal is a retrieval scaffold (here is the answer,
- * now practise pulling it). They sit at opposite ends of the concrete ->
- * strategic -> automatic progression, which is why order is fixed and only
- * membership varies.
+ * Every ladder terminates in 'reveal' — every problem has to end somewhere —
+ * and no ladder has a middle rung, because with one transition each there is no
+ * middle to have.
  */
-const LADDER = [
-  {
-    stage: 'clean',
-    // Just the problem, no help. Always present — it is the only stage that
-    // produces evidence of retrieval.
-    applies: () => true,
-  },
-  {
-    stage: 'strategy',
-    // Present only when there is a derivation worth teaching for this fact.
-    applies: (fact) => strategyFor(fact) !== null,
-  },
-  {
-    stage: 'blocks',
-    // Above about 25 items the array stops being a visualisation — nobody
-    // counts 42 blocks — so the drawing is worse than useless there.
-    //
-    // The lower bound matters just as much. A product of 0 draws an EMPTY grid,
-    // so a kid stuck on `0 x 7` would sit in front of a blank hint region for
-    // the full stage delay before the answer arrived. That is not a gentler
-    // hint, it is a broken-looking screen. 21 facts have a zero operand, and
-    // none of them gets a strategy either, so without this bound their whole
-    // ladder is clean -> nothing -> reveal.
-    applies: (fact, config) => {
-      const product = answerOf(fact);
-      return product >= 1 && product <= config.blocksMaxProduct;
-    },
-  },
-  {
-    stage: 'reveal',
-    // The answer, greyed into the slots. Always present — every problem must
-    // terminate somewhere.
-    applies: () => true,
-  },
-];
+const LADDERS = {
+  drill: ['clean', 'reveal'],
+  learn: ['strategy', 'reveal'],
+};
 
 /**
- * The stages that apply to this fact, in ladder order.
+ * The stages for this mode, in order. The same two stages for all 121 facts —
+ * `fact` and `config` are accepted so callers need not special-case, and so a
+ * future operation can vary the ladder without every call site changing.
  *
- * Always starts with 'clean' and always ends with 'reveal'; the middle rungs
- * appear only when their predicates hold.
+ * @param {{op: string, a: number, b: number}} fact
+ * @param {{mode?: 'drill'|'learn'}} config
+ * @param {'drill'|'learn'} [mode] defaults to `config.mode`
+ * @returns {('clean'|'strategy'|'reveal')[]} a fresh array, safe to mutate
+ */
+export function ladderFor(fact, config, mode = config.mode) {
+  const ladder = LADDERS[mode];
+  if (ladder === undefined) {
+    throw new Error(`No ladder for mode: ${mode}`);
+  }
+  return [...ladder];
+}
+
+/**
+ * Whether a block array should be drawn alongside the strategy for this fact.
+ * LEARN MODE ONLY — drill draws nothing.
+ *
+ * Above about 25 items the array stops being a visualisation; nobody counts 42
+ * blocks, so the drawing is worse than useless there.
+ *
+ * The lower bound is not optional. A product of 0 draws an EMPTY array — a blank
+ * region rather than a gentler hint. 21 of the 121 facts have a zero operand,
+ * and none of them gets strategy text either, so for those the learn screen
+ * shows the problem and nothing else. That is honest; a blank box where a
+ * picture should be is not.
  *
  * @param {{op: string, a: number, b: number}} fact
  * @param {{blocksMaxProduct: number}} config
- * @returns {('clean'|'strategy'|'blocks'|'reveal')[]}
+ * @returns {boolean}
  */
-export function ladderFor(fact, config) {
-  return LADDER.filter((rung) => rung.applies(fact, config)).map((rung) => rung.stage);
+export function blocksApply(fact, config) {
+  const product = answerOf(fact);
+  return product >= 1 && product <= config.blocksMaxProduct;
 }
 
 /**
  * How long a stage is held before the next one fires, for a fact in this
- * bucket.
+ * bucket. Drill only — learn has no clock, so nothing in learn mode calls this.
+ *
+ * With one transition per ladder this is now the WHOLE retrieval window: the
+ * time between the problem appearing and the answer appearing.
  *
  * THE DELAY GROWS WITH MASTERY. It does not shrink. A cold fact is rescued
  * almost immediately, because that is what keeps acquisition errorless and
@@ -106,9 +120,9 @@ export function delayMsFor(bucket, config) {
  * The stage after `current` in this ladder, or null when `current` is already
  * the last rung — which for every ladder means 'reveal', the terminal stage.
  *
- * @param {('clean'|'strategy'|'blocks'|'reveal')[]} ladder
- * @param {'clean'|'strategy'|'blocks'|'reveal'} current
- * @returns {('clean'|'strategy'|'blocks'|'reveal') | null}
+ * @param {('clean'|'strategy'|'reveal')[]} ladder
+ * @param {'clean'|'strategy'|'reveal'} current
+ * @returns {('clean'|'strategy'|'reveal') | null}
  */
 export function nextStage(ladder, current) {
   const index = ladder.indexOf(current);
