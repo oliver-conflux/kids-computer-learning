@@ -24,6 +24,19 @@ function attempt(a, b, ms, stage, wrong = []) {
   };
 }
 
+/**
+ * A learn-mode attempt. Learn ladders are ['strategy','reveal'], so the stage
+ * defaults to 'strategy' — a learn attempt can never carry stage 'clean'.
+ */
+function learnAttempt(a, b, ms, wrong = [], stage = 'strategy') {
+  return { ...attempt(a, b, ms, stage, wrong), mode: 'learn' };
+}
+
+/** A drill-mode attempt with the mode field written explicitly. */
+function drillAttempt(a, b, ms, stage, wrong = []) {
+  return { ...attempt(a, b, ms, stage, wrong), mode: 'drill' };
+}
+
 /** Same attempt, stamped with an explicit ISO timestamp. */
 function at(t, event) {
   return { ...event, t };
@@ -61,6 +74,7 @@ test('a fact with zero attempts is present, cold, and has a null median', () => 
     attempts: [],
     cleanCount: 0,
     medianCleanMs: null,
+    taught: false,
   });
 });
 
@@ -688,4 +702,341 @@ test('a wrong answer still counts as confusion however long the kid took', () =>
     op: '*', a: 6, b: 7, ms: 120_000, stage: 'clean', typed: [], wrong: [48],
   }], CONFIG).confusions.get('*:6x7');
   assert.deepEqual([...confusions], [48], 'interference evidence is not time-limited');
+});
+
+// --- v2: learn attempts are not mastery evidence (spec §5) ------------------
+
+test('a learn attempt does not change bucket, cleanCount or medianCleanMs', () => {
+  const drillOnly = [
+    attempt(6, 7, 400, 'clean'),
+    attempt(6, 7, 500, 'clean'),
+    attempt(6, 7, 600, 'clean'),
+  ];
+  // The same drill history with slow learn work interleaved through it. A
+  // 20-second answer with the strategy on screen is a successful derivation,
+  // not slow recall; folding it in would drag the median off hot.
+  const mixed = [
+    learnAttempt(6, 7, 20_000),
+    ...drillOnly,
+    learnAttempt(6, 7, 18_000),
+    learnAttempt(6, 7, 25_000),
+  ];
+
+  const before = statsFor(drillOnly, SIX_SEVEN);
+  const after = statsFor(mixed, SIX_SEVEN);
+
+  assert.equal(after.bucket, before.bucket);
+  assert.equal(after.bucket, 'hot');
+  assert.equal(after.cleanCount, before.cleanCount);
+  assert.equal(after.medianCleanMs, before.medianCleanMs);
+  assert.equal(after.medianCleanMs, 500);
+  assert.deepEqual(after.attempts, before.attempts, 'learn attempts never enter attempts');
+});
+
+test('a learn attempt cannot make a cold fact warm, however fast the answer', () => {
+  const stats = statsFor([learnAttempt(6, 7, 120)], SIX_SEVEN);
+  assert.equal(stats.bucket, 'cold');
+  assert.equal(stats.cleanCount, 0);
+  assert.equal(stats.medianCleanMs, null);
+  assert.equal(stats.attempts.length, 0);
+});
+
+test('a learn attempt is excluded even if the line claims stage clean', () => {
+  // Belt and braces. The learn ladder is ['strategy','reveal'] so this shape
+  // should never be written, but a hand-edited or future-tooled log must not be
+  // able to smuggle learn work into the retrieval evidence.
+  const stats = statsFor(
+    repeat(3, () => learnAttempt(6, 7, 300, [], 'clean')),
+    SIX_SEVEN,
+  );
+  assert.equal(stats.cleanCount, 0);
+  assert.equal(stats.bucket, 'cold');
+  assert.equal(stats.attempts.length, 0);
+});
+
+test('learn attempts do not consume the retain window', () => {
+  // Twenty learn reps between drill sessions must not age out the drill
+  // history that actually decides the bucket.
+  const events = [
+    ...repeat(3, (index) =>
+      at(`2026-07-28T09:0${index}:00.000Z`, attempt(6, 7, 400, 'clean')),
+    ),
+    ...repeat(20, (index) =>
+      at(`2026-07-29T09:${String(index).padStart(2, '0')}:00.000Z`, learnAttempt(6, 7, 15_000)),
+    ),
+  ];
+  const stats = statsFor(events, SIX_SEVEN);
+  assert.equal(stats.attempts.length, 3, 'only the drill attempts are retained');
+  assert.equal(stats.cleanCount, 3);
+  assert.equal(stats.bucket, 'hot');
+});
+
+test('a fact with only learn attempts is cold AND taught', () => {
+  const stats = statsFor(repeat(4, () => learnAttempt(6, 7, 9000)), SIX_SEVEN);
+  assert.equal(stats.bucket, 'cold');
+  assert.equal(stats.cleanCount, 0);
+  assert.equal(stats.medianCleanMs, null);
+  assert.deepEqual(stats.attempts, []);
+  assert.equal(stats.taught, true, 'this is the pair the grid renders as "shown how"');
+});
+
+// --- v2: confusions are the deliberate exception ---------------------------
+
+test("a learn attempt's wrong answers DO appear in confusions", () => {
+  const model = deriveMastery([learnAttempt(6, 7, 14_000, [48, 36])], CONFIG);
+  assert.deepEqual(model.confusions.get(SIX_SEVEN), new Set([48, 36]));
+});
+
+test('learn and drill confusions pool together for the same fact', () => {
+  const events = [
+    learnAttempt(6, 7, 14_000, [48]),
+    attempt(6, 7, 5000, 'reveal', [49]),
+    learnAttempt(6, 7, 12_000, [56]),
+  ];
+  const model = deriveMastery(events, CONFIG);
+  assert.deepEqual(model.confusions.get(SIX_SEVEN), new Set([48, 49, 56]));
+});
+
+test('a learn-only fact contributes confusions while staying cold', () => {
+  const model = deriveMastery([learnAttempt(6, 7, 30_000, [42])], CONFIG);
+  assert.equal(model.byId.get(SIX_SEVEN).bucket, 'cold');
+  assert.equal(model.byId.get(SIX_SEVEN).attempts.length, 0);
+  assert.deepEqual(
+    model.confusions.get(SIX_SEVEN),
+    new Set([42]),
+    'interference is interference whichever mode surfaced it',
+  );
+});
+
+test('learn confusions are keyed per fact and do not cross orientations', () => {
+  const model = deriveMastery(
+    [learnAttempt(6, 7, 9000, [48]), learnAttempt(7, 6, 9000, [36])],
+    CONFIG,
+  );
+  assert.deepEqual(model.confusions.get(SIX_SEVEN), new Set([48]));
+  assert.deepEqual(model.confusions.get(SEVEN_SIX), new Set([36]));
+});
+
+test('learn confusions hold only finite numbers, like drill ones', () => {
+  const model = deriveMastery([learnAttempt(6, 7, 9000, [null, 'x', NaN, 48])], CONFIG);
+  assert.deepEqual([...model.confusions.get(SIX_SEVEN)], [48]);
+});
+
+// --- v2: the taught flag ---------------------------------------------------
+
+test('taught is true after a single learn attempt', () => {
+  assert.equal(statsFor([learnAttempt(6, 7, 9000)], SIX_SEVEN).taught, true);
+});
+
+test('taught is false for a fact with only drill attempts', () => {
+  const events = [
+    ...repeat(3, () => attempt(6, 7, 400, 'clean')),
+    attempt(6, 7, 8000, 'reveal', [48]),
+  ];
+  assert.equal(statsFor(events, SIX_SEVEN).taught, false);
+});
+
+test('taught is false for a fact with no attempts at all', () => {
+  const model = deriveMastery([learnAttempt(6, 7, 9000)], CONFIG);
+  assert.equal(model.byId.get('*:3x4').taught, false);
+  assert.equal(model.byId.get(SEVEN_SIX).taught, false, '6x7 taught does not teach 7x6');
+});
+
+test('taught is computed from the full log, not the retain window', () => {
+  // Taught three weeks ago, drilled hard ever since. The learn attempt is long
+  // out of the retain window, but the kid has still been shown the route.
+  const events = [
+    at('2026-07-10T09:00:00.000Z', learnAttempt(6, 7, 22_000)),
+    ...repeat(CONFIG.retain + 5, (index) =>
+      at(`2026-08-01T09:${String(index).padStart(2, '0')}:00.000Z`, attempt(6, 7, 400, 'clean')),
+    ),
+  ];
+  const stats = statsFor(events, SIX_SEVEN);
+  assert.equal(stats.attempts.length, CONFIG.retain);
+  assert.equal(stats.bucket, 'hot');
+  assert.equal(stats.taught, true, 'a route taught three weeks ago is still a route');
+});
+
+test('taught survives regardless of where the learn attempt sits in time order', () => {
+  const late = [
+    at('2026-08-01T09:00:00.000Z', attempt(6, 7, 400, 'clean')),
+    at('2026-08-01T09:05:00.000Z', learnAttempt(6, 7, 15_000)),
+  ];
+  const early = [
+    at('2026-08-01T09:05:00.000Z', attempt(6, 7, 400, 'clean')),
+    at('2026-08-01T09:00:00.000Z', learnAttempt(6, 7, 15_000)),
+  ];
+  assert.equal(statsFor(late, SIX_SEVEN).taught, true);
+  assert.equal(statsFor(early, SIX_SEVEN).taught, true);
+});
+
+test('every fact carries a boolean taught, never undefined', () => {
+  const model = deriveMastery([learnAttempt(6, 7, 9000), attempt(2, 3, 400, 'clean')], CONFIG);
+  for (const [id, stats] of model.byId) {
+    assert.equal(typeof stats.taught, 'boolean', `${id} taught is not a boolean`);
+  }
+});
+
+test('taught is not a fourth bucket — bucket stays cold, warm or hot', () => {
+  const events = [
+    learnAttempt(6, 7, 20_000),
+    ...repeat(3, () => attempt(6, 7, 400, 'clean')),
+    learnAttempt(4, 5, 20_000),
+    attempt(4, 5, 4000, 'clean'),
+    learnAttempt(2, 3, 20_000),
+  ];
+  const model = deriveMastery(events, CONFIG);
+  assert.equal(model.byId.get(SIX_SEVEN).bucket, 'hot');
+  assert.equal(model.byId.get('*:4x5').bucket, 'warm');
+  assert.equal(model.byId.get('*:2x3').bucket, 'cold');
+  for (const stats of model.byId.values()) {
+    assert.ok(['cold', 'warm', 'hot'].includes(stats.bucket), `${stats.id} has a stray bucket`);
+  }
+  // Exactly the "shown how" pairing T7 renders: cold and taught.
+  assert.equal(model.byId.get('*:2x3').taught, true);
+  assert.equal(model.byId.get('*:9x9').taught, false);
+});
+
+// --- v2: absent mode means drill (all v1 history) --------------------------
+
+test('an attempt event with NO mode field is treated as drill', () => {
+  const events = repeat(3, () => attempt(6, 7, 400, 'clean'));
+  assert.equal(
+    events.every((event) => !('mode' in event)),
+    true,
+    'the v1 line shape',
+  );
+  const stats = statsFor(events, SIX_SEVEN);
+  assert.equal(stats.cleanCount, 3);
+  assert.equal(stats.bucket, 'hot', 'v1 history still earns its bucket');
+  assert.equal(stats.taught, false);
+});
+
+test('an explicit mode drill is identical to an absent mode', () => {
+  const implicit = repeat(3, () => attempt(6, 7, 400, 'clean'));
+  const explicit = repeat(3, () => drillAttempt(6, 7, 400, 'clean'));
+  const fromImplicit = statsFor(implicit, SIX_SEVEN);
+  const fromExplicit = statsFor(explicit, SIX_SEVEN);
+  assert.deepEqual(fromExplicit, fromImplicit);
+  assert.equal(fromExplicit.bucket, 'hot');
+});
+
+test('an unrecognised mode value falls back to drill rather than being dropped', () => {
+  // Only the exact literal 'learn' excludes. A corrupt or future mode string
+  // must not silently delete evidence the kid earned.
+  const events = repeat(3, () => ({ ...attempt(6, 7, 400, 'clean'), mode: 'Learn' }));
+  const stats = statsFor(events, SIX_SEVEN);
+  assert.equal(stats.cleanCount, 3);
+  assert.equal(stats.bucket, 'hot');
+  assert.equal(stats.taught, false);
+});
+
+test('a whole v1-shaped log derives with taught false everywhere', () => {
+  const events = [
+    attempt(6, 7, 400, 'clean'),
+    attempt(7, 6, 5000, 'reveal', [36]),
+    attempt(2, 3, 900, 'strategy'),
+  ];
+  const model = deriveMastery(events, CONFIG);
+  for (const stats of model.byId.values()) {
+    assert.equal(stats.taught, false, `${stats.id} claims to have been taught`);
+  }
+});
+
+// --- v2: v1 invariants still hold under a mixed log ------------------------
+
+test('byId and confusions stay total at 121 under a learn-heavy log', () => {
+  const events = [
+    ...repeat(30, () => learnAttempt(6, 7, 18_000, [48])),
+    learnAttempt(0, 0, 9000),
+    attempt(10, 10, 400, 'clean'),
+  ];
+  const model = deriveMastery(events, CONFIG);
+  assert.equal(model.byId.size, 121);
+  assert.equal(model.confusions.size, 121);
+  assert.deepEqual([...model.confusions.keys()], [...model.byId.keys()]);
+  const known = new Set(allFacts().map(factId));
+  for (const id of model.byId.keys()) {
+    assert.ok(known.has(id), `unexpected id ${id}`);
+  }
+});
+
+test('a learn attempt naming an out-of-range fact never adds a 122nd key', () => {
+  const model = deriveMastery([learnAttempt(99, 50, 9000, [4950])], CONFIG);
+  assert.equal(model.byId.size, 121);
+  assert.equal(model.confusions.size, 121);
+  assert.equal(model.byId.has('*:99x50'), false);
+  for (const stats of model.byId.values()) {
+    assert.equal(stats.taught, false);
+  }
+});
+
+test('learn attempts are sorted with the rest before folding', () => {
+  // Out-of-order replay must not change which drill attempts survive retention.
+  const inOrder = [
+    at('2026-07-28T09:00:00.000Z', learnAttempt(6, 7, 20_000, [48])),
+    at('2026-07-29T09:00:00.000Z', attempt(6, 7, 400, 'clean')),
+    at('2026-07-30T09:00:00.000Z', learnAttempt(6, 7, 21_000)),
+    at('2026-07-31T09:00:00.000Z', attempt(6, 7, 500, 'clean')),
+    at('2026-08-01T09:00:00.000Z', attempt(6, 7, 600, 'clean')),
+  ];
+  const shuffled = [inOrder[4], inOrder[1], inOrder[3], inOrder[0], inOrder[2]];
+  assert.deepEqual(deriveMastery(shuffled, CONFIG), deriveMastery(inOrder, CONFIG));
+
+  const stats = statsFor(shuffled, SIX_SEVEN);
+  assert.deepEqual(
+    stats.attempts.map((a) => a.ms),
+    [400, 500, 600],
+  );
+  assert.equal(stats.bucket, 'hot');
+  assert.equal(stats.taught, true);
+});
+
+test('6x7 and 7x6 stay independent across modes', () => {
+  const events = [
+    ...repeat(3, () => attempt(6, 7, 400, 'clean')),
+    ...repeat(2, () => learnAttempt(7, 6, 19_000, [36])),
+  ];
+  const model = deriveMastery(events, CONFIG);
+
+  const forward = model.byId.get(SIX_SEVEN);
+  const backward = model.byId.get(SEVEN_SIX);
+
+  assert.equal(forward.bucket, 'hot');
+  assert.equal(forward.taught, false);
+  assert.deepEqual(model.confusions.get(SIX_SEVEN), new Set());
+
+  assert.equal(backward.bucket, 'cold');
+  assert.equal(backward.taught, true);
+  assert.equal(backward.attempts.length, 0);
+  assert.deepEqual(model.confusions.get(SEVEN_SIX), new Set([36]));
+});
+
+test('a learn attempt with a non-finite ms is dropped like any corrupt line', () => {
+  const broken = learnAttempt(6, 7, 400);
+  broken.ms = 'slow';
+  const stats = statsFor([broken], SIX_SEVEN);
+  assert.equal(stats.taught, false, 'a corrupt line is corrupt in either mode');
+  assert.equal(stats.cleanCount, 0);
+});
+
+// --- v2: determinism -------------------------------------------------------
+
+test('deriving twice from a mixed-mode log gives a deep-equal result', () => {
+  const events = [
+    learnAttempt(6, 7, 22_000, [48]),
+    ...repeat(7, (index) => attempt(6, 7, 300 + index, 'clean')),
+    drillAttempt(7, 6, 5200, 'reveal', [36]),
+    learnAttempt(2, 3, 17_000),
+    attempt(2, 3, 900, 'clean'),
+    { type: 'session', t: 'x', build: 'm1', session: 's_9f2c', items: 9, cleanRate: 0.5, medianMs: 900 },
+  ];
+  assert.deepEqual(deriveMastery(events, CONFIG), deriveMastery(events, CONFIG));
+});
+
+test('deriveMastery does not mutate a mixed-mode event list', () => {
+  const events = [learnAttempt(6, 7, 22_000, [48]), attempt(7, 6, 900, 'clean')];
+  const before = structuredClone(events);
+  deriveMastery(events, CONFIG);
+  assert.deepEqual(events, before);
 });
