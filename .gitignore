@@ -32,8 +32,21 @@ data/*.jsonl
 !.env.example
 
 # Merriam-Webster's terms forbid duplicating or redistributing their data, and
-# committing a cache to a repo with a public origin is redistribution. Each
-# clone brings its own MW_KEY and builds its own cache via tools/fetch-words.js.
-# The game is fully playable with neither — audio falls back to local TTS.
-data/audio/
+# committing it to a repo with a public origin is redistribution. This applies to
+# anything M-W sent us, in any form: the entry JSON, and the recordings kept in
+# data/audio-mw/ as an independent reference for checking our own pronunciations.
+# Neither is needed to play — nothing at play time reads either one.
 data/words/
+data/audio-mw/
+
+# data/audio/ IS TRACKED, and that is a deliberate reversal. It used to hold the
+# Merriam-Webster cache, which could not be committed; it now holds audio we
+# generate ourselves with Kokoro-82M (Apache 2.0), so redistributing it is ours
+# to do. ~14MB for 995 words, and it buys the thing the M-W path could never
+# offer: a fresh clone plays with sound immediately — no API key, no .env, no
+# ingest run, nothing to copy onto the machine a kid actually uses.
+#
+# Regenerate with tools/gen-audio.js; see spelling-game/docs/audio-sourcing.md.
+# Its two by-products are working files, not sources, so they stay out:
+data/spine-words.txt
+data/audio-manifest.json
