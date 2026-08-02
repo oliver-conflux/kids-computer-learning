@@ -54,37 +54,91 @@ setting that silently does nothing is the worse option.
 
 ---
 
-## 2. The per-key heatmap is now buildable, and was not before
+## 2. The log is write-mostly — the loop is open
 
-**The state.** Every `item` event carries a `misses` array — what the kid
-meant, what they hit, and where:
+**The gap, stated plainly.** This game took the math game's storage model but
+not its feedback loop. It writes a rich log and reads almost none of it back.
+
+| | Math game | Typing game |
+|---|---|---|
+| Modules that read the log | `mastery.js`, `scheduler.js`, `main.js` | `progress.js` only |
+| What reading it produces | mastery buckets, confusion pairs, the next problem | stars, best accuracy, best wpm |
+| History influences what is served next | **yes** | **no** |
+| Replay tool for config changes | `tools/replay.js` | none |
+
+Item selection is `itemsFor(lessonId, Math.random)` — a uniform sample from the
+lesson's pool. **History is not an input at all.** A kid who has missed `q`
+eleven times gets exactly as much `q` as a kid who has never missed it.
+
+And every `item` event carries a `misses` array — what the kid meant, what they
+hit, and where:
 
 ```json
 "misses": [ {"expected":"d","actual":"x","pos":2},
             {"expected":"k","actual":"q","pos":6} ]
 ```
 
-Spec §14 listed a per-key accuracy heatmap as an open question, deferred because
-it "needs real usage data before it's worth building." That data is now being
-collected from the first session, so the question has changed from *should we
-build this* to *when do we render it*.
+**Nothing reads it.** It is written on every item and consumed by no code path.
 
-**Worth knowing:** this very nearly did not work. `misses` was originally derived
-by the caller as `entries.filter(e => !e.ok)`, but in block mode — the default —
-a wrong press appends no entry at all, so it was silently `[]` for every kid.
-Caught only by playing a round and reading the log. If the heatmap had been
-built six months from now against that data, it would have been built against
+**Why this matters more than it looks.** The math game's entire thesis is that
+the facts a kid lacks are a *small set*, worth finding and targeting — that is
+what mastery derivation and the scheduler exist for. Typing has exactly the same
+shape: the keys a kid cannot hit are a small set, and we are already recording
+precisely which ones. We built the observation half and stopped.
+
+**The honest counter-argument.** The typing curriculum is deliberately
+*sequential* — rungs run in a fixed, defensible order, so there is no
+equivalent of the scheduler choosing among 121 facts. That is a real difference
+and it is why this was not built. But it only argues against adaptive
+*ordering of rungs*. It says nothing about the two places history obviously
+belongs:
+
+- **Item sampling within a rung.** Weight the pool toward items containing keys
+  this kid has missed. `itemsFor` already takes an injected rng, so the seam is
+  there — it would take a weights argument rather than a new architecture.
+- **Practice mode**, which is entirely unconstrained and currently entirely
+  random. It is the natural home for targeted review, and it is already ungated.
+
+**Where to start, cheapest first.**
+
+1. **A per-key error rate in `progress.js`.** Pure, easily tested, and it is the
+   input every other idea here needs. Fold `misses` across item events into a
+   per-character rate. The interesting output is not "which keys are bad" but
+   **which confusions are systematic**: `d`→`x` repeatedly is a finger-assignment
+   problem, `d`→`f` is a neighbour slip, and those want different fixes. That is
+   the argument for having logged `actual` and not just `expected`.
+2. **Weight item sampling by it.** Smallest change with real effect on practice.
+3. **A "practise these" prompt**, or a parent-facing heatmap. Do not show a kid
+   a keyboard covered in red.
+4. **A replay tool**, mirroring `tools/replay.js`. The math notes point out that
+   theirs "has not yet been used in anger" — worth seeing whether it earns its
+   keep there before duplicating it here.
+
+Spec §14 deferred the heatmap because it "needs real usage data before it's
+worth building." That data is now being collected from the first session, so the
+question has changed from *whether* to *when*.
+
+**First real signal — from one adult session, so treat it as a shape not a
+finding.** 16 rounds, 97 misses. The most-missed expected characters were:
+
+```
+space x14    o x12    i x11    s x7    O x7    A x7    l x5    p x5
+```
+
+Space leading is the interesting one, and it is not what the curriculum is
+built to expect: every rung teaches letters, and space is introduced once, in
+passing, on rung 0 as a thumb key. If that pattern holds up with the kids —
+words being run together rather than individual letters being missed — it
+argues for space drills, which currently do not exist as a category. It is also
+exactly the kind of thing nobody would have thought to look for, which is the
+argument for item 2 above.
+
+**Worth knowing:** the `misses` data very nearly did not exist. It was
+originally derived by the caller as `entries.filter(e => !e.ok)`, but in block
+mode — the default — a wrong press appends no entry at all, so it was silently
+`[]` for every kid. Caught only by playing a round and reading the log. Had any
+of the above been built six months from now, it would have been built against
 nothing.
-
-**Where to start.** `progress.js` is the natural home and is pure, so it tests
-easily: fold `misses` across all item events into a per-character error rate,
-then tint the on-screen keyboard by it. The interesting output is not "which
-keys are bad" but **which confusions are systematic** — `d`→`x` repeatedly is a
-finger-assignment problem, `d`→`f` is a neighbour slip. Those want different
-fixes, which is the argument for logging `actual` and not just `expected`.
-
-Do not show a kid a board covered in red. This is a parent-facing view, or at
-most a "let's practise these three" prompt.
 
 ---
 
@@ -149,6 +203,18 @@ round) rather than to add content that does not exist.
   committed. It records the kid's name alongside their keystroke errors, and
   this repo has an `origin`. Flip it only if that remote is private and you want
   the history versioned — the reasoning is in `.gitignore` beside the entry.
+- **Being gitignored, the log does not travel between worktrees**, and this bit
+  us immediately: the first real play session (2026-08-02, 16 rounds across 13
+  lessons) was played from the `typing-game-redesign` worktree and lives only
+  there. The main checkout's log starts empty. If that worktree is removed, the
+  session goes with it. This is the practical cost of not committing the log,
+  and it is worth knowing before assuming a baseline exists.
+- **The math log is committed and holds three sessions as a deliberate
+  before/after baseline.** The typing log has no equivalent and, being ignored,
+  never will accumulate one across machines. If before/after comparison across a
+  `build` bump turns out to matter here the way it does for math, that decision
+  needs revisiting — perhaps committing an anonymised log with the name field
+  stripped.
 - **The game requires the server.** It cannot run from `file://` — ES modules
   are blocked at that origin, and progress lives behind `/api/log`. Both
   `typing-game/index.html` and `games-menu.html` carry a classic inline script
