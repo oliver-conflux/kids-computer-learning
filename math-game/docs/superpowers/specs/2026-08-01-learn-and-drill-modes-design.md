@@ -59,12 +59,31 @@ logic**, because session shapes will grow as the kids do.
 
 ### Drill — fluency
 
-The v1 loop, with **the `strategy` rung removed**. The ladder becomes
-`clean → blocks → reveal`: every rung is perceptual, nothing has to be read.
+**Drill has no hints at all.** The ladder is `clean → reveal`, for every one of
+the 121 facts. Problem appears, the kid gets a fixed window to retrieve it, then
+the answer shows. Nothing else ever appears.
 
-Unchanged from v1: timed stage advance, latency scoring, mastery buckets,
-interleaved scheduling, the anti-repeat and transpose guards, the interference
-guard, the success governor, the 11 × 11 grid.
+Blocks come out along with the prose. The original rule was "perceptual rungs may
+stay, task rungs must go" — but counting a 20-block array inside a three-second
+window is also work, just less of it. And keeping blocks would have made drill
+behave differently for 53 facts than for the other 68, for a reason no kid can
+perceive: `4 × 5` would offer help and `6 × 7` would not, which reads as the game
+being arbitrary rather than consistent.
+
+Uniformity is worth more here than partial help. Drill's job is retrieval, and
+the only outcomes that mean anything are "got it" and "didn't". Teaching happens
+in learn mode.
+
+Unchanged from v1: timed reveal, latency scoring, mastery buckets, interleaved
+scheduling, the anti-repeat and transpose guards, the interference guard, the
+success governor, the 11 × 11 grid.
+
+**Consequence worth stating plainly: the hard facts get no scaffolding in drill.**
+`6 × 7`, `7 × 8`, `8 × 9` are problem → silence → answer. That is correct for
+fluency practice, but it makes learn mode load-bearing rather than optional — a
+kid who only ever plays drill receives no strategy instruction at all. This is
+why the results screen must offer learn mode as a first-class next step (§7), not
+bury it.
 
 ### Learn — instruction
 
@@ -79,24 +98,29 @@ guard, the success governor, the 11 × 11 grid.
 - A **"show me the answer"** button reveals it on demand. The kid decides when.
 - The answer, once revealed, stays visible along with the strategy.
 
-## 2. Hints accumulate, never replace
+## 2. Hints accumulate, never replace — in learn mode
 
-In **both** modes, a hint that has appeared stays. Reaching the reveal stage in
-drill mode shows the blocks *and* the answer; learn mode shows the strategy, the
-blocks, and the answer together.
+Drill has nothing to accumulate; this rule now applies only to learn mode, where
+the strategy, the blocks, and the revealed answer are all on screen together.
 
 The answer must always arrive with its derivation attached. An answer alone is
-the thing we are trying not to build.
+the thing we are trying not to build — and drill mode is allowed to show a bare
+answer *only* because the derivation was taught in learn mode first.
 
 Consequence for T8's layout: the reserved hint region was sized for the tallest
-*single* hint (210px, from a 10-row block array). Accumulated hints need more
-room, or a more compact arrangement — strategy text beside the block array rather
-than above it. The reserved-space rule still holds: **the problem must not move
-vertically when a hint appears.**
+*single* hint (210px, from a 10-row block array). Learn mode needs room for
+strategy text and a block array simultaneously — most likely side by side rather
+than stacked. Drill mode's hint region can now collapse to nothing, since drill
+renders no hints at all. The reserved-space rule still holds within each mode:
+**the problem must not move vertically when anything appears.**
 
 ## 3. The two hint modalities are developmental, not sequential
 
 This is why v1's single ladder felt wrong.
+
+**Both now live exclusively in learn mode**, which is the right home for them:
+learn mode has no clock, so a kid can dwell on either for as long as they need.
+That is what neither could get in drill.
 
 | | is | suits |
 |---|---|---|
@@ -213,23 +237,30 @@ connected in use rather than being two separate things a kid has to know about.
 
 ## 8. Timing
 
-Removing prose from drill dissolves the original complaint at its root — the
+Removing every hint from drill dissolves the original complaint at its root — the
 interruption existed because a *task* was on a rescue timer, and drill now has no
-task rungs.
+rungs between the problem and the answer at all.
 
-So the delays are only modestly raised, and deliberately not overhauled at the
-same time as the structural change:
+The delay table becomes much simpler to reason about, because there is only one
+transition. **The value is now the whole retrieval window**: how long the kid has
+before the answer appears.
 
-| bucket | v1 | v2 |
+| bucket | v1 (per stage) | v2 (to reveal) |
 |---|---|---|
-| cold | 2000 | 3000 |
-| warm | 4000 | 5000 |
-| hot | 6000 | 7000 |
+| cold | 2000 | 4000 |
+| warm | 4000 | 6000 |
+| hot | 6000 | 8000 |
 
-Blocks still take a moment to count, which is what the bump covers. **This table
-is the first thing to retune against real sessions** — it is one line in
-`CONFIG`, and `tools/replay.js` can compare a change against collected history
-before it reaches a kid.
+Raised further than the earlier draft, because these are no longer the interval
+between rungs — they are the entire time the kid gets to think. Under v1 a cold
+fact reached the answer after three 2000ms stages, so ~6s; v2 gives 4s of clean
+silence. **This table is the first thing to retune against real sessions** — it
+is one line in `CONFIG`, and `tools/replay.js` can compare a change against
+collected history before it reaches a kid.
+
+A stuck kid still has the escape valve: **typing any wrong answer reveals it
+immediately**, so nobody has to sit out the window. The clock is for the kid who
+is thinking, not the kid who is stuck.
 
 The rule from v1 stands and is still the one most likely to be reverted by
 accident: **the delay grows with mastery, it does not shrink.**
@@ -242,8 +273,13 @@ All new quantities, in one place as ever:
 mode:              'drill',   // default mode on launch
 learnFacts:        3,         // distinct facts per learn session
 learnPasses:       4,         // times each is cycled
-delays:            { cold: 3000, warm: 5000, hot: 7000 },
+delays:            { cold: 4000, warm: 6000, hot: 8000 },  // now time-to-reveal
 ```
+
+`blocksMaxProduct` (25) survives, but now governs **learn mode only** — it is the
+predicate deciding whether a block array is drawn alongside the strategy. The
+lower bound added after v1 shipped still applies: a product of 0 draws an empty
+array and must not offer the modality at all.
 
 `sessionLength` (20) continues to govern drill. Expected to grow once the kids
 are used to it — that is a config edit, not a code change.
