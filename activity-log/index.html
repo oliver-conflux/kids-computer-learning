@@ -102,6 +102,15 @@
           </div>
         </div>
 
+        <!--
+          Where the clock-in guard speaks when she has not typed a time yet.
+          Empty until main.js fills it; `.message:empty` collapses it so it
+          takes no space until it has something to say. Declared here rather
+          than created at runtime so every id the wiring touches lives in one
+          place.
+        -->
+        <p class="message" id="start-message"></p>
+
         <div class="actions">
           <button class="btn btn--go" id="btn-clock-in" type="button">Start my timer!</button>
         </div>
