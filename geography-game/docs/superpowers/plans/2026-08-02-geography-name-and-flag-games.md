@@ -18,7 +18,9 @@
 - **`space` is always the LAST parameter**, matching `deriveMastery(events, config, space)`.
 - **Match the house comment style.** Every module opens with a comment saying what it is and *why it is that way*, not what it does. Read `spelling-game/js/space.js` for the register.
 - **Magic numbers live in `CONFIG`**, with the one documented exception of physical-model tables (see `typing-cost.js`).
-- **Tests:** `node --test <path>`. Thorough on logic; **none on DOM, CSS or rendering.**
+- **Tests:** `node --test <file>` for one file. For a whole directory you MUST use a quoted glob — `node --test 'core/tests/*.test.js'`. Passing a bare directory (`node --test core/tests/`) fails with `MODULE_NOT_FOUND` on Node 22.18 and looks like a broken repo when nothing is broken.
+- **Baseline is 640 passing, 0 failing** across `core`, `spelling-game`, `math-game` and `typing-game`. Verified on this worktree before Task 1. If your task starts red, the cause is your task, not inherited.
+- Thorough on logic; **no tests on DOM, CSS or rendering.**
 - **Commit style:** imperative subject describing the change's intent, body explaining why. No "feat:" prefixes — the repo does not use them.
 
 ---
@@ -94,7 +96,7 @@ In `core/tests/typing-cost.test.js` the module under test moves from `../js/typi
 
 ```bash
 node --test core/tests/typing-cost.test.js
-node --test spelling-game/tests/
+node --test 'spelling-game/tests/*.test.js'
 ```
 
 Expected: both pass, zero failures. If spelling fails with `ERR_MODULE_NOT_FOUND`, a Step 1 hit was missed.
@@ -230,7 +232,7 @@ Each call gains a fourth argument. In `spelling-game/js/main.js` that is `spelli
 
 ```bash
 node --test core/tests/frontier.test.js
-node --test spelling-game/tests/
+node --test 'spelling-game/tests/*.test.js'
 ```
 
 Expected: both pass. A spelling failure here means a caller in Step 5 was missed.
@@ -1648,7 +1650,7 @@ In `games-menu.html`, copy an existing card and point it at `geography-game/inde
 - [ ] **Step 6: Run every test in the repo**
 
 ```bash
-node --test core/tests/ geography-game/tests/ spelling-game/tests/ math-game/tests/ tools/countries/tests/
+node --test 'core/tests/*.test.js' 'geography-game/tests/*.test.js' 'spelling-game/tests/*.test.js' 'math-game/tests/*.test.js' 'typing-game/tests/*.test.js' 'tools/countries/tests/*.test.js'
 ```
 
 Expected: all pass. This is the first point where the two promotions, the build tool and the game are all in play together.
