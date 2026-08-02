@@ -395,7 +395,45 @@ exact drift the extraction exists to prevent, and the change is mechanical.
 
 ---
 
-## ▶ GATE A — dedicated code review
+## ▶ GATE A — PASSED 2026-08-02
+
+Verified, not asserted:
+
+- **The ten math test files are byte-identical.** `git diff f755e6e..HEAD --
+  math-game/tests/ typing-game/tests/` reports one file changed: `space.test.js`,
+  added. No original test was touched.
+- **423 tests pass, 0 fail** — math 323 (313 before the wave + 10 new adapter
+  tests), typing 96, core 4.
+- **No core module imports from a game**, and none of the four pure core modules
+  touches DOM, network, `Date.now()` or `Math.random()`. `core/log.js` is impure
+  by design.
+- **Both outbox keys byte-identical.** Server allowlist behaves: `?game=math`
+  200, unknown 400, `__proto__` 400.
+- **`git ls-files data/` is empty.**
+- **Both modes played end to end** — 20 drill items, 12 learn items. Observed:
+  the drill wrong answer bought exactly one stage of help; the timed reveal fired
+  on its own with no input; a learn wrong answer did NOT advance the stage; the
+  reveal button jumped to the last rung; backspace cleared one character; results
+  rendered as a hub with both continuations in both modes; the `taught` state
+  showed as "shown how".
+- **The log was read, not assumed.** A wrong answer records as the NUMBER 28, not
+  `"28"`. One learn line carries the whole engine:
+  `typed:["5","50","","5","","5","56"] wrong:[50] revealed:true` — the `""` at
+  index 2 is the wrong-answer clear and the one at index 4 is the backspace. No
+  drill line carries `revealed`, so absent still means "not applicable".
+
+Two process notes worth keeping:
+
+- The reviewer was dispatched without a Bash tool and could not run tests or diff.
+  It said so plainly instead of implying a pass, and named the three things it
+  could not check. Those three were then closed directly. Give the next gate's
+  reviewer a Bash tool.
+- Two agents independently hit the same wall — math's tests deep-equal whole
+  state and stats objects, so the item field cannot be aliased or added to. They
+  invented two different fixes. That is exactly the divergence this plan warns
+  about, and it was resolved into one: `space.itemKey`.
+
+### The original gate criteria
 
 Not a wave review. A full review of the extraction alone, before any spelling
 code is written.
@@ -413,7 +451,22 @@ code is written.
 
 # Wave 2 — Spelling's pure core and data pipeline
 
-All tasks are independent and parallelisable. None touch the DOM.
+None of these touch the DOM.
+
+**The Word shape, fixed here so Wave 2 can run in parallel.** Every task below
+codes against this rather than waiting for Task 2.1 to land:
+
+```
+Word   = { word: string, rank: number, dolch: boolean }
+spine  = Word[]        // difficulty order; index IS the frontier position
+itemId = `w:${word}`   // e.g. "w:friend"
+```
+
+`word` is lowercase a–z only, no spaces, no punctuation, unique across the spine.
+`rank` is Fry frequency rank, and is `0` for the hand-authored CVC opener that
+precedes Fry. `dolch` flags Dolch sight-word membership. Spine order is the
+difficulty spine and nothing else reads `rank` for ordering — a later retune
+changes the array, not the consumers.
 
 ### Task 2.1 — The word spine
 
