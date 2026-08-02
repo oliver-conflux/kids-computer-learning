@@ -561,8 +561,21 @@ async function fetchWord(word, references, work) {
     return { record, audio };
   }
 
-  // Elementary first, Intermediate only if Elementary does not have the word.
-  // The older kid drifting past Elementary's ceiling is the case this exists for.
+  // Elementary first, then Intermediate — and the fallthrough is on MISSING
+  // AUDIO, not merely on a missing entry.
+  //
+  // It used to be the second thing, and that was wrong. M-W puts the recording
+  // on the base headword, so an inflected form like `said` or `went` gets a
+  // cross-reference entry that exists but carries no pronunciation. The old loop
+  // saw an entry, wrote the record and returned, so Intermediate was never asked
+  // about 29 of the 31 silent words. Measured after this change: it has audio for
+  // `the`, `have` and `found`, and genuinely has none for the other 28 — so this
+  // is a small win, not a rescue. The bug was that we never found out.
+  //
+  // The first reference to answer at all still wins the DEFINITION, because
+  // Elementary is the one written for this age group. Only the audio is taken
+  // from further down the list.
+  let best = null;
   for (const reference of references) {
     const entry = await lookup(word, reference);
     if (entry === null) {
@@ -570,12 +583,24 @@ async function fetchWord(word, references, work) {
       continue;
     }
     const record = buildRecord(word, entry, reference.name, new Date().toISOString());
-    writeFileSync(wordPath(word), `${JSON.stringify(record, null, 2)}\n`);
-    const audio = record.audioUrl === null ? false : await downloadAudio(record.audioUrl, word);
-    return { record, audio };
+    if (best === null) {
+      best = record;
+    } else if (best.audioUrl === null && record.audioUrl !== null) {
+      // Keep Elementary's wording, borrow Intermediate's voice.
+      best = { ...best, audio: record.audio, audioUrl: record.audioUrl, audioFrom: reference.name };
+    }
+    if (best.audioUrl !== null) {
+      break;
+    }
+    await sleep(CONFIG.requestDelayMs);
   }
 
-  return { record: null, audio: false };
+  if (best === null) {
+    return { record: null, audio: false };
+  }
+  writeFileSync(wordPath(word), `${JSON.stringify(best, null, 2)}\n`);
+  const audio = best.audioUrl === null ? false : await downloadAudio(best.audioUrl, word);
+  return { record: best, audio };
 }
 
 /**
