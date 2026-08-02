@@ -350,6 +350,41 @@ play changed about the design, and commit.
 
 ---
 
+## Follow-up: add `geography` to the dropdown
+
+A geography game is being built in parallel. It should become a fourth
+verifiable activity — but **only once it registers a `geography` key in
+`LOG_PATHS`** (`server/serve.js`). The activity `value` strings must equal the
+log keys; adding `geography` before its log exists produces a dropdown entry
+with nothing to check against.
+
+Once that key lands, this is a one-line addition to `CONFIG.activities` in
+`activity-log/js/config.js`:
+
+```js
+{ value: 'geography', label: 'Geography' },
+```
+
+Do it at Wave 3 close-out if geography's log exists by then; otherwise carry it
+as a standing follow-up.
+
+## Findings from Wave 0 that later waves must honour
+
+- **`validateClockOut` cannot report a blank end-time field.** There is no
+  fourth reason code, and the wrong-day check runs first, so an empty or
+  unparseable reading comes back as `'wrong-day'`. **Agent 1C must guard the
+  empty field before calling it** — otherwise a child who submits a blank form
+  is told she typed the wrong date.
+- **`OpenClock.description` is always a string** (`''` when absent). 1C need not
+  guard it.
+- **`formatDuration` emits words** ("hour", "minute"), a deliberate narrow
+  exception to the no-copy-in-`core` rule: it is a number formatter that makes
+  no decision, and the frozen interface puts it in `core`. Not a defect.
+- **The fold runs in log order, not sorted by `t`.** If the offline outbox ever
+  flushed a `clock-out` ahead of its `clock-in`, that close would be dropped and
+  the clock would stay open. Single-writer append makes this unlikely; noted
+  because it is the one place log order and `t` order can genuinely diverge.
+
 ## Deliberately not in this plan
 
 From the spec's *Non-goals*, all cheap to add later, none requiring a record
