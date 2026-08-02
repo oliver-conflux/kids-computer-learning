@@ -131,6 +131,14 @@ const RULES = [
   ['-an', /^[^aeiou]*an$/],
   ['-ap', /^[^aeiou]*ap$/],
   ['-at', /^[^aeiou]*at$/],
+  ['-id', /^[^aeiou]*id$/],   // did, hid, lid — added at Gate B, see below
+  ['-ack', /^[^aeiou]*ack$/],
+  ['-ick', /^[^aeiou]*ick$/],
+  ['-ock', /^[^aeiou]*ock$/],
+  ['-uck', /^[^aeiou]*uck$/],
+  ['-ong', /^[^aeiou]*ong$/],
+  ['-ang', /^[^aeiou]*ang$/],
+  ['-ing-rime', /^[^aeiou]*ing$/],  // king, thing, bring — the RIME, not the suffix
   ['-ed', /^[^aeiou]*ed$/],   // bed, red, sled — NOT the -ed suffix, see below
   ['-en', /^[^aeiou]*en$/],
   ['-et', /^[^aeiou]*et$/],

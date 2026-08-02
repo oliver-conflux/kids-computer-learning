@@ -139,7 +139,7 @@ const FRY = [
   ['the', true], ['of', false], ['and', true], ['a', true], ['to', true],
   ['in', true], ['is', true], ['you', true], ['that', true], ['it', true],
   ['he', true], ['was', true], ['for', true], ['on', true], ['are', true],
-  ['as', true], ['with', true], ['his', true], ['they', true], ['i', true],
+  ['as', true], ['with', true], ['his', true], ['they', true],
   ['at', true], ['be', true], ['this', true], ['have', true], ['from', true],
   // 26-50
   ['or', true], ['one', true], ['had', true], ['by', true], ['words', false],
@@ -182,7 +182,7 @@ const FRY = [
   ['off', true], ['play', true], ['spell', false], ['air', false], ['away', true],
   ['animal', false], ['house', false], ['point', false], ['page', false], ['letter', false],
   ['mother', false], ['answer', false], ['found', true], ['study', false], ['still', false],
-  ['learn', false], ['should', false], ['america', false], ['world', false], ['high', false],
+  ['learn', false], ['should', false], ['world', false], ['high', false],
   // 201-225
   ['every', true], ['near', false], ['add', false], ['food', false], ['between', false],
   ['own', true], ['below', false], ['country', false], ['plant', false], ['last', false],
@@ -190,7 +190,7 @@ const FRY = [
   ['start', true], ['city', false], ['earth', false], ['eye', false], ['light', true],
   ['thought', false], ['head', false], ['under', true], ['story', false], ['saw', true],
   // 226-250
-  ['left', false], ['dont', false], ['few', false], ['while', false], ['along', false],
+  ['left', false], ['few', false], ['while', false], ['along', false],
   ['might', false], ['close', false], ['something', false], ['seem', false], ['next', false],
   ['hard', false], ['open', true], ['example', false], ['begin', false], ['life', false],
   ['always', true], ['those', true], ['both', true], ['paper', false], ['together', true],
@@ -203,7 +203,7 @@ const FRY = [
   ['stop', true], ['without', false], ['second', false], ['later', false], ['miss', false],
   // 276-300
   ['idea', false], ['enough', false], ['eat', true], ['face', false], ['watch', false],
-  ['far', true], ['indian', false], ['really', false], ['almost', false], ['let', true],
+  ['far', true], ['really', false], ['almost', false], ['let', true],
   ['above', false], ['girl', false], ['sometimes', false], ['mountain', false], ['cut', true],
   ['young', false], ['talk', false], ['soon', true], ['list', false], ['song', false],
   ['being', false], ['leave', false], ['family', false], ['its', false], ['body', false],

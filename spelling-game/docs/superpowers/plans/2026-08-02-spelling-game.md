@@ -582,7 +582,56 @@ changes the array, not the consumers.
 
 ---
 
-## ▶ GATE B — wave review
+## ▶ GATE B — PASSED WITH FINDINGS 2026-08-02
+
+149 spelling / 327 math / 96 typing / 4 core, all green. The reviewer wired every
+module together in a scratch script and ran a full problem end to end —
+`deriveMastery` → `activeWindow` → `pickNext` with `typingCost` as `itemWeight` →
+`createEngine` → `toAttemptEvent` → `idFromEvent` round trip. Nothing broke. That
+is the result that mattered: every module was written by a different agent, in
+parallel, against a written contract, none seeing the others' code.
+
+**Fixed at the gate:**
+
+- **Four words removed from the spine.** `dont` (a contraction with the
+  apostrophe stripped to satisfy the a–z rule — the game would show four slots
+  and mark a misspelling CORRECT), `i` (the pronoun is always capitalised and v1
+  has no capitalisation), `america` and `indian` (proper nouns taught lowercase).
+- **Eight rime families added** — `-id`, `-ack`, `-ick`, `-ock`, `-uck`, `-ong`,
+  `-ang`, `-ing`. `back`, `long`, `song` and `did` were reaching `irregular` by
+  FALLBACK, so learn mode would tell a kid "you just have to remember this one"
+  about a word that follows a rule, and unteach the rule while doing it.
+  Irregular fell from 104/342 to 98/338.
+- **`buildLearnSession` now throws** on a non-numeric tunable instead of
+  returning `[]`. It was silently producing a zero-item session that starts, ends
+  immediately and logs nothing. `typing-cost.js` throws on the identical mistake;
+  two modules in one wave should not disagree about that.
+- **A raw NUL byte in `typing-cost.test.js`** made git treat the whole 5.8KB file
+  as binary, so it never appeared in a diff. In a plan whose review model is
+  "read the wave's diff", one test file was structurally invisible.
+
+**Carried forward, not fixed:**
+
+- `tools/fetch-words.js` re-fetches a word Merriam-Webster does not have on every
+  run, forever — a miss writes nothing, so the resume check always says "not
+  cached". Its resume logic (`workFor`) is module-private and has no test.
+- `--limit` counts words attempted, not API calls. A word needing only audio
+  costs 0 calls and still eats a slot; a double-miss costs 2. Against a
+  1000/day/reference cap, `--limit=1000` can spend anywhere from 0 to 2000.
+- Fry rank drift past ~150: `words` appears where Fry has singular `word`, and
+  `an` is absent from the FRY array (harmlessly — it is already in the opener).
+  Nothing reads `rank` for ordering, so this is inert until someone makes it
+  load-bearing.
+- `dolch` is written on every entry and read by nothing.
+- Broad structural tags (`blend-end` 29 words, `silent-e` 29) can win family
+  selection, and a header reading "these are blend-end words" over
+  `and/first/just/left` teaches nothing. Not yet observed failing; Wave 3's
+  header copy is what will expose it.
+- **Live ingest is unverified.** No network request has been made and no key
+  used. URL construction and the subdirectory rule are covered by unit tests and
+  by reading only.
+
+### The original gate criteria
 
 - Every module in `spelling-game/js/` is pure except `audio.js`.
 - No DOM, no network, no clock, no randomness in the pure set.
@@ -664,6 +713,20 @@ appears.**
       or by letting the window fall back silently to the whole spine, which would
       re-serve mastered words forever with no signal. Detect it here and end the
       session with something that says she has finished what exists.
+- [ ] **Write `revealed` as a COUNT, and write it on drill events too.** Found at
+      Gate B. The spec fixes the drill event as `{"stage":"clean","revealed":0}`
+      and the rule that `stage` is `'clean'` **iff** `revealed === 0`. But
+      `core/engine.js` writes `revealed` only for learn attempts and only as a
+      BOOLEAN — correct for math, where the reveal is one button press, and
+      insufficient here, where the whole point is that letters arrive one at a
+      time. The number of letters revealed is the ONLY measure of how much
+      scaffolding a word needed, and without it a word rescued on letter one and
+      a word rescued on letter five are indistinguishable in the log forever.
+      Do NOT change the core: math's boolean is right for math. The spelling
+      ladder has a rung per letter (`clean`, `r1`, `r2`, …), so the count is
+      `ladder.indexOf(state.stage)` — compute it here and merge it into the event
+      before recording. Decide this before the first session is logged; a log
+      written without it cannot be repaired afterwards.
 - [ ] Emit the session event at the end, including `frontier`.
 - [ ] `record` fires without being awaited. The kid never waits on I/O.
 - [ ] Flush the outbox once at startup.

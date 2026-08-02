@@ -277,6 +277,19 @@ export function buildLearnSession(words, config) {
     return [];
   }
 
+  // Throw rather than degrade. A missing or non-numeric tunable makes `target`
+  // NaN, `passes` NaN, and the loop below run zero times — handing back an empty
+  // session that starts, ends immediately, logs nothing, and looks to the kid
+  // like the game is broken with no error anywhere to say why. `typing-cost.js`
+  // throws on exactly this class of mistake; two modules in one wave should not
+  // disagree about it, and the silent one is the wrong choice.
+  if (!Number.isFinite(config.learnWords) || !Number.isFinite(config.learnPasses)) {
+    throw new Error(
+      'buildLearnSession: config.learnWords and config.learnPasses must be numbers, ' +
+        `got ${config.learnWords} and ${config.learnPasses}`,
+    );
+  }
+
   const target = config.learnWords * config.learnPasses;
   const passes = Math.max(config.learnPasses, Math.ceil(target / words.length));
 
