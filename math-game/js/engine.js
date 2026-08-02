@@ -13,9 +13,18 @@
 // 6x8 is bleeding across and '49' tells us 7x7 is, which is the most valuable
 // signal in the log. A lone leading '4' tells us nothing.
 //
-// A wrong answer BUYS HELP: it records the value, clears the entry, pulses, and
-// advances the hint ladder exactly one stage. Nothing is ever marked failed and
-// no score is lost.
+// In DRILL, a wrong answer BUYS HELP: it records the value, clears the entry,
+// pulses, and advances the hint ladder exactly one stage. Nothing is ever marked
+// failed and no score is lost.
+//
+// In LEARN, a wrong answer records, clears and pulses but does NOT advance the
+// stage. The strategy is already fully on screen and the answer sits behind a
+// button the kid presses when they choose to; advancing on a mistake would take
+// that choice away, which is the whole point of the button (spec §1).
+//
+// The engine reads which case it is in FROM THE LADDER — `ladder[0] ===
+// 'strategy'` means a learn problem — rather than carrying a `mode` field on the
+// state. One source of truth cannot disagree with itself.
 //
 // Pure module: no DOM, no network, no clock, no randomness. Every function is a
 // transition that returns a NEW state object and never mutates its input. Time
@@ -45,6 +54,22 @@ function stageAfter(ladder, current) {
 }
 
 /**
+ * True when `ladder` belongs to a learn problem.
+ *
+ * The two v2 ladders are `['clean','reveal']` for drill and
+ * `['strategy','reveal']` for learn, so the first rung identifies the mode with
+ * no ambiguity — a learn attempt never has stage 'clean' (plan, Shared
+ * Contracts). Reading it off the ladder rather than off a `mode` field on the
+ * state means there is no second copy of the fact to drift out of sync.
+ *
+ * @param {string[]} ladder
+ * @returns {boolean}
+ */
+function isLearnLadder(ladder) {
+  return ladder[0] === 'strategy';
+}
+
+/**
  * A fresh state with `typed` and `history` cleared and the ladder parked at its
  * first stage.
  *
@@ -54,7 +79,8 @@ function stageAfter(ladder, current) {
  * behind — so `history` replays the entry field exactly.
  *
  * @param {{op: string, a: number, b: number}} fact
- * @param {string[]} ladder — stages in order, always starting 'clean'
+ * @param {string[]} ladder — stages in order, starting 'clean' (drill) or
+ *   'strategy' (learn)
  * @param {number} now
  * @returns {object} ProblemState
  */
@@ -71,6 +97,7 @@ export function startProblem(fact, ladder, now) {
     resolvedAt: null,
     status: 'active',
     pulse: false,
+    revealed: false,
   };
 }
 
@@ -109,9 +136,11 @@ export function typeDigit(state, digit, now) {
     };
   }
 
-  // Wrong. Record the whole value, clear the entry, pulse once, and advance the
-  // ladder exactly one step — never two, and never past the end.
-  const next = stageAfter(state.ladder, state.stage);
+  // Wrong. Record the whole value, clear the entry, pulse once, and — in drill
+  // only — advance the ladder exactly one step, never two and never past the
+  // end. In learn the stage is frozen: the strategy is already on screen and the
+  // answer is the kid's button to press.
+  const next = isLearnLadder(state.ladder) ? null : stageAfter(state.ladder, state.stage);
   return {
     ...state,
     typed: '',
@@ -176,6 +205,36 @@ export function tick(state, now, delayMs) {
 }
 
 /**
+ * Jump straight to the ladder's FINAL stage and mark the problem `revealed`.
+ *
+ * This is learn mode's "show me the answer" button (spec §1). It is the only way
+ * a learn problem ever changes stage — learn runs no tick loop and its wrong
+ * answers do not advance — so the kid, not a clock and not a mistake, decides
+ * when the answer appears.
+ *
+ * It jumps to the LAST rung rather than stepping one, because the button's
+ * promise is the answer, not the next hint. On the two-rung v2 ladders those are
+ * the same move; on any longer ladder they are not, and the promise wins.
+ *
+ * Already at the final stage: returns the state BY REFERENCE, unchanged — the
+ * same identity no-op that `tick`, `typeDigit` and `backspace` use, which the
+ * renderer's pulse guard (`next !== last && next.pulse`) depends on. That means a
+ * second press does not set `revealed` on a state that reached the last rung some
+ * other way; nothing did, in learn mode, but the reference contract comes first.
+ *
+ * @param {object} state ProblemState
+ * @param {number} now
+ * @returns {object} ProblemState
+ */
+export function revealAnswer(state, now) {
+  const last = state.ladder[state.ladder.length - 1];
+  if (last === undefined || state.stage === last) {
+    return state;
+  }
+  return { ...state, stage: last, stageAt: now, pulse: false, revealed: true };
+}
+
+/**
  * Build the log line for a resolved problem.
  *
  * `ms` is the whole problem — shown until the correct answer landed, wrong
@@ -194,16 +253,26 @@ export function tick(state, now, delayMs) {
  * primary time axis is simply garbage, and mastery's chronological sort silently
  * stops meaning anything. Pass epoch milliseconds.
  *
+ * `mode` is written on every event. `revealed` is written ONLY for learn
+ * attempts: in drill there is no button to press, so a `revealed: false` on every
+ * drill line would be a column of noise that reads as a real signal. Absent means
+ * "not applicable", not "false".
+ *
+ * `mode` defaults to `'drill'` because that is exactly what the log's own rule
+ * says an absent `mode` means (spec §5) — every v1 line predates the field and
+ * was a drill attempt. The default is for old callers, not new ones: pass it.
+ *
  * @param {object} state ProblemState with status 'correct'
  * @param {object} config the CONFIG table
  * @param {string} session session id, 's_' + 4 hex chars
+ * @param {'drill' | 'learn'} [mode] which mode produced this attempt
  * @returns {object} AttemptEvent
  */
-export function toAttemptEvent(state, config, session) {
+export function toAttemptEvent(state, config, session, mode = 'drill') {
   if (state.resolvedAt === null) {
     throw new Error('toAttemptEvent called on an unresolved problem');
   }
-  return {
+  const event = {
     type: 'attempt',
     t: new Date(state.resolvedAt).toISOString(),
     build: config.build,
@@ -215,5 +284,10 @@ export function toAttemptEvent(state, config, session) {
     stage: state.stage,
     typed: state.history.slice(),
     wrong: state.wrong.slice(),
+    mode,
   };
+  if (mode === 'learn') {
+    event.revealed = state.revealed;
+  }
+  return event;
 }
