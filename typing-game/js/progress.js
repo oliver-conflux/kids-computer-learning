@@ -30,6 +30,22 @@ export function starsFor(accuracy) {
   return 1;
 }
 
+/**
+ * Accuracy as the whole-number percentage a kid is SHOWN.
+ *
+ * Floored, never rounded, and it lives here rather than in ui.js so it cannot
+ * drift from starsFor. Rounding 0.9459 to "95%" next to a two-star result reads
+ * to a kid as the game cheating them out of a star it just told them they
+ * earned. Flooring keeps the number and the stars telling the same story: the
+ * displayed percentage crosses a threshold exactly when the stars do.
+ *
+ * @param {number} accuracy 0..1
+ * @returns {number} 0..100
+ */
+export function displayAccuracy(accuracy) {
+  return Math.floor(accuracy * 100);
+}
+
 /** A round event we can actually score, or null. */
 function asRound(event, lessonId) {
   if (event === null || typeof event !== 'object' || Array.isArray(event)) return null;
@@ -61,7 +77,7 @@ export function forLesson(events, lessonId) {
 
     const roundStars = starsFor(round.accuracy);
     stars = Math.max(stars, roundStars);
-    bestAccuracy = Math.max(bestAccuracy, Math.round(round.accuracy * 100));
+    bestAccuracy = Math.max(bestAccuracy, displayAccuracy(round.accuracy));
 
     const wpm = typeof round.wpm === 'number' && Number.isFinite(round.wpm) ? round.wpm : 0;
     bestWpm = Math.max(bestWpm, Math.round(wpm));

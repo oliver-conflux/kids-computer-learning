@@ -8,9 +8,19 @@
 import { fingerFor, fingerName, needsShift, shiftSideFor } from './keymap.js';
 import { setKeyboardVisibility, highlightKey } from './keyboard.js';
 import { setHandsVisibility, highlightFinger } from './hands.js';
+import { displayAccuracy } from './progress.js';
 
-/** A mistyped space is invisible unless we give it a glyph (spec §6). */
-function visible(ch) {
+/**
+ * A WRONG character, made visible (spec §6). A mistyped space renders as
+ * nothing at all, so the kid sees the line shake with no idea what they typed.
+ *
+ * Applied only on the wrong path. A correctly-typed space stays a space, so the
+ * typed line keeps matching the target line above it character for character —
+ * dotting every space would render a clean line as "she·had·a·field" under a
+ * target reading "she had a field", which undercuts the column alignment that
+ * is the whole reason for showing two lines.
+ */
+function visibleWrong(ch) {
   return ch === ' ' ? '·' : ch;
 }
 
@@ -34,10 +44,12 @@ export function renderLines(state) {
   const typed = document.getElementById('typed');
   typed.textContent = '';
   for (const entry of state.entries) {
-    typed.appendChild(span(visible(entry.actual), entry.ok ? 'ok' : 'bad'));
+    typed.appendChild(
+      span(entry.ok ? entry.actual : visibleWrong(entry.actual), entry.ok ? 'ok' : 'bad'),
+    );
   }
   if (state.wrong !== null) {
-    typed.appendChild(span(visible(state.wrong), 'bad'));
+    typed.appendChild(span(visibleWrong(state.wrong), 'bad'));
   } else {
     typed.appendChild(span('', 'caret'));
   }
@@ -135,7 +147,7 @@ export function showResults(summary, handlers) {
   card.appendChild(span(stars, 'results-stars'));
 
   const rows = [
-    ['Accuracy', `${Math.round(summary.accuracy * 100)}%`],
+    ['Accuracy', `${displayAccuracy(summary.accuracy)}%`],
     ['Speed', `${Math.round(summary.wpm)} wpm`],
     ['Best streak', String(summary.bestStreak)],
   ];

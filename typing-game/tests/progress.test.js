@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { starsFor, forLesson, allProgress } from '../js/progress.js';
+import { starsFor, displayAccuracy, forLesson, allProgress } from '../js/progress.js';
 
 const round = (over) => ({
   type: 'round', t: '2026-08-01T15:00:00.000Z', build: 't1', session: 's_1',
@@ -17,6 +17,27 @@ test('star thresholds sit exactly where the spec puts them', () => {
   assert.equal(starsFor(0.95), 3, '95% earns the third');
   assert.equal(starsFor(1), 3);
   assert.equal(starsFor(0), 1, 'finishing at all earns one star');
+});
+
+// The displayed percentage and the stars must never contradict each other. A
+// real round scored 70/74 = 0.9459: two stars, but rounding showed "95%", which
+// is the exact number the third star requires. Flooring keeps them aligned.
+test('the shown percentage never claims a threshold the stars withheld', () => {
+  for (let n = 0; n <= 1000; n += 1) {
+    const accuracy = n / 1000;
+    const shown = displayAccuracy(accuracy);
+    const stars = starsFor(accuracy);
+    assert.equal(shown >= 95, stars === 3, `at ${accuracy}: showed ${shown}%, gave ${stars} stars`);
+    assert.equal(shown >= 90, stars >= 2, `at ${accuracy}: showed ${shown}%, gave ${stars} stars`);
+  }
+});
+
+test('displayAccuracy floors rather than rounds', () => {
+  assert.equal(displayAccuracy(0.9459), 94, 'the case that started this');
+  assert.equal(displayAccuracy(0.9499), 94);
+  assert.equal(displayAccuracy(0.95), 95);
+  assert.equal(displayAccuracy(1), 100);
+  assert.equal(displayAccuracy(0), 0);
 });
 
 test('an empty event list is zero progress, not a crash', () => {
