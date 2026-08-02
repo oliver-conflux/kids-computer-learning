@@ -13,14 +13,13 @@ had a few sittings.
 
 ## 1. There is no way to change any setting after the first run
 
-**The gap.** `settings.js` stores six things. Exactly two can ever be changed
+**The gap.** `settings.js` stores five things. Exactly two can ever be changed
 from inside the game, and one of those only in one direction:
 
 | Setting | Changeable in game? |
 |---|---|
 | `guidance` | **Down only** — via the step-down offer after a 3-star round |
 | `name` | Once, at first run |
-| `lastLesson` | Written automatically — **and read by nothing** |
 | `blockOnError` | **Never** |
 | `accent`, `skin` | **Never — and nothing reads them at all** |
 
@@ -45,7 +44,7 @@ the menu rather than anything reachable mid-round. Guidance already has a
 working write path in `main.js` (`onStepDown`); it needs an up as well as a
 down, and a home that is not the results screen.
 
-**While you are there — three fields are written and never read.**
+**While you are there — two fields are written and never read.**
 
 `accent` and `skin` are dead schema: `base.css` hardcodes `--accent: #7b6bd6`
 and `--skin: #e8b7ac`, and nothing consults the stored values. Either wire them
@@ -53,13 +52,17 @@ to the CSS custom properties — the design file documents four alternates of
 each, and letting a kid pick their own hand colour is a cheap bit of ownership —
 or delete them. A setting that silently does nothing is the worse option.
 
-`lastLesson` is different: it *was* read. The original `boot()` resumed
-`settings.lastLesson ?? 'home-base'`, but the menu replaced that flow and the
-write outlived the read. So either restore the behaviour (a "carry on where you
-left off" default on the menu is genuinely nice for a kid who plays daily) or
-drop the field. This is a small instance of a general risk in staged builds:
-task N+1 replaces task N's entry point, and the now-orphaned bookkeeping keeps
-running because nothing fails when it does.
+**Resolved — `lastLesson` is gone.** It *was* read: the original `boot()`
+resumed `settings.lastLesson ?? 'home-base'`, but the menu replaced that flow
+and the write outlived the read. "Carry on where you left off" now exists as the
+Keep going button, and `nextup.js` derives its pick from the log rather than
+from a stored pointer, so the field had no remaining reader and was deleted from
+`settings.js` and `main.js`. `clean()` rebuilds from `DEFAULT_SETTINGS`, so a
+stored value left over from an older build is dropped on the next save with no
+migration.
+
+Worth keeping the general lesson: task N+1 replaces task N's entry point, and
+the now-orphaned bookkeeping keeps running because nothing fails when it does.
 
 ---
 

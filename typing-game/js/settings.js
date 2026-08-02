@@ -18,7 +18,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
   guidance: 3,
   accent: '#7b6bd6',
   skin: '#e8b7ac',
-  lastLesson: null,
 });
 
 function storage() {
@@ -40,7 +39,6 @@ function clean(raw) {
   }
   if (typeof raw.accent === 'string') out.accent = raw.accent;
   if (typeof raw.skin === 'string') out.skin = raw.skin;
-  if (typeof raw.lastLesson === 'string') out.lastLesson = raw.lastLesson;
   return out;
 }
 
