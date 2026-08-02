@@ -26,7 +26,7 @@
 // different directory depths. Inlining removes both risks and keeps the bar a
 // single file that either works or does not exist.
 
-import { localDate } from '../../core/timeclock.js';
+import { wallParts } from '../../core/timeclock.js';
 
 const STYLE_ID = 'kct-timer-bar-styles';
 
@@ -175,29 +175,28 @@ function activityLabel(activity) {
  * costs nothing when it is today and quietly surfaces a timer left running since
  * Tuesday when it is not.
  *
- * The reading is parsed as if it were UTC, which is the same trick
- * `core/timeclock.js` uses on these strings: `at` carries no zone, so reading it
- * on a fixed-offset scale returns the digits she typed rather than sliding them
- * by the ambient timezone. `localDate` is asked first, so nothing malformed gets
- * this far.
+ * The numbers come from `core`'s `wallParts`, which both validates the reading
+ * and reads it on a fixed-offset scale — `at` carries no zone, so that returns
+ * the digits she typed rather than sliding them by the ambient timezone. This
+ * function used to slice at hardcoded offsets instead, which meant it silently
+ * assumed core's format without ever restating it: relaxing that pattern to
+ * accept '2026-8-4' would have left these offsets landing mid-field and printed
+ * "started undefined at NaN: PM" here, with nothing raised anywhere.
  *
  * @returns {string | null} null when `wall` is not a well-formed reading
  */
 function formatStartedAt(wall) {
-  if (localDate(wall) === null) {
+  const parts = wallParts(wall);
+  if (parts === null) {
     return null;
   }
-  const year = Number(wall.slice(0, 4));
-  const month = Number(wall.slice(5, 7));
-  const day = Number(wall.slice(8, 10));
-  const hour = Number(wall.slice(11, 13));
-  const minute = wall.slice(14, 16);
+  const { year, month, day, hour, minute } = parts;
 
   const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
   const suffix = hour < 12 ? 'AM' : 'PM';
   const hour12 = hour % 12 === 0 ? 12 : hour % 12;
 
-  return `started ${weekday} at ${hour12}:${minute} ${suffix}`;
+  return `started ${weekday} at ${hour12}:${String(minute).padStart(2, '0')} ${suffix}`;
 }
 
 /** A button, wired only if the caller actually handed over a handler. */

@@ -40,6 +40,7 @@ import { renderBar } from './bar.js';
 import {
   localDate,
   toWallClock,
+  wallParts,
   durationMinutes,
   elapsedMinutesSince,
   formatDuration,
@@ -107,33 +108,9 @@ const DAY_NAMES = [
   'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
 ];
 
-const WALL_CLOCK = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
-
-/**
- * Split a wall-clock reading into numbers, for display.
- *
- * NOT a validator, and deliberately not a second opinion about whether a reading
- * is sound — that judgement belongs to `localDate` in core and is made before
- * anything reaches here. Every caller passes either an `at` the fold already
- * accepted or a string `toWallClock` just produced. A parse failure returns null
- * so a render degrades to an empty string instead of throwing.
- *
- * @param {unknown} wall 'YYYY-MM-DDTHH:MM'
- * @returns {{ year: number, month: number, day: number, hour: number, minute: number } | null}
- */
-function wallParts(wall) {
-  const match = typeof wall === 'string' ? WALL_CLOCK.exec(wall) : null;
-  if (match === null) {
-    return null;
-  }
-  return {
-    year: Number(match[1]),
-    month: Number(match[2]),
-    day: Number(match[3]),
-    hour: Number(match[4]),
-    minute: Number(match[5]),
-  };
-}
+// `wallParts` comes from core. This file used to carry a byte-identical copy of
+// core's pattern, which meant the wall-clock format was two facts that had to be
+// kept equal by hand — and nothing would have failed at the moment they diverged.
 
 /** 'Tuesday' */
 function dayName(wall) {

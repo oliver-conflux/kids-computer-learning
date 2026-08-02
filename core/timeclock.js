@@ -97,7 +97,23 @@ function pad(value, width) {
  * @param {unknown} wall
  * @returns {number | null} null when `wall` is not a well-formed reading
  */
-function wallToNominalMs(wall) {
+/**
+ * The five numbers in a wall-clock reading, or null if it is not one.
+ *
+ * Exported because the display code needs these numbers and has no other honest
+ * way to get them. Left unexported, each consumer re-derived them: `main.js`
+ * grew a byte-identical copy of the pattern, and `bar.js` sliced at hardcoded
+ * offsets without restating the format at all — so relaxing the pattern here to
+ * accept '2026-8-4' would have left the bar slicing at the old positions and
+ * rendering "started undefined at NaN: PM" on the games menu, with no error
+ * anywhere. The format is one fact and it belongs in one file.
+ *
+ * `month` is 1-based, as it is written. Callers building a `Date` subtract one.
+ *
+ * @param {unknown} wall local wall clock 'YYYY-MM-DDTHH:MM'
+ * @returns {{year: number, month: number, day: number, hour: number, minute: number} | null}
+ */
+export function wallParts(wall) {
   if (typeof wall !== 'string') {
     return null;
   }
@@ -111,13 +127,12 @@ function wallToNominalMs(wall) {
   const hour = Number(match[4]);
   const minute = Number(match[5]);
 
-  const ms = Date.UTC(year, month - 1, day, hour, minute);
   // The pattern alone admits '2026-02-30' and '2026-08-04T25:99', which Date.UTC
   // then silently rolls over into a real but different moment. Comparing the
   // round-trip back out is the only reliable way to reject them, and rejecting
   // them here is what lets `localDate` promise that a non-null answer means the
   // whole reading is sound, time half included.
-  const rolled = new Date(ms);
+  const rolled = new Date(Date.UTC(year, month - 1, day, hour, minute));
   if (
     rolled.getUTCFullYear() !== year
     || rolled.getUTCMonth() !== month - 1
@@ -127,7 +142,15 @@ function wallToNominalMs(wall) {
   ) {
     return null;
   }
-  return ms;
+  return { year, month, day, hour, minute };
+}
+
+function wallToNominalMs(wall) {
+  const parts = wallParts(wall);
+  if (parts === null) {
+    return null;
+  }
+  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
 }
 
 /**

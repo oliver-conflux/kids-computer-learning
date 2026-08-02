@@ -22,6 +22,7 @@ import { readFileSync } from 'node:fs';
 import {
   localDate,
   toWallClock,
+  wallParts,
   durationMinutes,
   elapsedMinutesSince,
   formatDuration,
@@ -658,6 +659,65 @@ test('an accepted result carries minutes and no reason', () => {
   assert.equal(result.ok, true);
   assert.equal(Object.hasOwn(result, 'reason'), false);
   assert.equal(formatDuration(result.minutes), '1 hour 15 minutes', 'the spec\'s worked example');
+});
+
+// ---------------------------------------------------------------------------
+// wallParts — the one parser
+// ---------------------------------------------------------------------------
+//
+// Exported so `main.js` and `bar.js` stop deriving these numbers themselves.
+// Before this existed the wall-clock format lived in three files: this one,
+// a byte-identical regex in main.js, and — worst — hardcoded slice offsets in
+// bar.js that never restated the format at all. Relaxing the pattern here would
+// have left the bar slicing at stale positions and rendering "started undefined
+// at NaN: PM" on the games menu, with nothing thrown. These tests exist so the
+// format stays one fact.
+
+test('wallParts splits a reading into the five numbers a display needs', () => {
+  assert.deepEqual(wallParts('2026-08-04T10:00'), {
+    year: 2026, month: 8, day: 4, hour: 10, minute: 0,
+  });
+  // 1-based, as written on the page — callers building a Date subtract one.
+  assert.equal(wallParts('2026-01-31T23:59').month, 1);
+});
+
+test('wallParts rejects everything localDate rejects, and agrees with it exactly', () => {
+  // The two must never disagree: bar.js used to ask localDate for permission and
+  // then parse by hand, so a reading one accepted and the other mangled printed
+  // garbage rather than nothing.
+  const readings = [
+    '2026-08-04T10:00',   // good
+    '2026-02-30T10:00',   // rolls over — not a real day
+    '2026-08-04T25:00',   // rolls over — not a real hour
+    '2026-08-04T10:60',   // rolls over — not a real minute
+    '2026-8-4T10:00',     // the relaxed form the pattern does NOT admit
+    '2026-08-04T10:00:00',// seconds are not part of a reading
+    '2026-08-04T10:00Z',  // a Z makes it an instant, not a reading
+    '', '   ', 'noon', '10am',
+  ];
+  for (const wall of readings) {
+    assert.equal(
+      wallParts(wall) === null,
+      localDate(wall) === null,
+      `wallParts and localDate must agree about ${JSON.stringify(wall)}`,
+    );
+  }
+});
+
+test('wallParts refuses anything that is not a string', () => {
+  for (const value of [null, undefined, 20260804, {}, [], new Date()]) {
+    assert.equal(wallParts(value), null);
+  }
+});
+
+test('wallParts reads the digits she typed, whatever zone the machine is in', () => {
+  // The reading carries no zone. Parsed against the ambient one, a 5 PM Pacific
+  // reading would come back as the next day — the exact bug the wall-clock
+  // format exists to prevent, and the reason this returns numbers rather than
+  // an instant.
+  const parts = wallParts('2026-08-04T17:30');
+  assert.equal(parts.day, 4);
+  assert.equal(parts.hour, 17);
 });
 
 // ---------------------------------------------------------------------------
