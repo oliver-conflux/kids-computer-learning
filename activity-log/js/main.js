@@ -227,16 +227,31 @@ function showStartScreen() {
   }
   setMessage(dom.startMessage, '');
 
-  // The reference reading, set once, beside the field and never inside it.
-  // Refreshing this on an interval would be the ticking counter the whole design
-  // forbids — and it would also be the wrong instrument. She is meant to read
-  // the clock on the wall; this is here so she can tell she is in the right
-  // hour, not so she can copy it.
+  refreshClockHint();
+
+  showScreen('screen-start');
+}
+
+/**
+ * Re-read the machine clock into the hint beside the start-time field.
+ *
+ * Called on entry to the start screen and again whenever she moves into the
+ * field — one reading per deliberate act, never on a timer. An interval here
+ * would be the ticking counter the whole design forbids, and it would be the
+ * wrong instrument besides: she is meant to read the clock on the wall, and this
+ * is only so she can tell she is in the right hour.
+ *
+ * Refreshing on focus is not a nicety. Set once and left alone, the hint goes
+ * quietly wrong: open the page at 10:00, get distracted, come back and start at
+ * 11:30, and it still says 10:00 AM — disagreeing with the wall clock she is
+ * being asked to read, at the exact moment she is deciding what to type. A
+ * reference that is sometimes false is worse than no reference, because it can
+ * talk her out of a correct measurement.
+ */
+function refreshClockHint() {
   if (dom.clockHint !== null) {
     dom.clockHint.textContent = clockTime(toWallClock(now()));
   }
-
-  showScreen('screen-start');
 }
 
 function showStopScreen(openClock) {
@@ -586,6 +601,12 @@ function collectDom() {
  * clock-out for a clock that is no longer running.
  */
 function wire() {
+  if (dom.startTime !== null) {
+    // Not a tick: `focus` fires when she deliberately moves into the field,
+    // which is the moment the reading beside it has to be true. It never fires
+    // on its own, so this cannot become a counter.
+    dom.startTime.addEventListener('focus', refreshClockHint);
+  }
   if (dom.clockInBtn !== null) {
     dom.clockInBtn.addEventListener('click', onClockIn);
   }
