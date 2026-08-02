@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spelling</title>
+
+    <!--
+      Zero dependencies, no build step, no CDN. Every stylesheet and script below
+      is a local relative path — nothing is fetched from an external host, fonts
+      included. See css/base.css for why the font stack looks the way it does.
+
+      This holds at PLAY TIME too, not just at load: audio comes from a file that
+      tools/fetch-words.js put on disk hours earlier, or from the browser's own
+      speechSynthesis. The game never contacts Merriam-Webster while a kid is
+      using it, and is fully playable with no API key and an empty cache.
+    -->
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/word.css" />
+    <link rel="stylesheet" href="css/learn.css" />
+    <link rel="stylesheet" href="css/results.css" />
+  </head>
+
+  <body>
+    <!--
+      The shell. Two regions and nothing else: a thin progress strip along the
+      top, and the stage that fills everything underneath it. Same structure as
+      the math game, deliberately — a kid moving between the two games should not
+      have to relearn where anything is.
+
+      Progress is SESSION state, not problem state, so no word renderer touches
+      this region. It is driven by renderProgress(shell, done, total) from
+      js/ui/word.js:
+
+          renderProgress(document.getElementById('shell'), done, total);
+    -->
+    <div class="shell" id="shell">
+      <header class="shell__top">
+        <div
+          class="progress"
+          role="progressbar"
+          aria-valuemin="0"
+          aria-valuemax="20"
+          aria-valuenow="0"
+          aria-label="Words done this session"
+        >
+          <div class="progress__fill"></div>
+        </div>
+        <p class="progress__count">0 / 20</p>
+      </header>
+
+      <!--
+        TWO stage elements, one per screen, exactly one visible at a time.
+
+        Separate on purpose: each renderer owns everything inside the node it is
+        handed and clears it, so sharing one node would mean each screen silently
+        destroying the other's DOM. main.js swaps them at session end by toggling
+        `hidden`.
+
+        NO COUNTDOWN, NO TIMER BAR, NO ELAPSED TIME lives anywhere in this
+        document, in either mode. Time is measured relentlessly and never shown.
+        The strip above counts WORDS, not seconds. Learn mode has no clock at all
+        — not a hidden one, none: `tick` is a structural no-op on a learn ladder.
+      -->
+      <main class="shell__stage" id="stage"></main>
+      <section class="shell__stage shell__stage--results" id="results" hidden></section>
+    </div>
+
+    <!--
+      Guard for file:// — deliberately a CLASSIC script, not a module.
+
+      ES modules are blocked over file:// (origin null fails CORS), so the module
+      below never executes and the page would otherwise sit there as dead HTML
+      with a keyboard that does nothing. A module-based check cannot catch this,
+      because the module is exactly what does not run. This one does.
+    -->
+    <script>
+      if (location.protocol === 'file:') {
+        document.body.innerHTML =
+          '<div class="startup-notice">' +
+          '<h1>Start the game first</h1>' +
+          '<p>This game needs its little server running so it can remember how you did.</p>' +
+          '<p><b>Double-click <code>play.command</code></b> in the games folder, ' +
+          'then pick the spelling game from the menu that opens.</p>' +
+          '</div>';
+      }
+    </script>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

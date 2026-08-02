@@ -1,0 +1,99 @@
+/*
+ * base.css — reset, palette, type.
+ *
+ * A BYTE-FOR-BYTE COPY of math-game/css/base.css, deliberately, and the third
+ * copy of this palette in the repo.
+ *
+ * The earlier note here said to extract a shared theme "when there is a second
+ * real consumer". There are now three, so by that rule the extraction is due —
+ * and it is still not being done in this wave, for a different reason: a shared
+ * stylesheet is a shared failure mode across three games two children use daily,
+ * and Wave 3 is not the moment to introduce one. Extract it as its own change,
+ * with all three games playable in front of you to check against.
+ *
+ * Until then the rule is COPY, NEVER EDIT IN PLACE. If a value changes, change
+ * it in all three or the games stop reading as one family — which is the whole
+ * point of the palette being fixed. See spelling-game/docs/next-steps.md.
+ */
+
+:root {
+  /* The six required values, exact. Do not approximate these. */
+  --page: #eef0f3; /* page background */
+  --accent: #7b6bd6; /* progress fill, the '=' and the filled slot underline */
+  --heading: #2f3742; /* numerals and any text that must be read */
+  --muted: #7b8493; /* the counter, the strategy line, the revealed answer */
+  --error-fill: #f4c9c2; /* wrong-answer pulse fill */
+  --error-text: #d98a7d; /* wrong-answer pulse text */
+
+  /* Two surface neutrals, also from the typing game's design reference: its
+     "key face" and "keyboard deck". They keep the slots and the progress track
+     reading as the same physical material as that game's keys. */
+  --surface: #ffffff;
+  --deck: #d9dde3;
+
+  /*
+   * Baloo 2 (display) and Nunito (UI) are the design's fonts, but they are
+   * Google Fonts and this project takes no CDN link of any kind — so they are
+   * named FIRST and used if the machine happens to have them installed, with a
+   * rounded-to-neutral system stack behind them otherwise. Nothing is fetched.
+   * If we ever want them guaranteed, the fix is to vendor the woff2 files into
+   * the repo and add an @font-face here, not a <link> to fonts.googleapis.com.
+   */
+  --font-display: 'Baloo 2', 'Trebuchet MS', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --font-ui: 'Nunito', 'Avenir Next', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+
+  /* The wrong-answer pulse, ~400ms. Shared by problem.css so the flash and the
+     JS timer that clears the class cannot drift apart. */
+  --pulse-ms: 400ms;
+}
+
+/* ---------- reset ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+h1,
+h2,
+p,
+figure {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  min-height: 100%;
+  background: var(--page);
+  color: var(--heading);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* The kid types straight at the document; there is no input element and no
+   submit key, so a stray drag-select on the numerals is only ever noise. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
