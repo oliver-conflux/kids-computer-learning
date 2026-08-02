@@ -124,19 +124,42 @@ listed is the implementer's choice.
 Both games supply an object with these members. This is the entire seam between
 the core and a game's content.
 
+**Corrected 2026-08-02, before Wave 1 started.** The plan originally listed five
+members. Reading `engine.js` and `scheduler.js` line by line showed that was
+drawn from `mastery.js` alone and could not carry the other two: the engine needs
+to know what characters are typable, what string must be matched, and what item
+fields go on the event; the scheduler's interference guard needs an item's
+canonical answer to compare against another item's recorded wrong values. Those
+are all genuinely item-specific and all genuinely generalise. Ten members:
+
 | member | type | math | spelling |
 |---|---|---|---|
 | `allItems()` | `() => Item[]` | 121 facts | the word spine |
-| `itemId(item)` | `(Item) => string` | `"*:6:7"` | `"w:friend"` |
+| `itemId(item)` | `(Item) => string` | `"*:6x7"` | `"w:friend"` |
 | `idFromEvent(event)` | `(object) => string \| null` | from `op,a,b` | from `word` |
-| `isValidWrong(value)` | `(unknown) => boolean` | `Number.isFinite` | non-empty string |
 | `relatedIds(id)` | `(string) => string[]` | `[transposeId]` | `[]` |
+| `targetOf(item)` | `(Item) => string` | `String(a*b)` | the word |
+| `isTypableChar(ch)` | `(string) => boolean` | `/^[0-9]$/` | `/^[a-z]$/` |
+| `coerceWrong(typed)` | `(string) => unknown` | `Number` | identity |
+| `isValidWrong(value)` | `(unknown) => boolean` | `Number.isFinite` | non-empty string |
+| `answerValue(item)` | `(Item) => unknown` | `a*b` | the word |
+| `eventFields(item)` | `(Item) => object` | `{op,a,b}` | `{word,patterns}` |
+
+Note the id format is `*:6x7` with an `x`, not the `*:6:7` this plan wrote
+earlier from memory. `math-game/js/facts.js` is authoritative.
 
 `relatedIds` generalises the math game's transpose guard: ids that must never be
 served adjacent to this one. Spelling has no analogue and returns empty.
 
 `idFromEvent` returns `null` for an event outside the item space, and callers
 skip those.
+
+`targetOf` and `answerValue` are separate on purpose. `targetOf` is the string
+the kid must type, character by character; `answerValue` is the value stored in
+and compared against `confusions`. For math those are `"42"` and `42` — a string
+and a number — and conflating them breaks the interference guard silently.
+The invariant `coerceWrong(targetOf(item))` deep-equals `answerValue(item)` ties
+them together, and `validateSpace` checks it.
 
 ### `core/mastery.js`
 
@@ -262,6 +285,24 @@ the wider signature; the shim narrows it. Do not change math's public API.
 
 If a test cannot pass without modification, **stop and escalate.** That is the
 signal the boundary is wrong, not an invitation to edit the test.
+
+**Three naming collisions the extraction has to solve, found before dispatch:**
+
+1. **`stats.fact` → `stats.item`.** Core names it `item`; math's tests and UI read
+   `fact`. The mastery shim rebuilds each entry as `{...stats, fact: stats.item}`.
+   Nothing depends on the identity of a stats object, so rebuilding is safe.
+
+2. **`state.fact` → `state.item`, and the by-reference contract.** The engine's
+   no-op transitions return their input *by reference*, `tick(s,…) === s`, and both
+   the renderer's pulse guard and a test depend on it. A shim that re-wrapped every
+   returned state would destroy that. It must not. **Alias once in `startProblem`
+   only** — `{...coreState, fact: coreState.item}` — and let every later transition
+   carry `fact` through its own spread untouched. The other four transitions pass
+   through the shim unwrapped.
+
+3. **`pickNext` returns an id, not an item.** Core returns a `string`. Math's shim
+   returns `{...model.byId.get(id).item}`, preserving both its old return type and
+   its fresh-copy guarantee.
 
 ### Task 1.1 — The adapter contract and math's adapter
 
