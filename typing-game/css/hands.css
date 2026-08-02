@@ -1,0 +1,9 @@
+/* typing-game/css/hands.css */
+
+/* The overlay is semi-transparent so the keys — and the highlighted key in
+   particular — stay readable through the hands. 0.55 is the design file's
+   default handOpacity. */
+.hands { position: absolute; inset: 0; width: 924px; height: 385px; pointer-events: none; opacity: .55; }
+.palm, .finger { fill: var(--skin); stroke: rgba(0,0,0,.10); stroke-width: 1.5; }
+.finger { transition: fill .12s ease; }
+.finger.is-active { fill: var(--accent); }

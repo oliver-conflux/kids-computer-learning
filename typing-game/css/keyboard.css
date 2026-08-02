@@ -1,0 +1,14 @@
+/* typing-game/css/keyboard.css */
+.stage { position: relative; width: 924px; transform-origin: top center; }
+.keyboard { background: var(--deck); border-radius: 18px; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px; }
+.kb-row { display: flex; justify-content: center; }
+.kb-key { height: 52px; border-radius: 9px; background: var(--key-face); color: var(--key-label);
+  display: grid; place-items: center; font-family: var(--ui); font-size: .85rem; font-weight: 600;
+  box-shadow: 0 1px 0 rgba(0,0,0,.08); transition: background .12s ease, color .12s ease; }
+.kb-key.is-next { background: var(--accent); color: #fff; }
+.kb-key.is-wrong { background: var(--wrong-flash); color: var(--error-text); }
+
+.stage.guidance-dim .keyboard { opacity: .35; }
+.stage.guidance-dim .kb-key.is-next { background: var(--key-face); color: var(--key-label); }
+.stage.guidance-hidden { display: none; }

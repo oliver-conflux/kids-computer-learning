@@ -1,0 +1,34 @@
+/* typing-game/css/base.css — palette and fonts, per design/README.md */
+:root {
+  --page: #eef0f3;
+  --deck: #d9dde3;
+  --key-face: #ffffff;
+  --key-label: #6b7381;
+  --heading: #2f3742;
+  --muted: #7b8493;
+  --accent: #7b6bd6;
+  --skin: #e8b7ac;
+  --wrong-flash: #f4c9c2;
+  --error-text: #d98a7d;
+
+  --display: 'Baloo 2', system-ui, sans-serif;
+  --ui: 'Nunito', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body, h1, p { margin: 0; }
+
+body {
+  background: var(--page);
+  color: var(--heading);
+  font-family: var(--ui);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.5rem 1rem 2rem;
+}
+
+.hidden { display: none !important; }

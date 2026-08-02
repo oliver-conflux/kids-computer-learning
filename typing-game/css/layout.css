@@ -1,0 +1,75 @@
+/* typing-game/css/layout.css */
+.topbar { width: min(924px, 100%); display: flex; align-items: center; gap: 1rem; }
+.lesson-title { font-family: var(--display); font-size: 1.5rem; }
+.progress { margin-left: auto; display: flex; align-items: center; gap: .75rem; }
+.progress-count { font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress-track { width: 220px; height: 10px; background: var(--deck); border-radius: 999px; overflow: hidden; }
+.progress-bar { height: 100%; width: 0%; background: var(--accent); transition: width .25s ease; }
+
+.prompt-row { width: min(924px, 100%); display: flex; align-items: center; gap: 1rem; }
+.character { width: 64px; height: 56px; background: var(--deck); border-radius: 14px;
+  display: grid; place-items: center; animation: bob 2.4s ease-in-out infinite; }
+.character-face { width: 34px; height: 14px; border-radius: 8px;
+  background: radial-gradient(circle at 25% 50%, var(--heading) 4px, transparent 4px),
+              radial-gradient(circle at 75% 50%, var(--heading) 4px, transparent 4px); }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@media (prefers-reduced-motion: reduce) { .character { animation: none; } }
+
+.prompt { font-size: 1.15rem; color: var(--heading); }
+
+/* Both lines monospace so columns align character-for-character. That
+   alignment is the whole point of the two-line compare — it is what lets a kid
+   see exactly which letter went wrong. */
+.typing-lines { width: min(924px, 100%); display: flex; flex-direction: column; gap: .35rem; }
+.line { font-family: var(--mono); font-size: 1.75rem; letter-spacing: .06em; white-space: pre; min-height: 2.2rem; }
+.line-target { color: var(--muted); }
+.line-typed { color: var(--heading); }
+.line-typed .ok { color: var(--heading); }
+.line-typed .bad { color: var(--error-text); background: var(--wrong-flash); border-radius: 3px; }
+.line-typed .caret { border-left: 2px solid var(--accent); margin-left: -1px; animation: blink 1s step-end infinite; }
+@keyframes blink { 50% { border-color: transparent; } }
+
+.shake { animation: shake .18s ease-in-out 2; }
+@keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+/* Overlays: the first-run name prompt and the lesson menu (spec §4, §5). */
+.overlay { position: fixed; inset: 0; display: grid; place-items: center;
+  background: rgba(238,240,243,.9); backdrop-filter: blur(3px); z-index: 10; }
+.overlay-card { background: #fff; border-radius: 20px; padding: 2rem 2.5rem;
+  display: flex; flex-direction: column; gap: 1rem; align-items: center;
+  box-shadow: 0 12px 40px rgba(0,0,0,.12); }
+.overlay-card h2 { font-family: var(--display); margin: 0; }
+.overlay-wide { min-width: min(680px, 92vw); align-items: stretch; }
+.overlay-actions { display: flex; gap: .75rem; }
+.overlay-actions button, .rung { font-family: var(--ui); font-weight: 700; border: none;
+  border-radius: 12px; padding: .7rem 1.2rem; cursor: pointer;
+  background: var(--deck); color: var(--heading); }
+.overlay-actions button.primary { background: var(--accent); color: #fff; }
+#name-input { font-family: var(--ui); font-size: 1.1rem; padding: .6rem .9rem;
+  border: 2px solid var(--deck); border-radius: 12px; }
+.track h3 { font-family: var(--display); color: var(--muted); margin: 1rem 0 .5rem; }
+.rungs { display: flex; flex-wrap: wrap; gap: .5rem; }
+.rung { display: flex; flex-direction: column; align-items: flex-start; gap: .2rem; }
+.rung-stars { color: var(--accent); font-size: .8rem; }
+
+/* Shown instead of the game when it cannot save — see main.js showServerDown
+   and the file:// guard in index.html. Deliberately calm and instructional
+   rather than alarming; a kid may well be the one reading it. */
+.startup-notice {
+  max-width: 34rem;
+  margin: 4rem auto;
+  padding: 2rem 2.5rem;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .10);
+  text-align: center;
+}
+.startup-notice h1 { font-family: var(--display); font-size: 1.6rem; margin-bottom: .75rem; }
+.startup-notice p { color: var(--muted); line-height: 1.6; margin-bottom: .6rem; }
+.startup-notice code {
+  font-family: var(--mono);
+  background: var(--deck);
+  color: var(--heading);
+  padding: .15em .4em;
+  border-radius: 6px;
+}
