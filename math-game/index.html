@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Math Facts</title>
+
+    <!--
+      Zero dependencies, no build step, no CDN. Every stylesheet and script below
+      is a local relative path — nothing is fetched from an external host, fonts
+      included. See base.css for why the font stack looks the way it does.
+    -->
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/problem.css" />
+    <link rel="stylesheet" href="css/hints.css" />
+    <!-- Owned by T9. Its selectors are scoped under .results and do not reach
+         the problem screen; loaded here because index.html is T8's file. -->
+    <link rel="stylesheet" href="css/results.css" />
+  </head>
+
+  <body>
+    <!--
+      The shell. Two regions and nothing else: a thin progress strip along the
+      top, and the stage that fills everything underneath it.
+
+      Progress is SESSION state, not problem state, so renderProblem never
+      touches this region. It is driven instead by renderProgress(shell, done,
+      total) from js/ui/problem.js — a named function with typed arguments, so
+      the ids and the `--progress` custom property below stay private to that
+      module and a rename inside it cannot break the wiring silently.
+
+          renderProgress(document.getElementById('shell'), done, total);
+    -->
+    <div class="shell" id="shell">
+      <header class="shell__top">
+        <div
+          class="progress"
+          role="progressbar"
+          aria-valuemin="0"
+          aria-valuemax="20"
+          aria-valuenow="0"
+          aria-label="Problems done this session"
+        >
+          <div class="progress__fill"></div>
+        </div>
+        <p class="progress__count">0 / 20</p>
+      </header>
+
+      <!--
+        TWO stage elements, one per screen, exactly one visible at a time.
+
+        They are separate on purpose: both renderers own everything inside the
+        node they are handed — mountProblemScreen clears its container and T9's
+        renderResults calls replaceChildren — so sharing one node would mean
+        each screen silently destroying the other's DOM. T10 swaps them by
+        toggling `hidden` at session end:
+
+            stage.hidden = true;
+            results.hidden = false;
+            renderResults(results, model, summary);
+
+        NO COUNTDOWN, NO TIMER BAR, NO ELAPSED TIME lives anywhere in this
+        document. Time is measured relentlessly and never shown — a visible
+        clock is a documented math-anxiety trigger and an explicit non-goal.
+        The progress bar above counts PROBLEMS, not seconds.
+      -->
+      <main class="shell__stage" id="stage"></main>
+      <section class="shell__stage shell__stage--results" id="results" hidden></section>
+    </div>
+
+    <!--
+      main.js is T10 and does not exist yet; until it lands this page renders the
+      empty shell and logs a 404 for this one request. That is expected.
+    -->
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

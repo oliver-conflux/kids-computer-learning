@@ -1,0 +1,168 @@
+/*
+ * hints.css — the LEARN view: strategy text, the block array, and the
+ * "Show me the answer" button.
+ *
+ * NONE OF THIS EXISTS IN DRILL MODE. Every rule below is either scoped to
+ * `.problem-screen[data-mode='learn']` or applies to a node that JS keeps
+ * `hidden` outside learn mode, and `[hidden]` collapses the box out of the
+ * flex column entirely — so the gap above it collapses with it and the drill
+ * screen is numerals and slots with nothing underneath. Drill's layout is
+ * therefore identical at 'clean' and at 'reveal': the only thing that changes
+ * between those two stages is the text inside the answer slots.
+ *
+ * v1 reserved a fixed 210px region here because a stage could fire under the
+ * kid mid-thought and move the numerals. In v2 nothing fires: drill has no
+ * region at all, and in learn the strategy and the blocks are on screen from
+ * the first frame of the problem and stay there through the reveal. So the
+ * region is sized to its content, and the reserved-space rule is kept by the
+ * only element that still appears and disappears mid-problem — the reveal
+ * button, whose row holds its height when the button goes (see .reveal-bar).
+ *
+ * The 'reveal' stage is NOT rendered here — it draws the answer greyed inside
+ * the answer slots (see problem.css), because the help has to land where the
+ * kid is already looking.
+ */
+
+/*
+ * Strategy and blocks SIDE BY SIDE, not stacked.
+ *
+ * They are alternative representations for different developmental stages
+ * (spec §3) — blocks show the quantity, prose derives from a known anchor —
+ * so neither sits above the other as though it came first or mattered more.
+ * A row also keeps both on screen without the tall region a stack would need:
+ * the block array is the tall thing, and the text costs nothing beside it.
+ */
+.hint {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(16px, 3vw, 40px);
+
+  width: 100%;
+}
+
+/* Visibility is decided in JS, so the mode and per-fact rules live in one place
+   rather than being half-encoded in selectors here. These make sure `hidden`
+   beats the display values set above and below. */
+.hint[hidden],
+.hint [hidden] {
+  display: none;
+}
+
+/* ---------- strategy ---------- */
+
+/*
+ * One line, read aloud by a 10-year-old: "6 x 6 = 36, add one more 6". Sized
+ * well below the numerals — it is help, not the problem.
+ */
+.hint__strategy {
+  display: block;
+  max-width: 22ch;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: clamp(21px, 3.4vw, 38px);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--muted);
+}
+
+/* ---------- block array ---------- */
+
+/*
+ * The array, drawn: `a` rows of `b` squares. A concrete representation — see the
+ * quantity — which is why it is drawn NEXT TO the prose rather than in place of
+ * it. Only ever drawn when the product is 1..config.blocksMaxProduct (25):
+ * nobody counts 42 blocks, and a product of 0 is a blank box rather than a
+ * gentler hint. Both bounds live in `blocksApply`.
+ *
+ * The square size is FIXED, not fitted to the grid. A block array only means
+ * anything if every block is the same unit, so 3 x 4 draws the same square as
+ * 10 x 2 and simply takes less room. The tallest array that can appear is 10
+ * rows (10 x 1, 10 x 2), which at 16px squares and 4px gaps is 196px — the
+ * ceiling on how tall this region can get, and it is reached only by facts with
+ * a 10 in them.
+ */
+.hint__blocks {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 1), 16px);
+  grid-auto-rows: 16px;
+  gap: 4px;
+  justify-content: center;
+  align-content: center;
+}
+
+.block {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0.82;
+}
+
+/* ---------- the reveal button ---------- */
+
+/*
+ * "Show me the answer" — learn mode's whole clock, replaced by a button.
+ * Nothing is ever pushed at the kid in this mode (spec §1); the answer arrives
+ * when they decide it should, and the strategy stays on screen when it does.
+ *
+ * THE ROW IS RESERVED SPACE. It keeps its height after the button is hidden,
+ * because the button disappears at the exact moment the answer appears in the
+ * slots — and a screen that jumps upward while the kid is reading the thing
+ * they just asked for is the specific failure this design avoids. The height is
+ * a constant rather than min-height on the button for that reason.
+ */
+.reveal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
+}
+
+.reveal-bar[hidden],
+.reveal-bar [hidden] {
+  display: none;
+}
+
+/*
+ * Deliberately quiet. It is an offer, not the goal — a big accent-filled button
+ * would read as the thing you are supposed to press, and the thing you are
+ * supposed to do is have a go first. Outlined in the accent, filled only on
+ * hover, and never larger than the strategy text beside it.
+ */
+.reveal-bar__button {
+  padding: 0 22px;
+  height: 44px;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: var(--surface);
+
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--accent);
+  cursor: pointer;
+
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.reveal-bar__button:hover {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+/* The kid types straight at the document, so the button is reachable by keyboard
+   but must never look like it has swallowed the input. A visible focus ring is
+   kept — it is the only cue a keyboard user gets — and nothing else changes. */
+.reveal-bar__button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}

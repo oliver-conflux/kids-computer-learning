@@ -1,0 +1,91 @@
+/*
+ * base.css — reset, palette, type.
+ *
+ * The palette is copied from typing-game/design/README.md so the two games read
+ * as one family from the menu. Values are duplicated here rather than imported
+ * from a shared theme file on purpose: the typing redesign has not landed yet,
+ * and extracting a theme before there is a second real consumer would be
+ * guessing at the seam. Extract it when that redesign ships (spec §10).
+ */
+
+:root {
+  /* The six required values, exact. Do not approximate these. */
+  --page: #eef0f3; /* page background */
+  --accent: #7b6bd6; /* progress fill, the '=' and the filled slot underline */
+  --heading: #2f3742; /* numerals and any text that must be read */
+  --muted: #7b8493; /* the counter, the strategy line, the revealed answer */
+  --error-fill: #f4c9c2; /* wrong-answer pulse fill */
+  --error-text: #d98a7d; /* wrong-answer pulse text */
+
+  /* Two surface neutrals, also from the typing game's design reference: its
+     "key face" and "keyboard deck". They keep the slots and the progress track
+     reading as the same physical material as that game's keys. */
+  --surface: #ffffff;
+  --deck: #d9dde3;
+
+  /*
+   * Baloo 2 (display) and Nunito (UI) are the design's fonts, but they are
+   * Google Fonts and this project takes no CDN link of any kind — so they are
+   * named FIRST and used if the machine happens to have them installed, with a
+   * rounded-to-neutral system stack behind them otherwise. Nothing is fetched.
+   * If we ever want them guaranteed, the fix is to vendor the woff2 files into
+   * the repo and add an @font-face here, not a <link> to fonts.googleapis.com.
+   */
+  --font-display: 'Baloo 2', 'Trebuchet MS', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --font-ui: 'Nunito', 'Avenir Next', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+
+  /* The wrong-answer pulse, ~400ms. Shared by problem.css so the flash and the
+     JS timer that clears the class cannot drift apart. */
+  --pulse-ms: 400ms;
+}
+
+/* ---------- reset ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+h1,
+h2,
+p,
+figure {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  min-height: 100%;
+  background: var(--page);
+  color: var(--heading);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* The kid types straight at the document; there is no input element and no
+   submit key, so a stray drag-select on the numerals is only ever noise. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
