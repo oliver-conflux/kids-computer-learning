@@ -57,12 +57,18 @@ const DEFAULT_MAX_HOURS = 5;
 const WALL_CLOCK_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
 
 /**
+ * An open clock-in, as returned by deriveOpenClocks.
+ *
+ * `at` is a local wall clock reading, 'YYYY-MM-DDTHH:MM'.
+ * `t` is a machine instant, ISO-8601 UTC. The two are not interchangeable —
+ * see the spec's "t and at are different kinds of time".
+ *
  * @typedef {{
  *   id: string,
  *   activity: string,
  *   description: string,
- *   at: string,  — local wall clock 'YYYY-MM-DDTHH:MM'
- *   t: string,   — machine instant, ISO-8601 UTC
+ *   at: string,
+ *   t: string,
  * }} OpenClock
  *
  * @typedef {'wrong-day' | 'end-before-start' | 'too-long'} RejectReason
