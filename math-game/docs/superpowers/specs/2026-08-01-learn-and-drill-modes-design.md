@@ -82,8 +82,8 @@ success governor, the 11 × 11 grid.
 `6 × 7`, `7 × 8`, `8 × 9` are problem → silence → answer. That is correct for
 fluency practice, but it makes learn mode load-bearing rather than optional — a
 kid who only ever plays drill receives no strategy instruction at all. This is
-why the results screen must offer learn mode as a first-class next step (§7), not
-bury it.
+why learn mode gets its own menu card (§7) and a first-class button on the results
+screen (§8), rather than being buried in a settings toggle.
 
 ### Learn — instruction
 
@@ -218,9 +218,33 @@ attempts renders as "shown how"; `cold` with none renders "not started".
 
 This keeps the mastery model unchanged and the scheduler untouched.
 
-## 7. Play again
+## 7. Two menu cards, one game
 
-**v1 omission, not an implementation miss.** Spec §11 described what the results
+`games-menu.html` gets **two cards**, not one:
+
+- **Learn Numbers** → `math-game/index.html?mode=learn`
+- **Drill Numbers** → `math-game/index.html?mode=drill`
+
+They are two entry points into one game, not two games. Same log, same mastery
+model, same grid, same everything below the surface. The only difference is which
+mode the session starts in.
+
+The reason for two cards rather than a toggle inside the game is §1's
+consequence: **drill teaches nothing, so learn mode cannot be a setting.** Buried
+behind a toggle, a kid takes the default every time and the hard facts are never
+taught. A card on the menu makes it a visible, equal choice — and lets an adult
+say "do a Learn one first" without explaining where a menu is hidden.
+
+`CONFIG.mode` remains as the fallback when no query parameter is supplied (e.g.
+opening `index.html` directly). It is not the primary mechanism.
+
+Card copy must not describe these as difficulty levels. They are different
+activities: one teaches a method, the other builds speed at methods already
+known.
+
+## 8. Play again
+
+**v1 omission, not an implementation miss.** v1 spec §11 described what the results
 screen *shows* and never specified a control to start another session, so the
 session ended in a dead end requiring a page reload. The typing game spec has
 `[ Again ] [ Next → ]` in its results mockup; it was not carried over.
@@ -235,7 +259,7 @@ The results screen gains:
 the next mode a one-click choice off the results screen is how the two modes stay
 connected in use rather than being two separate things a kid has to know about.
 
-## 8. Timing
+## 9. Timing
 
 Removing every hint from drill dissolves the original complaint at its root — the
 interruption existed because a *task* was on a rescue timer, and drill now has no
@@ -265,7 +289,7 @@ is thinking, not the kid who is stuck.
 The rule from v1 stands and is still the one most likely to be reverted by
 accident: **the delay grows with mastery, it does not shrink.**
 
-## 9. Config additions
+## 10. Config additions
 
 All new quantities, in one place as ever:
 
@@ -284,7 +308,7 @@ array and must not offer the modality at all.
 `sessionLength` (20) continues to govern drill. Expected to grow once the kids
 are used to it — that is a config edit, not a code change.
 
-## 10. What does not change
+## 11. What does not change
 
 Stated explicitly so implementation does not drift into it:
 
@@ -297,7 +321,36 @@ Stated explicitly so implementation does not drift into it:
   but the kid's own previous session. **Both modes.**
 - Timestamps UTC `Z`; `now` in epoch milliseconds.
 
-## 11. Open questions
+## 12. Deferred — time on task, across all games
+
+Not in this pass. Recorded because the right place to build it is not obvious and
+the decision is easier to make now than to retrofit.
+
+The question is whether the kids are actually doing the work — minutes spent, how
+often, across **every** game rather than just this one. That makes it a
+repo-level concern, not a math-game feature, and it should not be built inside
+`math-game/js/`.
+
+**The server is the natural home.** Since v1 moved everything behind
+`server/serve.js`, the server already sees every request from every game. It can
+derive sessions from request patterns without any game reporting anything about
+itself, which means the typing game gets covered without being modified, and any
+game added later is covered for free. A per-game reporting API would need every
+game to opt in and would drift the moment one forgot.
+
+Two things worth settling when it is built:
+
+- **Time-in-tab is not time-on-task.** A tab left open all afternoon is not four
+  hours of practice. Attempt timestamps in `data/math-log.jsonl` are the honest
+  signal for this game — gaps longer than a few minutes are absence, not work.
+  The typing game currently writes no such log, so covering it means either
+  giving it one or accepting a coarser measure there.
+- **It answers a parent's question, not a kid's.** It should not appear anywhere
+  a kid sees, and it must never become a target — a visible minutes counter is a
+  speed score wearing different clothes, and the same reasoning that keeps a
+  clock off the drill screen applies.
+
+## 13. Open questions
 
 - Whether "shown how" is the right label for a kid. It has to read as progress,
   not as a consolation state.
