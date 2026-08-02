@@ -1,0 +1,234 @@
+/*
+ * learn.css — the LEARN view: the family header, the family itself, the
+ * press-and-hold button, and the meaning.
+ *
+ * NONE OF THIS EXISTS IN DRILL MODE. Not hidden, not empty — absent. main.js
+ * mounts the word screen straight into the stage in drill, so every node styled
+ * below is simply not in the document, and drill is a prompt line and a row of
+ * slots with nothing above or below them. That is what makes drill's layout
+ * identical from the 'clean' rung to the last one.
+ *
+ * THE RESERVED-REGION RULE, which this file has to keep just as word.css does:
+ * the word must not move vertically when anything appears or disappears.
+ * Three things could move it here, and each is answered structurally:
+ *
+ *   1. The target word appearing and vanishing as the button is held. It keeps
+ *      its place in the family row and its exact width — hidden with
+ *      `visibility`, never `display` — so the row cannot reflow.
+ *   2. The definition arriving from the cache a frame or two late. The meaning
+ *      region is OUT OF FLOW, so it can appear, change or never arrive at all
+ *      without touching anything above it.
+ *   3. The family row rewrapping. It does not: one family, fixed for the whole
+ *      session, and every word in it is on screen from the first frame.
+ */
+
+.learn-screen {
+  position: relative; /* the meaning region is positioned against this */
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(14px, 3.4vh, 34px);
+  width: 100%;
+}
+
+/* ---------- the header ---------- */
+
+/*
+ * "These are -at words". One line, read aloud by a ten-year-old or by the adult
+ * sitting next to a four-year-old. Sized well below the slots — it is the route,
+ * not the question.
+ */
+.learn__header {
+  max-width: 26ch;
+  text-align: center;
+
+  font-family: var(--font-display);
+  font-size: clamp(20px, 3.2vw, 34px);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--muted);
+}
+
+/* The pattern itself, which is the only part of the sentence that changes and
+   the only part worth reading twice. */
+.learn__tag {
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- the family ---------- */
+
+/*
+ * `cat  hat  bat` — and THIS IS THE MODE. The family is on screen from the first
+ * frame of every problem and stays there through the target word appearing and
+ * hiding again, so the answer always arrives with its derivation attached. A
+ * change that removes it turns this screen into flash-and-hide, which is copy
+ * practice with a nicer layout.
+ */
+.learn__family {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: clamp(14px, 3vw, 40px);
+
+  font-family: var(--font-display);
+  font-size: clamp(24px, 4.4vw, 46px);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--heading);
+  letter-spacing: 0.04em;
+}
+
+/*
+ * The word being spelled right now: present, sized, spaced — and invisible.
+ *
+ * `visibility`, never `display: none`. It holds its exact width in the row, so
+ * pressing and releasing the button cannot shift the words either side of it,
+ * and the gap it leaves shows the kid where in the family her word belongs.
+ * `mat` appearing between `hat` and `bat` is the pattern made visible; a word
+ * that popped in at the end of the row would be just an answer.
+ */
+.learn__word[data-target='yes'] {
+  visibility: hidden;
+  color: var(--accent);
+}
+
+.learn-screen[data-showing='on'] .learn__word[data-target='yes'] {
+  visibility: visible;
+}
+
+/* ---------- the word screen's region ---------- */
+
+/*
+ * The node word.js owns. Nothing in this file styles anything inside it — the
+ * slots are identical in both modes and word.css is the only place that says so.
+ * Full width so the slots centre against the viewport rather than against
+ * whatever the family above them happens to be wide.
+ */
+.learn__word-area {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+/* ---------- "show me" ---------- */
+
+.learn__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* Reserved, though nothing currently hides the button. The row keeping its
+     height is what makes that a safe thing to change later. */
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
+}
+
+/*
+ * Deliberately quiet, and identical to the math game's reveal button, because it
+ * is the same offer: help, when you decide you want it. A big accent-filled
+ * button would read as the thing you are supposed to press, and the thing you
+ * are supposed to do is have a go first.
+ *
+ * PRESS AND HOLD, which the label says and the `:active` state confirms. The
+ * word is visible only while the button is down, so peeking costs a hand off the
+ * keyboard — friction doing useful work (spec §6).
+ *
+ * `touch-action: none` keeps a long press on a touchscreen from being taken over
+ * by the browser's own scroll or text-selection gesture, which would cancel the
+ * pointer stream and hide the word mid-hold.
+ */
+.learn__show {
+  padding: 0 22px;
+  height: 44px;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: var(--surface);
+
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--accent);
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.learn__show:hover {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+/* Held. The filled state is the feedback that the gesture is working — without
+   it, a kid whose word is not showing cannot tell whether the button is down. */
+.learn__show:active,
+.learn-screen[data-showing='on'] .learn__show {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.learn__show:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* ---------- the meaning ---------- */
+
+/*
+ * The definition and the usage sentence, when the ingest happens to have cached
+ * them. THE EMPTY CACHE IS THE DEFAULT — a fresh clone has no MW_KEY and no
+ * `data/words/` — so this region is absent far more often than not, and its
+ * absence must cost nothing.
+ *
+ * OUT OF FLOW, and that is the whole reason for the `position: relative` on the
+ * screen. The record is fetched asynchronously, so on a cache hit it lands a
+ * frame or two after the slots are already up; in flow, that would shove the
+ * word the kid is mid-way through spelling up the screen. Positioned, it cannot
+ * move anything, whether it arrives, changes, or never comes at all.
+ *
+ * Capped and clipped for the same reason: a four-line definition must not run
+ * off the bottom of the viewport and start the page scrolling.
+ */
+.learn__meaning {
+  position: absolute;
+  top: calc(100% + clamp(12px, 3vh, 28px));
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: min(46ch, 92vw);
+  max-height: 5.6em;
+  overflow: hidden;
+  text-align: center;
+
+  font-family: var(--font-ui);
+  color: var(--muted);
+}
+
+.learn__meaning [hidden] {
+  display: none;
+}
+
+.learn__definition {
+  font-size: clamp(14px, 1.9vw, 18px);
+  line-height: 1.45;
+}
+
+/* The usage sentence, in quotes: the meaning anchor for a word the kid can now
+   spell but may not have met. Held back from the definition above it. */
+.learn__usage {
+  margin-top: 0.35em;
+  font-size: clamp(13px, 1.7vw, 17px);
+  font-style: italic;
+  line-height: 1.4;
+  opacity: 0.85;
+}

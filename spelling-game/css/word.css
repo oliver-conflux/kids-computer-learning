@@ -1,0 +1,215 @@
+/*
+ * word.css — the prompt line, the letter slots, and the wrong-answer pulse.
+ *
+ * The slots are the largest thing on screen by a wide margin and everything else
+ * here is sized in `em` relative to them, so the word scales as one object and a
+ * slot can never drift out of proportion with the letter inside it. This is
+ * math-game/css/problem.css with numerals swapped for letters, on purpose.
+ *
+ * THE RESERVED-REGION RULE, which is what this file exists to enforce: THE WORD
+ * MUST NOT MOVE VERTICALLY WHEN ANYTHING APPEARS OR DISAPPEARS. A word that
+ * jumps when a letter arrives makes a kid lose their place mid-thought, and a
+ * letter arriving is the one thing that is guaranteed to happen while they are
+ * mid-thought. Three things keep it still:
+ *
+ *   1. The prompt row is a FIXED HEIGHT and is present in both modes. Nothing
+ *      about it changes during a problem.
+ *   2. A revealed letter is drawn INSIDE a slot that was already there. No node
+ *      appears, no node grows, and the row of slots has the same height empty as
+ *      it does full.
+ *   3. The type scale is a function of the word's LENGTH (`--letters`), which is
+ *      fixed for the whole problem. The slots never wrap, so the block is always
+ *      exactly one line tall.
+ *
+ * This file is MODE-AGNOSTIC and stays that way. The slots are identical in
+ * drill and in learn — same size, same position, same behaviour — and everything
+ * that differs between the two lives in learn.css. That is what makes the drill
+ * screen provably still: with the family, the button and the meaning region
+ * absent from the document entirely, there is nothing left whose size can change
+ * between the 'clean' rung and the last one.
+ */
+
+.word-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(12px, 3vh, 32px);
+  width: 100%;
+}
+
+/* ---------- the prompt line ---------- */
+
+/*
+ * There is no word here, and that is the point — the word is the thing being
+ * asked for. All this row carries is the speaker and the reminder of which key
+ * says it again.
+ *
+ * IT IS IN BOTH MODES. In drill the audio is the whole prompt; in learn the
+ * family is on screen but the target word is not, so audio is the only thing
+ * naming what to spell there too. A fixed height, so it is reserved space rather
+ * than something that can push the slots down.
+ */
+.word-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+
+  height: 56px;
+  min-height: 56px;
+  max-height: 56px;
+}
+
+/*
+ * Deliberately quiet, like the math game's reveal button. Replaying is free and
+ * always available; it is not the thing the kid is supposed to be doing.
+ */
+.word-prompt__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 2px solid var(--deck);
+  border-radius: 999px;
+  background: var(--surface);
+
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+
+  transition:
+    border-color 140ms ease-out,
+    background-color 140ms ease-out;
+}
+
+.word-prompt__button:hover {
+  border-color: var(--accent);
+}
+
+.word-prompt__button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.word-prompt__hint {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+/* ---------- letter slots ---------- */
+
+/*
+ * One slot per letter, filling left to right. This is not decoration. There is
+ * no submit key and no Enter — the word evaluates the moment the entry reaches
+ * full length — so the slots are what makes that rule visible. Without them a
+ * kid who types `frend` for `friend` sits waiting on a machine that appears to
+ * have ignored them (spec §7.1).
+ *
+ * THE TYPE SCALE IS A FUNCTION OF THE WORD'S LENGTH. `--letters` is set by
+ * word.js from the word itself; the second term of the `min()` is the size at
+ * which that many slots still fit across the viewport. `something` and `cat` are
+ * therefore both one line, both centred, and neither wraps — a wrapped word
+ * would be two rows tall and the row above it would move.
+ *
+ * `nowrap` is load-bearing rather than defensive: if the calculation is ever
+ * wrong it must overflow visibly, not silently reflow into a second line and
+ * shift the whole screen.
+ */
+.slots {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1em;
+
+  font-family: var(--font-display);
+  /* Declared twice on purpose. The second form divides by a custom property,
+     which is valid CSS and works in every browser this runs on — but if it ever
+     is not understood, the whole declaration is dropped and the slots would fall
+     back to the 16px body size, which is not a smaller word but a broken screen.
+     The first line is what they fall back to instead. */
+  font-size: clamp(30px, 11vw, 88px);
+  font-size: min(clamp(30px, 11vw, 88px), calc(84vw / (var(--letters, 6) * 0.9)));
+  font-weight: 700;
+  line-height: 1;
+  color: var(--heading);
+}
+
+.slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 0.78em;
+  height: 1.08em;
+  border-radius: 0.12em;
+
+  background: var(--surface);
+  box-shadow: inset 0 0 0 0.035em var(--deck);
+  color: var(--heading);
+
+  transition:
+    box-shadow 140ms ease-out,
+    background-color 140ms ease-out;
+}
+
+/* The slot the next letter will land in. The accent ring is the only positional
+   feedback the kid gets, and it moves as they type. */
+.slot[data-state='next'] {
+  box-shadow: inset 0 0 0 0.045em var(--accent);
+}
+
+.slot[data-state='filled'] {
+  box-shadow: inset 0 0 0 0.035em var(--deck);
+}
+
+/*
+ * A revealed letter: greyed, INSIDE the slot. Not in a caption, not off to one
+ * side. The help has to land where the kid is already looking, which is the
+ * whole reason the reveal renders here rather than under the word.
+ *
+ * Greyed but deliberately NOT faint. This is the help of last resort, so it has
+ * to be the most readable grey on the screen rather than the least. Do not stack
+ * opacity on top of --muted here; the math game did, computed 1.79:1 against the
+ * slot, and made the final help the hardest thing on screen to read.
+ */
+.slot[data-state='revealed'] {
+  color: var(--muted);
+}
+
+/* ---------- wrong-answer pulse ---------- */
+
+/*
+ * ~400ms of warm amber, then it clears itself. Not a failure ceremony: nothing
+ * is marked red and left standing, no score is lost, and one more letter arrives
+ * — a wrong answer buys help (spec §7.2). The pair of colours is the typing
+ * game's wrong-key flash and the math game's wrong-answer flash, unchanged, so
+ * "that didn't land" looks identical across all three games.
+ *
+ * Driven by data-pulse on the screen root. word.js restarts it by removing the
+ * attribute, forcing a reflow and setting it again — an animation will not
+ * replay on an element that already has it applied.
+ */
+.word-screen[data-pulse='on'] .slot {
+  animation: slot-pulse var(--pulse-ms) ease-out 1;
+}
+
+@keyframes slot-pulse {
+  0%,
+  65% {
+    background: var(--error-fill);
+    color: var(--error-text);
+    box-shadow: inset 0 0 0 0.045em var(--error-text);
+  }
+  100% {
+    background: var(--surface);
+    color: var(--heading);
+    box-shadow: inset 0 0 0 0.035em var(--deck);
+  }
+}
