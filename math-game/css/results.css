@@ -6,12 +6,28 @@
  * values are the project palette, written literally so this file renders
  * correctly whatever base.css happens to name its variables.
  *
- * Bucket colours differ in hue AND lightness, and each is backed by a
- * non-colour cue (dashed border / solid border / filled), so the grid still
- * reads for a colour-blind kid or a parent looking over a shoulder.
+ * State colours differ in hue AND lightness, and each is backed by a non-colour
+ * cue, so the grid still reads for a colour-blind kid or a parent looking over a
+ * shoulder:
+ *
+ *   not started    dashed border all the way round, grey
+ *   shown how      dashed sides, SOLID THICK BASE — a floor under the square
+ *   getting there  solid 1px border all the way round
+ *   from memory    filled
+ *
+ * The cue that separates the two cold states is a border-WEIGHT difference on
+ * one edge, which survives greyscale, a bad screen and every form of colour
+ * blindness, and reads at 26px as well as at 46px. It is deliberately not a
+ * second hue: shown-how and not-started are the pair most often compared at a
+ * glance, so the difference between them must not be carried by colour at all.
  */
 
 .results {
+  /* base.css disables selection globally, which is right while a kid is typing
+     but wrong here: the results screen is also the parent-facing diagnostic, and
+     a fact list you cannot copy out is less useful than one you can. */
+  -webkit-user-select: text;
+  user-select: text;
   --page: #eef0f3;
   --accent: #7b6bd6;
   --heading: #2f3742;
@@ -19,14 +35,20 @@
   --error-fill: #f4c9c2;
   --error-text: #d98a7d;
 
-  /* Bucket colours. */
+  /* State colours. */
   --cold-fill: #e3e6ec;
   --cold-line: #b9c0cc;
-  --cold-text: #6b7381;
+  --cold-text: #565d69;   /* was #6b7381 = 3.82:1 on the cold fill; AA needs 4.5 at 13px */
+  /* "Shown how": still a cold square, so the fill stays pale — it is a step on
+     the way to warm, not a fourth bucket. The accent tint says "we have been
+     here"; the solid base bar is what actually carries the distinction. */
+  --shown-fill: #ded9f2;
+  --shown-line: #8f7fd0;
+  --shown-text: #4b4270;  /* 6.4:1 on the shown fill */
   --warm-fill: #f3c98d;
   --warm-line: #dda85c;
   --warm-text: #7a4f16;
-  --hot-fill: #7b6bd6;
+  --hot-fill: #6455c4;    /* was the raw accent #7b6bd6 = 4.27:1 with white; AA needs 4.5 */
   --hot-line: #6a5ac6;
   --hot-text: #ffffff;
 
@@ -40,7 +62,7 @@
   padding: 24px 20px 64px;
   color: var(--heading);
   background: var(--page);
-  font-family: 'Nunito', 'Baloo 2', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-ui, 'Nunito', 'Avenir Next', system-ui, -apple-system, 'Segoe UI', sans-serif);
 }
 
 .results *,
@@ -66,14 +88,23 @@
 /* --- header ------------------------------------------------------------ */
 
 .results__title {
-  font-family: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
   font-size: clamp(28px, 6vw, 40px);
   font-weight: 700;
   letter-spacing: 0.01em;
 }
 
+.results__subtitle {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
 .results__h2 {
-  font-family: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
   font-size: 20px;
   font-weight: 700;
 }
@@ -109,7 +140,7 @@
 }
 
 .results__stat-value {
-  font-family: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
   font-size: 34px;
   font-weight: 700;
   line-height: 1.1;
@@ -143,6 +174,68 @@
 .results__stat-note--same,
 .results__stat-note--slower {
   color: var(--muted);
+}
+
+/* --- continuation row --------------------------------------------------- */
+
+/* Sits directly under the stats, above the fold, because it is the decision
+ * point: the sitting continues or it does not, and scrolling past the whole
+ * grid to find out is exactly the friction that keeps a three-minute session
+ * from becoming a fifteen-minute one. The two continuations are styled
+ * identically — neither mode is "the next one" — and Done is a quiet ghost so
+ * that stopping is easy and unpunished but never the thing the eye lands on. */
+.results__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.results__action {
+  flex: 1 1 auto;
+  min-height: 52px;
+  padding: 14px 22px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
+  font-size: 19px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.results__action--go {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.results__action--quiet {
+  flex: 0 1 auto;
+  background: transparent;
+  border-color: var(--cold-line);
+  color: var(--muted);
+}
+
+.results__action:focus-visible {
+  outline: 3px solid var(--heading);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .results__action--go:hover {
+    background: #6455c4;
+  }
+
+  .results__action--quiet:hover {
+    border-color: var(--muted);
+    color: var(--heading);
+  }
+}
+
+.results__action:active {
+  transform: translateY(1px);
 }
 
 /* --- bucket movement --------------------------------------------------- */
@@ -231,6 +324,13 @@
   border: 1px dashed var(--cold-line);
 }
 
+.results__pill--shown {
+  background: var(--shown-fill);
+  color: var(--shown-text);
+  border: 1px dashed var(--shown-line);
+  border-bottom: 3px solid var(--shown-line);
+}
+
 .results__pill--warm {
   background: var(--warm-fill);
   color: var(--warm-text);
@@ -287,6 +387,12 @@
 .results__swatch--cold {
   background: var(--cold-fill);
   border: 1px dashed var(--cold-line);
+}
+
+.results__swatch--shown {
+  background: var(--shown-fill);
+  border: 1px dashed var(--shown-line);
+  border-bottom: 3px solid var(--shown-line);
 }
 
 .results__swatch--warm {
@@ -391,6 +497,18 @@
   border: 1px dashed var(--cold-line);
 }
 
+/* "Shown how": cold, but taught. Dashed on three sides like every other cold
+ * square, with a solid 3px base — the square has a floor under it now. The bar
+ * is on the BOTTOM edge because the mismatch wedge owns the top-right corner,
+ * and it is drawn as a border rather than a pseudo-element for the same reason.
+ * `box-sizing: border-box` and the fixed cell height keep the grid aligned. */
+.results__cell--shown {
+  background: var(--shown-fill);
+  color: var(--shown-text);
+  border: 1px dashed var(--shown-line);
+  border-bottom: 3px solid var(--shown-line);
+}
+
 .results__cell--warm {
   background: var(--warm-fill);
   color: var(--warm-text);
@@ -447,7 +565,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  font-family: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
   font-size: 24px;
   font-weight: 700;
 }
@@ -544,5 +662,12 @@
   .results {
     --cell: 26px;
     padding: 16px 12px 48px;
+  }
+
+  /* The continuation row must never push the page sideways: the grid is the one
+     thing allowed to scroll horizontally, and only inside its own board. */
+  .results__action {
+    padding: 13px 16px;
+    font-size: 17px;
   }
 }

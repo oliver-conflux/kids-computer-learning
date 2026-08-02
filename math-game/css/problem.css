@@ -5,6 +5,14 @@
  * else on this page is sized in `em` relative to them, so the whole problem
  * scales as one object and the slots can never drift out of proportion with the
  * digits they sit beside.
+ *
+ * This file is MODE-AGNOSTIC and stays that way. The numerals and the slots are
+ * identical in drill and in learn — same size, same position, same behaviour —
+ * and everything that differs between the two modes lives in hints.css. That is
+ * what makes the drill screen provably still: with the hint region and the
+ * reveal row taken out of the flex column entirely, there is nothing left on the
+ * problem screen whose size can change between the 'clean' stage and the
+ * 'reveal' stage, so the numerals cannot move while the kid is retrieving.
  */
 
 .problem {
@@ -83,14 +91,25 @@
 }
 
 /*
- * The 'reveal' rung of the hint ladder: the answer, greyed, INSIDE the slots.
- * Not in a caption, not off to one side. The hint has to land where the kid is
- * already looking (spec §5), and this is the entire reason the reveal stage
- * renders here rather than in the hint region below.
+ * The 'reveal' stage: the answer, greyed, INSIDE the slots. Not in a caption,
+ * not off to one side. The help has to land where the kid is already looking
+ * (spec §5), and this is the entire reason the reveal renders here rather than
+ * anywhere below the problem.
+ *
+ * The same in both modes, and the only help drill has. In learn the strategy
+ * stays on screen underneath while this shows, because an answer without its
+ * derivation is exactly the flashcard the game exists not to be (spec §2).
  */
 .slot[data-state='revealed'] {
+  /*
+   * Greyed, but deliberately NOT faint. This is the help of last resort — in
+   * drill it is the only thing the kid gets, and in learn it is what they
+   * pressed a button to ask for — so it has to be the most readable grey on the
+   * screen, not the least. An earlier version stacked opacity 0.5 on top of
+   * --muted, which computed to 1.79:1 against the slot and made the final help
+   * the hardest thing on screen to read. Do not add opacity here.
+   */
   color: var(--muted);
-  opacity: 0.5;
 }
 
 /* ---------- wrong-answer pulse ---------- */

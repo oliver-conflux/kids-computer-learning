@@ -30,6 +30,22 @@ const PAIR_STRATEGIES = new Map([
   ['6,7', '6 x 6 = 36, add one more 6'],
   ['6,8', 'half it: 3 x 8 = 24, now double'],
   ['7,8', '7 x 7 = 49, add one more 7'],
+
+  // The three squares. v1 left these with no strategy on the reasoning that a
+  // square is an ANCHOR — it is what the other strategies lever off — so there
+  // is nothing shorter to derive it from.
+  //
+  // True of deriving a square from another square, but not of deriving one at
+  // all, and the consequence was serious: drill shows no hints, and learn mode
+  // only offers facts that have strategy text, so 6 x 6, 7 x 7 and 8 x 8 had no
+  // teaching anywhere in the game. 7 x 7 = 49 is on the short list of facts that
+  // genuinely need work, and it was the one fact learn mode could never reach.
+  //
+  // Each levers off an easier fact the kid already has: 6x6 and 7x7 off their
+  // x5 neighbour, 8x8 off 4x8 and a double.
+  ['6,6', '5 x 6 = 30, add one more 6'],
+  ['7,7', '5 x 7 = 35, then two more 7s'],
+  ['8,8', '4 x 8 = 32, then double it'],
 ]);
 
 /**
@@ -88,8 +104,6 @@ export function strategyFor(fact) {
     }
   }
 
-  // What is left is 6 x 6, 7 x 7 and 8 x 8. Squares are anchors themselves —
-  // they are what the other strategies lever off — so there is nothing shorter
-  // to derive them from. They go straight from clean to reveal.
+  // What is left has no rule and no pair override.
   return null;
 }

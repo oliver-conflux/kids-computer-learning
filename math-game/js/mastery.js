@@ -16,6 +16,7 @@ import { allFacts, factId } from './facts.js';
 
 const CLEAN_STAGE = 'clean';
 const ATTEMPT_TYPE = 'attempt';
+const LEARN_MODE = 'learn';
 
 // Enough of ISO 8601 to know the value is a real date-time we can order
 // lexicographically. Anything else is treated as "no usable timestamp".
@@ -30,6 +31,7 @@ const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
  *   attempts: Attempt[],
  *   cleanCount: number,
  *   medianCleanMs: number | null,
+ *   taught: boolean,
  * }} FactStats
  * @typedef {{ byId: Map<string, FactStats>, confusions: Map<string, Set<number>> }} MasteryModel
  */
@@ -64,7 +66,7 @@ function median(values) {
  * @param {unknown} right
  * @returns {number}
  */
-function compareTimestamps(left, right) {
+export function compareTimestamps(left, right) {
   const leftOk = typeof left === 'string' && ISO_TIMESTAMP_PATTERN.test(left);
   const rightOk = typeof right === 'string' && ISO_TIMESTAMP_PATTERN.test(right);
   if (!leftOk && !rightOk) {
@@ -80,6 +82,25 @@ function compareTimestamps(left, right) {
     return -1;
   }
   return left > right ? 1 : 0;
+}
+
+/**
+ * Is this attempt event a learn-mode attempt?
+ *
+ * Only the exact literal `'learn'` counts. Everything else — the string
+ * `'drill'`, an absent field, or a corrupt value — is a drill attempt.
+ *
+ * The absent case is the load-bearing one: `mode` is a v2 field, and every line
+ * written before it existed was a drill attempt. Defaulting to drill is what
+ * lets all v1 history read correctly with no migration pass over the log. A
+ * default of learn, or a requirement that the field be present, would silently
+ * erase every bucket the kid has already earned.
+ *
+ * @param {object} event
+ * @returns {boolean}
+ */
+function isLearnAttempt(event) {
+  return event.mode === LEARN_MODE;
 }
 
 /**
@@ -131,19 +152,42 @@ function bucketFor(cleanCount, medianCleanMs, config) {
  * position, where they cannot displace real attempts out of the retain window —
  * rather than throwing.
  *
- * Two different windows are in play, deliberately:
+ * LEARN-MODE ATTEMPTS ARE NOT MASTERY EVIDENCE (spec §5). An attempt event with
+ * `mode: 'learn'` is excluded from `attempts`, `cleanCount`, `medianCleanMs`
+ * and `bucket` — not discounted, excluded. Drill measures retrieval speed
+ * against a clock; learn measures whether a taught route was followed, with the
+ * strategy on screen and the answer behind a button the kid presses. A
+ * 20-second answer in learn mode is a successful derivation, not slow recall.
+ * Folding it in would drag the median and mislabel a fact the kid is acquiring
+ * well. The two do not share a scale, so they must not share a bucket.
+ *
+ * An ABSENT `mode` is a drill attempt — see `isLearnAttempt`. Because the whole
+ * model derives on read, this exclusion applies retroactively across all
+ * history the moment the rule changes, with no migration.
+ *
+ * Three different windows are in play, deliberately:
  *
  *   - `attempts` / `cleanCount` / `medianCleanMs` / `bucket` use only the last
- *     `config.retain` attempts for the fact. Mastery is a recent-form question.
- *   - `confusions` uses EVERY attempt event passed in, retained or not. A wrong
- *     answer from three weeks ago is still evidence that two facts interfere,
- *     and it must not age out just because the fact has been drilled since
- *     (spec §6).
+ *     `config.retain` DRILL attempts for the fact. Mastery is a recent-form
+ *     question, asked of the timed mode only.
+ *   - `confusions` uses EVERY attempt event passed in — retained or not, drill
+ *     or learn. A wrong answer from three weeks ago is still evidence that two
+ *     facts interfere, and it must not age out just because the fact has been
+ *     drilled since (spec §6). Learn mode is the deliberate exception to the
+ *     mode split: interference between two facts is interference regardless of
+ *     which mode surfaced it.
+ *   - `taught` uses every learn attempt in the FULL event list, unwindowed. A
+ *     route taught three weeks ago is still a route the kid has been shown, so
+ *     it must not expire out of the retain window. This is what lets the
+ *     results grid render a fact that is cold but taught as "shown how" rather
+ *     than "not started" — a display state layered on top of the model, not a
+ *     fourth bucket (spec §6). `bucket` stays exactly cold | warm | hot and the
+ *     scheduler is untouched.
  *
  * BOTH maps are total: every one of the 121 facts is a key in `byId` AND a key
  * in `confusions`, in `allFacts()` order, whatever the log happens to contain.
- * A fact with no attempts is cold with `cleanCount: 0`, `medianCleanMs: null`
- * and an empty `attempts` array; a fact with no recorded wrong answers maps to
+ * A fact with no attempts is cold with `cleanCount: 0`, `medianCleanMs: null`,
+ * `taught: false` and an empty `attempts` array; a fact with no recorded wrong answers maps to
  * an empty Set, never to `undefined`. Downstream code never has to handle a
  * missing key on either map, and never has to guard one but not the other.
  *
@@ -163,6 +207,8 @@ export function deriveMastery(events, config) {
   const attemptsById = new Map();
   /** @type {Map<string, Set<number>>} */
   const wrongById = new Map();
+  /** Facts with at least one learn-mode attempt anywhere in the full log. */
+  const taughtIds = new Set();
 
   const known = new Set(allFacts().map(factId));
 
@@ -205,7 +251,10 @@ export function deriveMastery(events, config) {
       ? event.wrong.filter(Number.isFinite)
       : [];
 
-    // Confusions come from the full history, before any retention trimming.
+    // Confusions come from the full history, before any retention trimming,
+    // and from BOTH modes. This is the one deliberate leak across the mode
+    // split: a wrong answer says two facts interfere in the kid's head, and
+    // that is true whether the strategy was on screen or not.
     if (wrong.length > 0) {
       let seen = wrongById.get(id);
       if (seen === undefined) {
@@ -215,6 +264,14 @@ export function deriveMastery(events, config) {
       for (const answer of wrong) {
         seen.add(answer);
       }
+    }
+
+    // `taught` is likewise unwindowed: the question is whether the kid was ever
+    // shown a route for this fact, not whether it was shown recently.
+    if (isLearnAttempt(event)) {
+      taughtIds.add(id);
+      // Everything below is mastery evidence, and learn attempts are none.
+      continue;
     }
 
     let attempts = attemptsById.get(id);
@@ -240,8 +297,21 @@ export function deriveMastery(events, config) {
     // Keep the most recent `retain` attempts — the tail of the list, not the head.
     const attempts = all.length > config.retain ? all.slice(all.length - config.retain) : all;
 
+    // An implausibly long attempt is excluded from the latency evidence even if
+    // it landed at the clean stage. Waiting 90 seconds and then typing the right
+    // answer is not retrieval — the kid switched tabs, or was called away, and
+    // the rAF loop that drives the hint ladder pauses in a hidden tab while wall
+    // time keeps running. One such attempt in a window of five drags the median
+    // far enough to flip a fact's bucket.
+    //
+    // The attempt stays in `attempts` because it did happen, and its `wrong`
+    // entries still count toward `confusions` — a wrong answer is evidence of
+    // interference no matter how long the kid took to give it.
     const cleanMs = attempts
-      .filter((attempt) => attempt.stage === CLEAN_STAGE)
+      .filter(
+        (attempt) =>
+          attempt.stage === CLEAN_STAGE && attempt.ms <= config.maxPlausibleMs,
+      )
       .map((attempt) => attempt.ms);
     const cleanCount = cleanMs.length;
     const medianCleanMs = cleanCount === 0 ? null : median(cleanMs);
@@ -253,6 +323,7 @@ export function deriveMastery(events, config) {
       attempts,
       cleanCount,
       medianCleanMs,
+      taught: taughtIds.has(id),
     });
   }
 

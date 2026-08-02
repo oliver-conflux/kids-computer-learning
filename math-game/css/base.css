@@ -34,9 +34,6 @@
   --font-display: 'Baloo 2', 'Trebuchet MS', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
   --font-ui: 'Nunito', 'Avenir Next', 'Segoe UI', system-ui, -apple-system, sans-serif;
 
-  /* Reserved height of the hint region. Fixed, and referenced from hints.css —
-     the layout must not jump when a stage fires under a kid mid-thought. */
-  --hint-region-height: 210px;
 
   /* The wrong-answer pulse, ~400ms. Shared by problem.css so the flash and the
      JS timer that clears the class cannot drift apart. */
