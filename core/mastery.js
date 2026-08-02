@@ -41,6 +41,7 @@ import { itemKeyOf } from './space.js';
  *   cleanCount: number,
  *   medianCleanMs: number | null,
  *   taught: boolean,
+ *   taughtCount: number,
  * }} ItemStats
  * @typedef {{ byId: Map<ItemId, ItemStats>, confusions: Map<ItemId, Set<unknown>> }} MasteryModel
  */
@@ -230,6 +231,17 @@ export function deriveMastery(events, config, space) {
   const wrongById = new Map();
   /** Items with at least one learn-mode attempt anywhere in the full log. */
   const taughtIds = new Set();
+  /**
+   * Item -> the set of learn SESSIONS that taught it, so `taughtCount` can be
+   * how many lessons an item has had rather than how many attempts. A session
+   * teaches each of its words `config.learnPasses` times, and counting raw
+   * attempts would make one lesson look like three.
+   *
+   * @type {Map<ItemId, Set<unknown>>}
+   */
+  const taughtSessionsById = new Map();
+  /** Fallback lesson key for a learn attempt with no session id. */
+  let looseLearnAttempts = 0;
 
   const known = new Set(space.allItems().map((item) => space.itemId(item)));
   // The field name a game calls its item by — `item` for everything except the
@@ -295,6 +307,19 @@ export function deriveMastery(events, config, space) {
     // shown a route for this item, not whether it was shown recently.
     if (isLearnAttempt(event)) {
       taughtIds.add(id);
+      let lessons = taughtSessionsById.get(id);
+      if (lessons === undefined) {
+        lessons = new Set();
+        taughtSessionsById.set(id, lessons);
+      }
+      // An attempt with no session id is its own lesson rather than being
+      // lumped with every other sessionless attempt under `undefined`, which
+      // would make a whole old log count as one lesson.
+      lessons.add(
+        typeof event.session === 'string' && event.session !== ''
+          ? event.session
+          : `#loose${(looseLearnAttempts += 1)}`,
+      );
       // Everything below is mastery evidence, and learn attempts are none.
       continue;
     }
@@ -349,6 +374,7 @@ export function deriveMastery(events, config, space) {
       cleanCount,
       medianCleanMs,
       taught: taughtIds.has(id),
+      taughtCount: taughtSessionsById.get(id)?.size ?? 0,
     });
   }
 

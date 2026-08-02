@@ -75,6 +75,10 @@ test('a fact with zero attempts is present, cold, and has a null median', () => 
     cleanCount: 0,
     medianCleanMs: null,
     taught: false,
+    // How many learn sessions have taught this item. `taught` is the boolean
+    // form and stays; the count is what lets a learn picker rotate between
+    // equally-cold groups instead of returning the same one forever.
+    taughtCount: 0,
   });
 });
 

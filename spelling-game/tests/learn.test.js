@@ -21,6 +21,14 @@ import assert from 'node:assert/strict';
 
 import { pickLearnFamily, buildLearnSession, isIrregularSet } from '../js/learn.js';
 import { patternsFor } from '../js/patterns.js';
+// The REAL config, aliased: this file deliberately keeps its own minimal
+// CONFIG for the picker tests, and the whole-game simulation needs the
+// shipped values (windowSize, learnPasses, build).
+import { CONFIG as GAME_CONFIG } from '../js/config.js';
+import { SPINE } from '../js/spine.js';
+import { spellingSpace } from '../js/space.js';
+import { activeWindow } from '../js/frontier.js';
+import { deriveMastery } from '../../core/mastery.js';
 
 // --- helpers -----------------------------------------------------------------
 
@@ -356,4 +364,94 @@ test('the returned members are fresh objects a caller may not reach through', ()
   first.words.length = 0;
 
   assert.equal(pickLearnFamily(model, window, CONFIG).words.length, 2);
+});
+
+// --- the rotation ----------------------------------------------------------
+// The bug these pin: `taught` is a boolean, so it demotes a family from
+// "cold and untaught" to "cold and taught" exactly ONCE. After every cold family
+// in the window has had its lesson they score identically, the tie falls to a
+// fixed insertion order, and the same family comes back every session forever.
+// Learn attempts are excluded from mastery on purpose, so nothing else moves.
+// Found in real play: `in pin win tin` four sessions running.
+
+/** A learn attempt, shaped the way main.js writes them. */
+function learnAttempt(word, session) {
+  return {
+    type: 'attempt', t: `2026-08-02T00:00:00.000Z`, build: GAME_CONFIG.build,
+    session, mode: 'learn', word, ms: 3000, stage: 'reveal', wrong: [], revealed: 0,
+  };
+}
+
+test('pressing learn repeatedly rotates families instead of repeating one', () => {
+  const events = [];
+  const picked = [];
+
+  for (let session = 1; session <= 12; session += 1) {
+    const model = deriveMastery(events, CONFIG, spellingSpace);
+    const family = pickLearnFamily(model, activeWindow(SPINE, model, GAME_CONFIG.windowSize), CONFIG);
+    picked.push(family.pattern);
+    for (let pass = 0; pass < GAME_CONFIG.learnPasses; pass += 1) {
+      for (const word of family.words) {
+        events.push(learnAttempt(word.word, `s${session}`));
+      }
+    }
+  }
+
+  // The tail is what matters: the stall only began once every family in the
+  // window had been taught once, so the first few sessions rotated even before
+  // the fix and prove nothing.
+  const tail = picked.slice(-8);
+  assert.ok(
+    new Set(tail).size >= 3,
+    `learn mode stalled: last 8 sessions taught ${new Set(tail).size} distinct family/families (${tail.join(' ')})`,
+  );
+  assert.ok(!tail.every((p) => p === tail[0]), 'the same family came back every session');
+});
+
+test('a colder family still beats a less-taught warmer one', () => {
+  // The rotation is a TIE-BREAK, not a reordering. Temperature must still lead,
+  // or a family the kid has never met would wait behind one she nearly knows.
+  const model = {
+    byId: new Map([
+      // -at: never taught, still cold -> must win
+      ['w:at', { id: 'w:at', item: { word: 'at' }, bucket: 'cold', taught: false, taughtCount: 0, attempts: [], cleanCount: 0, medianCleanMs: null }],
+      ['w:cat', { id: 'w:cat', item: { word: 'cat' }, bucket: 'cold', taught: false, taughtCount: 0, attempts: [], cleanCount: 0, medianCleanMs: null }],
+      // -ig: warm, and taught fewer times than nothing can be
+      ['w:big', { id: 'w:big', item: { word: 'big' }, bucket: 'warm', taught: false, taughtCount: 0, attempts: [], cleanCount: 0, medianCleanMs: null }],
+      ['w:dig', { id: 'w:dig', item: { word: 'dig' }, bucket: 'warm', taught: false, taughtCount: 0, attempts: [], cleanCount: 0, medianCleanMs: null }],
+    ]),
+    confusions: new Map(),
+  };
+  const family = pickLearnFamily(model, ['w:at', 'w:cat', 'w:big', 'w:dig'], CONFIG);
+  assert.equal(family.pattern, '-at');
+});
+
+test('between equally cold families, the less-taught one wins', () => {
+  const stats = (word, taughtCount) => [
+    `w:${word}`,
+    { id: `w:${word}`, item: { word }, bucket: 'cold', taught: taughtCount > 0, taughtCount,
+      attempts: [], cleanCount: 0, medianCleanMs: null },
+  ];
+  const model = {
+    // -at appears FIRST, so insertion order would hand it the tie. It has had
+    // three lessons; -ig has had one and must win anyway.
+    byId: new Map([stats('at', 3), stats('cat', 3), stats('big', 1), stats('dig', 1)]),
+    confusions: new Map(),
+  };
+  const family = pickLearnFamily(model, ['w:at', 'w:cat', 'w:big', 'w:dig'], CONFIG);
+  assert.equal(family.pattern, '-ig', 'insertion order beat the lesson count');
+});
+
+test('a model with no taughtCount field at all still picks a family', () => {
+  // An older log, or a hand-built model. Missing must read as "never taught"
+  // rather than NaN, which would poison the mean and disable the rotation.
+  const stats = (word) => [
+    `w:${word}`,
+    { id: `w:${word}`, item: { word }, bucket: 'cold', taught: false,
+      attempts: [], cleanCount: 0, medianCleanMs: null },
+  ];
+  const model = { byId: new Map([stats('at'), stats('cat')]), confusions: new Map() };
+  const family = pickLearnFamily(model, ['w:at', 'w:cat'], CONFIG);
+  assert.equal(family.pattern, '-at');
+  assert.deepEqual(family.words.map((w) => w.word), ['at', 'cat']);
 });

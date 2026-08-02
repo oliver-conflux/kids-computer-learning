@@ -47,6 +47,7 @@ import { patternsFor, IRREGULAR } from './patterns.js';
  *   cleanCount: number,
  *   medianCleanMs: number | null,
  *   taught: boolean,
+ *   taughtCount: number,
  * }} WordStats
  * @typedef {{byId: Map<string, WordStats>, confusions: Map<string, Set<unknown>>}} MasteryModel
  *
@@ -69,13 +70,21 @@ const MIN_FAMILY_SIZE = 2;
  * Selection ranks, coldest and least-taught first. A word's rank is the index of
  * the first predicate it satisfies.
  *
- * The `taught` split inside `cold` is what stops learn mode repeating itself
- * forever, and it is the same trap math's learn.js documents: learn attempts are
- * excluded from mastery evidence, so a family taught yesterday is still entirely
- * cold today, and a purely temperature-based ordering hands back the identical
- * family every single session. Cold-and-taught ranks above warm rather than last
- * — a word shown once and never drilled SHOULD come back round, it just must not
- * come back before every untaught word has had a turn.
+ * The `taught` split inside `cold` is the FIRST of two things that stop learn
+ * mode repeating itself, and on its own it is not enough. It is the same trap
+ * math's learn.js documents: learn attempts are excluded from mastery evidence,
+ * so a family taught yesterday is still entirely cold today, and a purely
+ * temperature-based ordering hands back the identical family every session.
+ * Cold-and-taught ranks above warm rather than last — a word shown once and
+ * never drilled SHOULD come back round, it just must not come back before every
+ * untaught word has had a turn.
+ *
+ * WHERE THIS LADDER RUNS OUT: a boolean can demote a family exactly once. Once
+ * every cold family in the window has had its lesson they are all rank 1 and
+ * nothing here can separate them again, so the pick becomes fixed and the same
+ * family returns forever. `pickLearnFamily` adds the lesson COUNT to this rank
+ * for that reason; see the scoring comment there. Do not "simplify" the score
+ * back to rank alone — the stall it causes is invisible from inside a session.
  *
  * `taught` is compared against `true` rather than read for truthiness, so a
  * model predating the field ranks its words as untaught instead of throwing.
@@ -143,6 +152,10 @@ function familiesIn(model, window) {
       id,
       word: stats.item.word,
       rank: rankOf(stats),
+      // How many lessons this word has already had. `?? 0` so a model from
+      // before the field existed reads as never taught rather than NaN, which
+      // would poison the mean and silently disable the rotation below.
+      lessons: stats.taughtCount ?? 0,
       position,
     };
 
@@ -163,12 +176,17 @@ function familiesIn(model, window) {
  * Choose the family for one learn session: the coldest pattern with at least
  * two words in the active window.
  *
- * Family coldness is the MEAN rank of its members in the window, not the count
- * of cold words in it. The distinction matters: by mean, a two-word family where
- * both words are cold beats a six-word family with two cold and four hot, which
- * is right — the second family is one the kid has largely got, and re-teaching
- * it spends a session on four words that did not need it. Ties go to the family
- * appearing earliest in the window.
+ * A family is scored by MEAN ATTENTION ALREADY SPENT on its members: mean rank
+ * plus mean lesson count. Lowest wins.
+ *
+ * Means, not counts. By mean, a two-word family where both words are cold beats
+ * a six-word family with two cold and four hot, which is right — the second is
+ * one the kid has largely got, and re-teaching it spends a session on four words
+ * that did not need it.
+ *
+ * The lesson term is what makes the mode advance rather than settle; the scoring
+ * comment inside the loop explains why a tie-break was not enough. Ties go to the
+ * family appearing earliest in the window.
  *
  * `irregular` competes on exactly the same terms as every other tag and is
  * neither preferred nor penalised. It is a SET, not a family — the words in it
@@ -196,7 +214,7 @@ export function pickLearnFamily(model, window, config) {
 
   /** @type {string | null} */
   let bestPattern = null;
-  /** @type {{id: string, word: string, rank: number, position: number}[]} */
+  /** @type {{id: string, word: string, rank: number, lessons: number, position: number}[]} */
   let bestMembers = [];
   let bestScore = Infinity;
 
@@ -204,9 +222,36 @@ export function pickLearnFamily(model, window, config) {
     if (members.length < MIN_FAMILY_SIZE) {
       continue;
     }
-    const score = members.reduce((total, member) => total + member.rank, 0) / members.length;
-    // Strictly less than, so the first family to reach a score keeps it and Map
-    // insertion order settles every tie.
+    const rank = members.reduce((total, member) => total + member.rank, 0) / members.length;
+    const lessons = members.reduce((total, member) => total + member.lessons, 0) / members.length;
+
+    // ATTENTION ALREADY SPENT = TEMPERATURE + LESSONS. This sum is why learn
+    // mode advances at all, and the lessons term is the half that was missing.
+    //
+    // Rank alone stalls, silently. `taught` is a boolean, so it demotes a family
+    // from "cold and untaught" to "cold and taught" exactly ONCE. After every
+    // cold family in the window has had its one lesson, nothing can separate
+    // them again: learn attempts are excluded from mastery evidence on purpose,
+    // so no amount of teaching changes a bucket, and the pick falls to a fixed
+    // Map insertion order. The same family then comes back every session
+    // forever. Reproduced: pressing 'learn' ten times taught -at, -an, -ap, -ad,
+    // -at, -an, then -at for every session after the sixth. Real play hit the
+    // same wall on -in — `in pin win tin`, four sessions running.
+    //
+    // A TIE-BREAK IS NOT ENOUGH, which is the trap on the way to this fix.
+    // Making lessons a secondary key only fires when two families score exactly
+    // equal, and on real data they almost never do — measured `th` at 1.50
+    // against `irregular` at 1.60, so the tie-break was never consulted and `th`
+    // won three sessions out of four regardless of having had twice the lessons.
+    // The count has to be IN the score.
+    //
+    // One lesson weighs one rank step, and that is the whole calibration: both
+    // measure "this family has already had a turn". Rank still leads in
+    // practice, because a family two steps colder needs two lessons before it
+    // yields — but a family taught over and over does eventually give way, which
+    // is exactly the property that was missing. Insertion order remains the last
+    // resort and still breaks toward the easier end of the spine.
+    const score = rank + lessons;
     if (score < bestScore) {
       bestScore = score;
       bestPattern = pattern;
