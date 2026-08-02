@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { activeWindow } from '../js/frontier.js';
-import { spellingSpace } from '../js/space.js';
+import { activeWindow } from '../frontier.js';
+import { spellingSpace } from '../../spelling-game/js/space.js';
 
 /** The id encoding under test comes from the adapter, not from a copy of it. */
 const wordId = (word) => spellingSpace.itemId({ word, rank: 0, dolch: false });
@@ -53,7 +53,7 @@ test('a single permanently-cold word does not stop the window advancing past it'
   }
   const leech = spine[0].word; // cold forever, never leaves
 
-  const window = activeWindow(spine, modelOf(spine, buckets), 3);
+  const window = activeWindow(spine, modelOf(spine, buckets), 3, spellingSpace);
 
   assert.deepEqual(window, [wordId(leech), wordId('uword'), wordId('vword')]);
 
@@ -75,7 +75,7 @@ test('the naive readings of the rule are both wrong', () => {
     buckets[entry.word] = 'hot';
   }
   const model = modelOf(spine, buckets);
-  const window = activeWindow(spine, model, 3);
+  const window = activeWindow(spine, model, 3, spellingSpace);
 
   const firstNWords = spine.slice(0, 3).map((entry) => wordId(entry.word));
   assert.notDeepEqual(window, firstNWords, 'must not be simply the first N words');
@@ -96,7 +96,7 @@ test('two leeches far apart both stay in and the window still reaches the end', 
     if (index !== 0 && index !== 12 && index < 24) buckets[entry.word] = 'hot';
   }
 
-  assert.deepEqual(activeWindow(spine, modelOf(spine, buckets), 4), [
+  assert.deepEqual(activeWindow(spine, modelOf(spine, buckets), 4, spellingSpace), [
     wordId('aword'),
     wordId('mword'),
     wordId('yword'),
@@ -110,7 +110,7 @@ test('an empty log yields the first `size` words in spine order', () => {
   const spine = longSpine();
   // No events at all means every word is cold, which is what deriveMastery
   // returns over an empty log.
-  const window = activeWindow(spine, modelOf(spine), 5);
+  const window = activeWindow(spine, modelOf(spine), 5, spellingSpace);
   assert.deepEqual(window, ['aword', 'bword', 'cword', 'dword', 'eword'].map(wordId));
 });
 
@@ -121,7 +121,7 @@ test('a fully hot prefix slides the window forward', () => {
     buckets[entry.word] = 'hot';
   }
 
-  const window = activeWindow(spine, modelOf(spine, buckets), 4);
+  const window = activeWindow(spine, modelOf(spine, buckets), 4, spellingSpace);
   assert.deepEqual(window, ['kword', 'lword', 'mword', 'nword'].map(wordId));
 });
 
@@ -129,29 +129,29 @@ test('warm words stay in the window; only hot leaves', () => {
   const spine = spineOf('cat', 'bat', 'hat', 'sat');
   const model = modelOf(spine, { cat: 'warm', bat: 'hot', hat: 'cold' });
 
-  assert.deepEqual(activeWindow(spine, model, 3), [wordId('cat'), wordId('hat'), wordId('sat')]);
+  assert.deepEqual(activeWindow(spine, model, 3, spellingSpace), [wordId('cat'), wordId('hat'), wordId('sat')]);
 });
 
 test('a spine shorter than `size` returns what exists', () => {
   const spine = spineOf('cat', 'bat', 'hat');
-  assert.deepEqual(activeWindow(spine, modelOf(spine), 20), ['cat', 'bat', 'hat'].map(wordId));
+  assert.deepEqual(activeWindow(spine, modelOf(spine), 20, spellingSpace), ['cat', 'bat', 'hat'].map(wordId));
 });
 
 test('an entirely hot spine yields an empty window', () => {
   const spine = spineOf('cat', 'bat', 'hat');
   const model = modelOf(spine, { cat: 'hot', bat: 'hot', hat: 'hot' });
-  assert.deepEqual(activeWindow(spine, model, 20), []);
+  assert.deepEqual(activeWindow(spine, model, 20, spellingSpace), []);
 });
 
 test('an empty spine yields an empty window', () => {
-  assert.deepEqual(activeWindow([], modelOf([]), 20), []);
+  assert.deepEqual(activeWindow([], modelOf([]), 20, spellingSpace), []);
 });
 
 test('a size of zero or less yields an empty window rather than throwing', () => {
   const spine = spineOf('cat', 'bat', 'hat');
   const model = modelOf(spine);
-  assert.deepEqual(activeWindow(spine, model, 0), []);
-  assert.deepEqual(activeWindow(spine, model, -3), []);
+  assert.deepEqual(activeWindow(spine, model, 0, spellingSpace), []);
+  assert.deepEqual(activeWindow(spine, model, -3, spellingSpace), []);
 });
 
 test('a word missing from the model is treated as not hot, never dropped', () => {
@@ -161,19 +161,19 @@ test('a word missing from the model is treated as not hot, never dropped', () =>
   const model = modelOf(spine, { cat: 'hot' });
   model.byId.delete(wordId('bat'));
 
-  assert.deepEqual(activeWindow(spine, model, 5), [wordId('bat'), wordId('hat')]);
+  assert.deepEqual(activeWindow(spine, model, 5, spellingSpace), [wordId('bat'), wordId('hat')]);
 });
 
 test('the window is in spine order, not bucket order', () => {
   const spine = longSpine();
   const buckets = { bword: 'warm', cword: 'hot', dword: 'warm' };
-  const window = activeWindow(spine, modelOf(spine, buckets), 4);
+  const window = activeWindow(spine, modelOf(spine, buckets), 4, spellingSpace);
   assert.deepEqual(window, ['aword', 'bword', 'dword', 'eword'].map(wordId));
 });
 
 test('the window never contains a duplicate', () => {
   const spine = longSpine();
-  const window = activeWindow(spine, modelOf(spine), 26);
+  const window = activeWindow(spine, modelOf(spine), 26, spellingSpace);
   assert.equal(new Set(window).size, window.length);
 });
 
@@ -183,7 +183,7 @@ test('the window is keyed by the adapter\'s ids, which mastery is also keyed by'
   assert.equal(wordId('friend'), 'w:friend');
 
   const spine = spineOf('friend', 'could');
-  assert.deepEqual(activeWindow(spine, modelOf(spine), 2), spine.map((e) => spellingSpace.itemId(e)));
+  assert.deepEqual(activeWindow(spine, modelOf(spine), 2, spellingSpace), spine.map((e) => spellingSpace.itemId(e)));
 });
 
 test('activeWindow is pure — it does not mutate the spine or the model', () => {
@@ -192,8 +192,8 @@ test('activeWindow is pure — it does not mutate the spine or the model', () =>
   const spineBefore = JSON.stringify(spine);
   const bucketsBefore = [...model.byId.values()].map((s) => s.bucket).join(',');
 
-  activeWindow(spine, model, 5);
-  activeWindow(spine, model, 5);
+  activeWindow(spine, model, 5, spellingSpace);
+  activeWindow(spine, model, 5, spellingSpace);
 
   assert.equal(JSON.stringify(spine), spineBefore);
   assert.equal([...model.byId.values()].map((s) => s.bucket).join(','), bucketsBefore);
@@ -202,5 +202,30 @@ test('activeWindow is pure — it does not mutate the spine or the model', () =>
 test('the same inputs give the same window every time', () => {
   const spine = longSpine();
   const model = modelOf(spine, { cword: 'hot', dword: 'hot' });
-  assert.deepEqual(activeWindow(spine, model, 7), activeWindow(spine, model, 7));
+  assert.deepEqual(activeWindow(spine, model, 7, spellingSpace), activeWindow(spine, model, 7, spellingSpace));
+});
+
+// --- any item space -----------------------------------------------------------
+
+// A minimal space standing in for any game's adapter. The point of the test is
+// that frontier.js never reaches for a specific game's id encoding.
+const fakeSpace = {
+  itemId: (item) => `x:${item.name}`,
+};
+
+const fakeSpine = [{ name: 'a' }, { name: 'b' }, { name: 'c' }, { name: 'd' }];
+
+test('the window is a filter over the spine, not a slice of it', () => {
+  const model = { byId: new Map([['x:b', { bucket: 'hot' }]]) };
+  assert.deepEqual(activeWindow(fakeSpine, model, 2, fakeSpace), ['x:a', 'x:c']);
+});
+
+test('an item missing from the model is treated as not hot', () => {
+  const model = { byId: new Map() };
+  assert.deepEqual(activeWindow(fakeSpine, model, 2, fakeSpace), ['x:a', 'x:b']);
+});
+
+test('a size of zero yields an empty window rather than throwing', () => {
+  const model = { byId: new Map() };
+  assert.deepEqual(activeWindow(fakeSpine, model, 0, fakeSpace), []);
 });

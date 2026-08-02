@@ -590,7 +590,7 @@ function renderMoves(model, summary) {
  * The frontier: how far down the spine the active window has reached.
  *
  * There is no stored level in this game and no placement test — the window is
- * recomputed from the log every load (js/frontier.js). That makes progress real
+ * recomputed from the log every load (core/frontier.js). That makes progress real
  * but invisible, and this section is the only place it is ever shown. It is the
  * reason the session event carries `frontier`.
  *

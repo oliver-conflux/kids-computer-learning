@@ -27,7 +27,7 @@ import { patternsFor } from '../js/patterns.js';
 import { CONFIG as GAME_CONFIG } from '../js/config.js';
 import { SPINE } from '../js/spine.js';
 import { spellingSpace } from '../js/space.js';
-import { activeWindow } from '../js/frontier.js';
+import { activeWindow } from '../../core/frontier.js';
 import { deriveMastery } from '../../core/mastery.js';
 
 // --- helpers -----------------------------------------------------------------
@@ -388,7 +388,7 @@ test('pressing learn repeatedly rotates families instead of repeating one', () =
 
   for (let session = 1; session <= 12; session += 1) {
     const model = deriveMastery(events, CONFIG, spellingSpace);
-    const family = pickLearnFamily(model, activeWindow(SPINE, model, GAME_CONFIG.windowSize), CONFIG);
+    const family = pickLearnFamily(model, activeWindow(SPINE, model, GAME_CONFIG.windowSize, spellingSpace), CONFIG);
     picked.push(family.pattern);
     for (let pass = 0; pass < GAME_CONFIG.learnPasses; pass += 1) {
       for (const word of family.words) {
@@ -504,7 +504,7 @@ test('clicking learn repeatedly never repeats a family back to back', () => {
     const model = deriveMastery(events, GAME_CONFIG, spellingSpace);
     const family = pickLearnFamily(
       model,
-      activeWindow(SPINE, model, GAME_CONFIG.windowSize),
+      activeWindow(SPINE, model, GAME_CONFIG.windowSize, spellingSpace),
       GAME_CONFIG,
     );
     picked.push(family.pattern);
