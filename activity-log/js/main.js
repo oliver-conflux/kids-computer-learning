@@ -518,9 +518,14 @@ function populateActivities() {
 }
 
 /**
- * The start screen has no message element in the frozen id list, so one is made.
- * Created rather than skipped because the empty-field guard needs somewhere to
- * speak, and a guard that silently does nothing is not a guard.
+ * Where the clock-in guard speaks.
+ *
+ * index.html declares `#start-message`, so the fallback below never runs today.
+ * It stays because the guard must never be the thing that fails: an empty form
+ * answered by silence is indistinguishable to a child from a form that was
+ * accepted, and she would go on believing a timer was running when none was.
+ * If the element is ever dropped from the markup, this keeps the words on the
+ * screen — unstyled and out of reading order, but present.
  */
 function ensureStartMessage() {
   const existing = document.getElementById('start-message');
@@ -534,6 +539,8 @@ function ensureStartMessage() {
   const created = document.createElement('p');
   created.id = 'start-message';
   created.className = 'message';
+  created.setAttribute('role', 'status');
+  created.setAttribute('aria-live', 'polite');
   anchor.insertAdjacentElement('beforebegin', created);
   return created;
 }
