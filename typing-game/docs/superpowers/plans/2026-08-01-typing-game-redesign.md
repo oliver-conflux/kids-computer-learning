@@ -3454,6 +3454,46 @@ function playPractice(tab) {
 
 `nextLesson('practice-…')` returns null, so the results screen correctly offers only **Again** for a practice round.
 
+**Which is exactly why `onAgain` cannot call `playLesson` directly.** For a
+practice round `lesson.id` is `practice-math`, `lessonById` returns null, and
+`playLesson` then reads `.title` off it — so the one button a practice round
+offers throws a TypeError and strands the kid on a dead results screen. Route
+both `onAgain` and `onStepDown` through:
+
+```js
+function replayRound() {
+  if (lesson.track === 'practice') playPractice(lesson.id.slice('practice-'.length));
+  else playLesson(lesson.id);
+}
+```
+
+### Getting back out
+
+A kid who picks the wrong thing must be able to leave. Without this the only
+exit from a round is finishing all ten items or reloading the page.
+
+- `openMenu()` lives at module level, not as a closure inside `boot()`, so the
+  results screen and the Escape key can both reach it. It sets `state = null`
+  so stray keystrokes do not land in the round sitting behind the menu.
+- **Escape** returns to the menu, checked before every other guard in
+  `onKeyDown` — including the completed-item guard.
+- The results screen always offers a **Menu** button, alongside Again and the
+  conditional Next.
+
+### Keeping the menu's stars honest
+
+`record()` is fire-and-forget, so re-reading the log after a round races the
+write and shows a kid the stars they had *before* the round they just played.
+Keep the loaded tail in memory and fold the new round into it:
+
+```js
+events = [...events, roundEvent];
+progress = allProgress(events);
+```
+
+Practice rounds land under `practice-*` ids, which no rung ever uses, so they
+cannot contaminate a lesson's stars.
+
 - [ ] **Step 5: Add `hasAskedName` to settings**
 
 In `settings.js`, add to `DEFAULT_SETTINGS`:

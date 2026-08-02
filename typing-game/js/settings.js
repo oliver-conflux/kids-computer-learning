@@ -11,6 +11,9 @@ const KEY = 'kct.typing.settings.v1';
 
 export const DEFAULT_SETTINGS = Object.freeze({
   name: null,
+  // Distinguishes "skipped the name prompt" from "not yet asked". Without it a
+  // kid who skipped gets asked again on every launch (spec §5).
+  hasAskedName: false,
   blockOnError: true,
   guidance: 3,
   accent: '#7b6bd6',
@@ -30,6 +33,7 @@ function storage() {
 function clean(raw) {
   const out = { ...DEFAULT_SETTINGS };
   if (typeof raw.name === 'string' && raw.name.length > 0) out.name = raw.name;
+  if (typeof raw.hasAskedName === 'boolean') out.hasAskedName = raw.hasAskedName;
   if (typeof raw.blockOnError === 'boolean') out.blockOnError = raw.blockOnError;
   if (Number.isInteger(raw.guidance) && raw.guidance >= 0 && raw.guidance <= 3) {
     out.guidance = raw.guidance;

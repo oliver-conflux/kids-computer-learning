@@ -43,6 +43,15 @@ test('saved settings round-trip', () => {
   assert.equal(loaded.blockOnError, true, 'untouched keys keep their defaults');
 });
 
+test('hasAskedName defaults false and round-trips, so a skip is remembered', () => {
+  globalThis.localStorage = fakeStorage();
+  assert.equal(DEFAULT_SETTINGS.hasAskedName, false);
+  saveSettings({ ...DEFAULT_SETTINGS, name: null, hasAskedName: true });
+  const loaded = loadSettings();
+  assert.equal(loaded.hasAskedName, true, 'a kid who skipped must not be asked again');
+  assert.equal(loaded.name, null);
+});
+
 test('corrupt JSON falls back to defaults silently', () => {
   globalThis.localStorage = fakeStorage({ 'kct.typing.settings.v1': '{not json' });
   assert.deepEqual(loadSettings(), DEFAULT_SETTINGS);

@@ -16,11 +16,12 @@ import { renderKeyboard, flashWrong } from './keyboard.js';
 import { renderHands } from './hands.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { loadEvents, record, flushOutbox } from './log.js';
-import { forLesson, starsFor } from './progress.js';
+import { allProgress, starsFor } from './progress.js';
 import {
   renderLines, renderPrompt, renderProgress, applyGuidance,
   highlightNext, showResults, hideResults, shakeLine,
 } from './ui.js';
+import { showNamePrompt, showMenu, hideMenu, practiceItems } from './screens.js';
 
 // Declared before anything can reference it — finishItem and finishRound both
 // stamp it onto their events.
@@ -37,6 +38,12 @@ let roundErrors = 0;
 let roundBestStreak = 0;
 let roundStartedAt = null;
 let shiftSide = null;
+
+// The loaded log tail, kept so a finished round can be folded in immediately.
+// record() is fire-and-forget, so re-fetching after a round would race the
+// write and show a kid the stars they had BEFORE the round they just played.
+let events = [];
+let progress = {};
 
 /** Track which Shift is down. keydown on a letter only exposes a boolean. */
 function watchShift() {
@@ -117,7 +124,7 @@ function finishRound() {
   const wpm = minutes <= 0 ? 0 : items.join('').length / 5 / minutes;
   const stars = starsFor(accuracy);
 
-  record({
+  const roundEvent = {
     type: 'round',
     t: new Date().toISOString(),
     build: BUILD,
@@ -129,7 +136,14 @@ function finishRound() {
     bestStreak: roundBestStreak,
     guidance: settings.guidance,
     handsOff: stars === 3 && settings.guidance <= 1,
-  });
+  };
+  record(roundEvent);
+
+  // Fold it into the in-memory tail as well. record() does not await the write,
+  // so a kid returning to the menu would otherwise see the stars they had
+  // BEFORE the round they just finished — which reads as the game forgetting.
+  events = [...events, roundEvent];
+  progress = allProgress(events);
 
   renderProgress(items.length, items.length);
   showResults(
@@ -139,18 +153,27 @@ function finishRound() {
       hasNext: nextLesson(lesson.id) !== null,
     },
     {
-      onAgain: () => playLesson(lesson.id),
+      onAgain: () => replayRound(),
+      onMenu: () => openMenu(),
       onNext: () => playLesson(nextLesson(lesson.id).id),
       onStepDown: () => {
         settings = { ...settings, guidance: settings.guidance - 1 };
         saveSettings(settings);
-        playLesson(lesson.id);
+        replayRound();
       },
     },
   );
 }
 
 function onKeyDown(e) {
+  // Escape is checked before every other guard, including the completed-item
+  // one: a kid who picked the wrong thing must not have to finish ten items,
+  // or reload the page, to get back out.
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    openMenu();
+    return;
+  }
   if (state === null || isComplete(state)) return;
   if (e.key === 'Backspace') {
     e.preventDefault();
@@ -195,6 +218,61 @@ function playLesson(id) {
   startItem(); // applies this item's guidance itself
 }
 
+/**
+ * A practice round (spec §4): never locked, never gated by ladder progress.
+ *
+ * It is not a rung, so it runs on a SYNTHETIC lesson — that way the existing
+ * round loop, results screen, and logging all work unchanged. `nextLesson`
+ * returns null for a `practice-…` id, so the results screen correctly offers
+ * only Again.
+ */
+function playPractice(tab) {
+  hideResults();
+  lesson = {
+    id: `practice-${tab}`,
+    track: 'practice',
+    title: `Practice: ${tab}`,
+    newKeys: [],
+    availableKeys: [],
+    hint: 'Type it just as you see it.',
+    mix: { drills: 0, words: 10, sentences: 0 },
+  };
+  items = practiceItems(tab, settings.name, Math.random);
+  itemIndex = 0;
+  roundKeystrokes = 0;
+  roundErrors = 0;
+  roundBestStreak = 0;
+  roundStartedAt = Date.now();
+
+  document.getElementById('lesson-title').textContent = lesson.title;
+  startItem(); // applies this item's guidance itself
+}
+
+/**
+ * Replay whatever round just finished. A practice round cannot go back through
+ * playLesson: lessonById('practice-…') is null, so Again would blow up on a
+ * synthetic lesson.
+ */
+function replayRound() {
+  if (lesson.track === 'practice') playPractice(lesson.id.slice('practice-'.length));
+  else playLesson(lesson.id);
+}
+
+/**
+ * Show the menu. Module-level rather than a closure inside boot() because the
+ * results screen and the Escape key both need a way back to it.
+ *
+ * @returns {void}
+ */
+function openMenu() {
+  hideResults();
+  state = null; // stop stray keystrokes landing in the round behind the menu
+  showMenu(progress, {
+    onLesson: (id) => { hideMenu(); playLesson(id); },
+    onPractice: (tab) => { hideMenu(); playPractice(tab); },
+  });
+}
+
 async function boot() {
   renderKeyboard(document.getElementById('keyboard'));
   renderHands(document.getElementById('hands'));
@@ -204,10 +282,21 @@ async function boot() {
   window.addEventListener('keydown', onKeyDown);
 
   await flushOutbox();
-  const events = await loadEvents();
-  const resume = settings.lastLesson ?? 'home-base';
-  console.log('progress', forLesson(events, resume));
-  playLesson(resume);
+  events = await loadEvents();
+  progress = allProgress(events);
+
+  // First run: ask for a name once, always skippable. `hasAskedName` is what
+  // distinguishes "skipped" from "not yet asked" — without it, a kid who
+  // skipped would be asked again on every single launch.
+  if (!settings.hasAskedName) {
+    showNamePrompt((name) => {
+      settings = { ...settings, name, hasAskedName: true };
+      saveSettings(settings);
+      openMenu();
+    });
+    return;
+  }
+  openMenu();
 }
 
 boot();

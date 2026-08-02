@@ -130,7 +130,8 @@ export function highlightNext(ch, level) {
  *
  * @param {{stars: number, accuracy: number, wpm: number, bestStreak: number,
  *          canStepDown: boolean, hasNext: boolean}} summary
- * @param {{onAgain: Function, onNext: Function, onStepDown: Function}} handlers
+ * @param {{onAgain: Function, onMenu: Function, onNext: Function,
+ *          onStepDown: Function}} handlers
  * @returns {void}
  */
 export function showResults(summary, handlers) {
@@ -169,6 +170,14 @@ export function showResults(summary, handlers) {
 
   const actions = document.createElement('div');
   actions.className = 'results-actions';
+
+  // Always offered. Without it a kid who picked the wrong thing can only
+  // replay it or reload the page, and a practice round has no "Next" at all.
+  const menu = document.createElement('button');
+  menu.textContent = 'Menu';
+  menu.addEventListener('click', handlers.onMenu);
+  actions.appendChild(menu);
+
   const again = document.createElement('button');
   again.textContent = 'Again';
   again.addEventListener('click', handlers.onAgain);

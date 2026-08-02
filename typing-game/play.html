@@ -39,6 +39,26 @@
     <svg id="hands" class="hands" viewBox="0 0 924 385" aria-hidden="true"></svg>
   </section>
 
+  <div id="name-prompt" class="overlay hidden">
+    <div class="overlay-card">
+      <h2>What should I call you?</h2>
+      <input id="name-input" type="text" maxlength="20" autocomplete="off" placeholder="Your name">
+      <div class="overlay-actions">
+        <button id="name-skip">Skip</button>
+        <button id="name-save" class="primary">That's me</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="menu" class="overlay hidden">
+    <div class="overlay-card overlay-wide">
+      <h2>Pick something to type</h2>
+      <div class="track"><h3>Letters</h3><div id="track-letters" class="rungs"></div></div>
+      <div class="track"><h3>Numbers</h3><div id="track-numbers" class="rungs"></div></div>
+      <div class="track"><h3>Practice</h3><div id="practice-tabs" class="rungs"></div></div>
+    </div>
+  </div>
+
   <div id="results" class="results hidden"></div>
 
   <script type="module" src="js/main.js"></script>
