@@ -55,7 +55,7 @@ export function normalize(name) {
  * the two it does not rescue are unrecognised states already in EXCLUDE, so the
  * fallback is total over everything this function keeps.
  */
-function codeOf(properties) {
+export function codeOf(properties) {
   const primary = properties.ISO_A2;
   const raw = primary && primary !== '-99' ? primary : properties.ISO_A2_EH;
   if (!raw || raw === '-99') {

@@ -10,7 +10,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 
-import { curate } from './countries/names.js';
+import { curate, codeOf } from './countries/names.js';
 import { pathFor, boxFor, WORLD } from './countries/geometry.js';
 
 const SOURCE = new URL('../geography-game/data/ne_110m_admin_0_countries.geojson', import.meta.url);
@@ -23,9 +23,28 @@ const OUTPUT = new URL('../geography-game/js/countries.js', import.meta.url);
  */
 const TOLERANCE = 0.35;
 
+/**
+ * Descending POP_EST, which is the order the spine's tail walks.
+ *
+ * Population is a PROXY FOR FAMILIARITY -- "likely to have heard of it" -- and
+ * not a claim about importance. It is the only such proxy the source data
+ * carries, and it is at least honest about being derived rather than judged.
+ * The countries a kid actually knows first are not the populous ones, they are
+ * the local ones, and the spine's hand-authored opener overrides this ordering
+ * entirely for exactly that reason. This decides only what comes after the
+ * local water runs out.
+ */
+function byFamiliarity(features) {
+  const population = new Map(
+    features.map((f) => [codeOf(f.properties), f.properties.POP_EST ?? 0]),
+  );
+  return (a, b) => (population.get(b.code) ?? 0) - (population.get(a.code) ?? 0);
+}
+
 function build() {
   const geojson = JSON.parse(readFileSync(SOURCE, 'utf8'));
   const curated = curate(geojson.features);
+  curated.sort(byFamiliarity(geojson.features));
   const byName = new Map(geojson.features.map((f) => [f.properties.NAME_EN ?? f.properties.NAME, f]));
 
   const rows = curated.map(({ code, name, target }) => {
@@ -49,11 +68,7 @@ function build() {
 
 /** A renamed country no longer matches its NAME_EN key, so fall back to the code. */
 function findByCurated(features, code) {
-  return features.find((f) => {
-    const primary = f.properties.ISO_A2;
-    const raw = primary && primary !== '-99' ? primary : f.properties.ISO_A2_EH;
-    return (raw ?? '').toLowerCase().replace('cn-tw', 'tw') === code;
-  });
+  return features.find((f) => codeOf(f.properties) === code);
 }
 
 function header() {
