@@ -139,3 +139,24 @@
   border-radius: 6px;
   padding: 0.1em 0.4em;
 }
+
+/* ---------- no-sound warning ---------- */
+
+/*
+ * Shown only when speech AND the cached mp3 have both failed for two words
+ * running — see reportAudio in js/main.js.
+ *
+ * Deliberately quiet: it sits at the bottom, it does not move the word, and it
+ * does not block anything. A kid who can already hear does not need it, and a
+ * kid who cannot is stuck without it, because drill mode asks for a word she was
+ * never told.
+ */
+.audio-warning {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 12px 16px 20px;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  color: var(--error-text);
+}

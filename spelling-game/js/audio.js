@@ -43,6 +43,14 @@ const AUDIO = {
   // `friend` past them in under half a second.
   ttsRate: 0.8,
   ttsPitch: 1,
+
+  // How long to wait for a `start` event before calling the speech attempt
+  // silent. Chrome queues an utterance indefinitely in a background or unfocused
+  // tab and fires NO event either way, while reporting `speaking: true` — so
+  // without this the game waits forever on a sound that will never play. A
+  // second is far longer than a real engine takes to begin and short enough that
+  // a kid is not left staring at empty boxes wondering.
+  ttsStartTimeoutMs: 1000,
   ttsLang: 'en-US',
 
   // How long to wait for a cached file to become playable before speaking the
@@ -157,28 +165,66 @@ export function createAudio(options = {}) {
   }
 
   /**
-   * Speak the word with the browser's voice.
+   * Speak the word with the browser's voice, and WAIT TO SEE IF IT ACTUALLY
+   * STARTED.
+   *
+   * This used to call `speech.speak()` and return 'tts' on the next line. That
+   * is wrong, and wrong in the way that matters most in this particular game.
+   *
+   * `speechSynthesis.speak()` is fire-and-forget and reports nothing. Chrome
+   * queues the utterance and declines to start it in a background or unfocused
+   * tab, and — this is the part that makes it dangerous — `speechSynthesis
+   * .speaking` reads TRUE the whole time. Measured here: `speaking: true`,
+   * `pending: false`, `paused: false`, and after 3.4 seconds neither `start` nor
+   * `error` had fired. Nothing throws, nothing logs, no request is made. The old
+   * code returned 'tts' into that silence.
+   *
+   * In the math game a missed sound would be a nicety. Here the sound IS the
+   * question: with no audio the kid is looking at a row of empty boxes with
+   * literally no way to know which word is being asked for. Reporting success we
+   * have not observed is how that reaches a child as "the game is broken".
+   *
+   * So: resolve on `start`, on `error`, or on a timeout, whichever comes first.
    *
    * @param {string} word
-   * @returns {'tts' | 'silent'}
+   * @returns {Promise<'tts' | 'silent'>}
    */
   function speak(word) {
     if (speech === null || typeof speech.speak !== 'function') {
-      return 'silent'; // no speech engine — the game still plays, just quietly
+      return Promise.resolve('silent'); // no engine — the game still plays, quietly
     }
-    try {
-      // Cancel first: an unfinished utterance from the previous word would
-      // otherwise queue behind it, and the kid would hear the wrong word.
-      speech.cancel?.();
-      const utterance = makeUtterance(word);
-      utterance.rate = config.ttsRate;
-      utterance.pitch = config.ttsPitch;
-      utterance.lang = config.ttsLang;
-      speech.speak(utterance);
-      return 'tts';
-    } catch {
-      return 'silent';
-    }
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = (outcome) => {
+        if (!settled) {
+          settled = true;
+          resolve(outcome);
+        }
+      };
+
+      try {
+        // Cancel first: an unfinished utterance from the previous word would
+        // otherwise queue behind it and the kid would hear the wrong word.
+        speech.cancel?.();
+        const utterance = makeUtterance(word);
+        utterance.rate = config.ttsRate;
+        utterance.pitch = config.ttsPitch;
+        utterance.lang = config.ttsLang;
+
+        // `start` is the only honest evidence that a sound was produced.
+        utterance.addEventListener?.('start', () => settle('tts'), { once: true });
+        utterance.addEventListener?.('error', () => settle('silent'), { once: true });
+
+        speech.speak(utterance);
+
+        // The queued-forever case, which is the common one and fires no event at
+        // all. Resolving 'silent' does NOT cancel the utterance — if it starts
+        // late the kid still hears it; we simply stop claiming it worked.
+        setTimeout(() => settle('silent'), config.ttsStartTimeoutMs);
+      } catch {
+        settle('silent');
+      }
+    });
   }
 
   /**
@@ -213,8 +259,11 @@ export function createAudio(options = {}) {
         return 'mp3';
       } catch {
         // Decode failure, or autoplay policy before the first keystroke. Speech
-        // is subject to the same policy and may also be silent, which is fine:
-        // the game is playable without sound and audible from the next word on.
+        // is subject to the same policy and may be silent too — which is NOT
+        // fine here and must not be swallowed. Drill mode asks "spell the word
+        // you just heard"; a kid who heard nothing is looking at empty boxes
+        // with no way to know what is wanted. `speak` reports honestly and the
+        // caller is expected to act on 'silent'.
       }
     }
 

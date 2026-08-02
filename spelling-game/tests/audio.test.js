@@ -52,7 +52,31 @@ function fakeElement(behaviour = {}) {
   };
 }
 
+/**
+ * A speech engine that STARTS, which is what a working one does.
+ *
+ * `speak()` fires the utterance's `start` listener, because since the audio
+ * layer learned to wait for that event, "spoke" and "was handed an utterance"
+ * are no longer the same claim. Chrome hands back neither `start` nor `error` in
+ * a background tab while reporting `speaking: true`, which is the real bug this
+ * models the absence of — see `fakeSilentSpeech`.
+ */
 function fakeSpeech() {
+  return {
+    spoken: [],
+    cancels: 0,
+    speak(utterance) {
+      this.spoken.push(utterance);
+      utterance.listeners?.start?.forEach((fn) => fn({}));
+    },
+    cancel() {
+      this.cancels += 1;
+    },
+  };
+}
+
+/** An engine that accepts an utterance and never starts it — Chrome, backgrounded. */
+function fakeSilentSpeech() {
   return {
     spoken: [],
     cancels: 0,
@@ -65,7 +89,13 @@ function fakeSpeech() {
   };
 }
 
-const makeUtterance = (text) => ({ text });
+const makeUtterance = (text) => ({
+  text,
+  listeners: {},
+  addEventListener(name, fn) {
+    (this.listeners[name] ??= []).push(fn);
+  },
+});
 
 /**
  * A player wired to fakes. `load` decides whether the cache "contains" the word.
@@ -83,7 +113,7 @@ function playerWith(behaviour = {}, extra = {}) {
     speech,
     makeUtterance,
     // Short enough that the timeout test does not slow the suite down.
-    config: { loadTimeoutMs: 50, ...extra },
+    config: { loadTimeoutMs: 50, ttsStartTimeoutMs: 50, ...extra },
   });
   return { audio, speech, elements };
 }
@@ -283,4 +313,80 @@ test('preload: warms a word without playing it', async () => {
 test('preload: an unplayable word is not an error', () => {
   const { audio } = playerWith({ load: 'ready' });
   assert.doesNotThrow(() => audio.preload(''));
+});
+
+// ---------------------------------------------------------------------------
+// The silent-speech bug, pinned.
+// ---------------------------------------------------------------------------
+
+test('play reports silent when the engine takes the utterance and never starts it', async () => {
+  // THE REAL FAILURE, and the reason `speak` waits for an event at all.
+  // Chrome queues an utterance in a background or unfocused tab and starts it
+  // never, firing neither `start` nor `error`, while `speechSynthesis.speaking`
+  // reads true. Measured in a browser: 3.4 seconds, zero events. The old code
+  // returned 'tts' into that silence, so the game believed it had spoken.
+  //
+  // In a spelling game that is not a missing nicety — drill asks the kid to
+  // spell a word she was never told, and the slots then fill themselves in on a
+  // timer while she sits there with nothing to go on.
+  const speech = fakeSilentSpeech();
+  const audio = createAudio({
+    makeAudio: () => fakeElement({ load: 'error' }),
+    speech,
+    makeUtterance,
+    config: { loadTimeoutMs: 20, ttsStartTimeoutMs: 40 },
+  });
+
+  assert.equal(await audio.play('friend'), 'silent');
+  assert.equal(speech.spoken.length, 1, 'it still tried');
+});
+
+test('play reports silent when the utterance errors', async () => {
+  const speech = {
+    spoken: [],
+    speak(utterance) {
+      this.spoken.push(utterance);
+      utterance.listeners?.error?.forEach((fn) => fn({ error: 'not-allowed' }));
+    },
+    cancel() {},
+  };
+  const audio = createAudio({
+    makeAudio: () => fakeElement({ load: 'error' }),
+    speech,
+    makeUtterance,
+    config: { loadTimeoutMs: 20, ttsStartTimeoutMs: 40 },
+  });
+
+  assert.equal(await audio.play('friend'), 'silent');
+});
+
+test('a late start does not retract the silent report, and is not cancelled', async () => {
+  // Resolving 'silent' on the timeout must not stop a slow engine from speaking.
+  // The kid hearing the word late is strictly better than not at all; we only
+  // stop CLAIMING it worked.
+  let started = null;
+  const speech = {
+    spoken: [],
+    cancels: 0,
+    speak(utterance) {
+      this.spoken.push(utterance);
+      setTimeout(() => {
+        started = true;
+        utterance.listeners?.start?.forEach((fn) => fn({}));
+      }, 60);
+    },
+    cancel() {
+      this.cancels += 1;
+    },
+  };
+  const audio = createAudio({
+    makeAudio: () => fakeElement({ load: 'error' }),
+    speech,
+    makeUtterance,
+    config: { loadTimeoutMs: 20, ttsStartTimeoutMs: 30 },
+  });
+
+  assert.equal(await audio.play('friend'), 'silent');
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.equal(started, true, 'the utterance was left alone to start late');
 });

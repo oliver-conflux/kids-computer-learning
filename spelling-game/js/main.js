@@ -182,6 +182,65 @@ function apply(next) {
   }
 }
 
+// How many words in a row may come out silent before we say so. One is a
+// blocked first play, which is ordinary: browsers refuse sound until the page
+// has been interacted with, and the very first word of a session arrives before
+// the kid has touched a key. Two in a row means it is not coming.
+const SILENT_WORDS_BEFORE_WARNING = 2;
+
+let silentRun = 0;
+let audioWarned = false;
+
+/**
+ * React to what `audio.play` actually managed to do.
+ *
+ * A SILENT SPELLING GAME IS AN UNPLAYABLE ONE, and this is the difference
+ * between this game and the other two. Drill asks "spell the word you just
+ * heard". A kid who heard nothing sees an empty row of boxes and no way at all
+ * to know what is wanted — and, because the reveal is on a timer, the screen
+ * then starts filling itself in while she sits there. That reads as a broken
+ * game, and it is exactly what happened in testing: an mp3 404 followed by a
+ * speech utterance Chrome queued and never started, with nothing thrown, nothing
+ * logged, and `speechSynthesis.speaking` reporting true throughout.
+ *
+ * So it gets said out loud, once, in words a kid can act on.
+ *
+ * @param {'mp3' | 'tts' | 'silent'} outcome
+ */
+function reportAudio(outcome) {
+  if (outcome !== 'silent') {
+    silentRun = 0;
+    return;
+  }
+  silentRun += 1;
+  if (silentRun < SILENT_WORDS_BEFORE_WARNING || audioWarned) {
+    return;
+  }
+  audioWarned = true;
+  console.warn(
+    'spelling-game: no sound. The cached mp3 is missing and speech synthesis did not start. ' +
+      'Common causes: the tab is in the background, the tab is muted, or no words have been ' +
+      'fetched yet (tools/fetch-words.js).',
+  );
+  showAudioWarning();
+}
+
+/**
+ * A persistent, calm line telling the kid the sound is not working. Rendered
+ * once into the shell rather than into a screen, so it survives the word
+ * changing and the session ending.
+ */
+function showAudioWarning() {
+  if (document.querySelector('.audio-warning') !== null) {
+    return;
+  }
+  const note = document.createElement('p');
+  note.className = 'audio-warning';
+  note.setAttribute('role', 'status');
+  note.textContent = 'No sound — ask a grown-up to check the volume.';
+  shell.append(note);
+}
+
 /** Learn mode's "show me", pressed and held. */
 function onReveal() {
   if (active === null) {
@@ -234,7 +293,9 @@ function runProblem(id, model, mode, container) {
     };
 
     renderWord(container, active.state, mode);
-    audio.play(item.word);
+    // Not awaited — the word is already on screen and the kid can start typing.
+    // But the OUTCOME is acted on: see reportAudio.
+    audio.play(item.word).then(reportAudio);
     if (mode === 'drill') {
       startTickLoop(mode, bucket, container);
     }
