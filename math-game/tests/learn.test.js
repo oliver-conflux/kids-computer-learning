@@ -17,9 +17,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { pickLearnFacts, buildLearnSession } from '../js/learn.js';
+import { pickLearnFacts, buildLearnSession, isLearnable } from '../js/learn.js';
 import { deriveMastery } from '../js/mastery.js';
-import { allFacts, factId } from '../js/facts.js';
+import { allFacts, factId, answerOf } from '../js/facts.js';
 import { strategyFor } from '../js/strategies.js';
 import { CONFIG } from '../js/config.js';
 
@@ -27,9 +27,10 @@ import { CONFIG } from '../js/config.js';
 
 /**
  * A total mastery model, all 121 facts present, with each fact's bucket decided
- * by `bucketOf(fact)`. Only the fields learn.js reads are populated.
+ * by `bucketOf(fact)` and `taught` by `taughtOf(fact)`. Only the fields learn.js
+ * reads are populated.
  */
-function modelWith(bucketOf) {
+function modelWith(bucketOf, taughtOf = () => false) {
   const byId = new Map();
   for (const fact of allFacts()) {
     const id = factId(fact);
@@ -37,6 +38,7 @@ function modelWith(bucketOf) {
       id,
       fact,
       bucket: bucketOf(fact),
+      taught: taughtOf(fact),
       attempts: [],
       cleanCount: 0,
       medianCleanMs: null,
@@ -51,11 +53,30 @@ const allHot = () => modelWith(() => 'hot');
 const isEligible = (fact) => strategyFor(fact) !== null;
 const eligibleFacts = () => allFacts().filter(isEligible);
 
+/** A learn-mode attempt event, as engine.toAttemptEvent writes one. */
+function learnAttempt(fact) {
+  return {
+    type: 'attempt',
+    t: '2026-08-01T15:04:05.123Z',
+    build: CONFIG.build,
+    session: 's_learn',
+    op: '*',
+    a: fact.a,
+    b: fact.b,
+    ms: 3200,
+    stage: 'strategy',
+    typed: String(answerOf(fact)).split(''),
+    wrong: [],
+    mode: 'learn',
+    revealed: false,
+  };
+}
+
 const label = (fact) => `${fact.a}x${fact.b}`;
 
-/** Buckets snapshotted as a plain array, for mutation checks. */
+/** Every field learn.js reads, snapshotted as a plain array, for mutation checks. */
 const bucketSnapshot = (model) =>
-  [...model.byId.entries()].map(([id, stats]) => `${id}:${stats.bucket}`);
+  [...model.byId.entries()].map(([id, stats]) => `${id}:${stats.bucket}:${stats.taught}`);
 
 // --- eligibility -----------------------------------------------------------
 
@@ -64,6 +85,40 @@ test('exactly 78 of the 121 facts are eligible for learn mode', () => {
   // "trivial facts cannot enter learn mode" guarantee needs re-reading.
   assert.equal(allFacts().length, 121);
   assert.equal(eligibleFacts().length, 78);
+  assert.equal(allFacts().filter(isLearnable).length, 78);
+});
+
+test('isLearnable agrees exactly with having strategy text', () => {
+  for (const fact of allFacts()) {
+    assert.equal(
+      isLearnable(fact),
+      strategyFor(fact) !== null,
+      `isLearnable disagrees with strategyFor on ${label(fact)}`,
+    );
+  }
+});
+
+test('isLearnable admits exactly the facts pickLearnFacts is willing to return', () => {
+  // The point of exporting the predicate: a consumer computing `canLearn` from
+  // isLearnable must not be able to promise a fact the picker would refuse, nor
+  // refuse one the picker would offer.
+  //
+  // Forward: everything picked is learnable — checked here across every bucket
+  // arrangement, and exhaustively in the sweep below.
+  // Backward: every learnable fact IS reachable — make it the sole cold-untaught
+  // fact in an otherwise hot model and confirm it comes back first.
+  for (const fact of allFacts()) {
+    const id = factId(fact);
+    const model = modelWith((f) => (factId(f) === id ? 'cold' : 'hot'));
+    const picked = pickLearnFacts(model, { ...CONFIG, learnFacts: 1 });
+
+    assert.ok(picked.every(isLearnable));
+    if (isLearnable(fact)) {
+      assert.equal(label(picked[0]), label(fact), `${label(fact)} is unreachable`);
+    } else {
+      assert.notEqual(label(picked[0]), label(fact), `${label(fact)} is not learnable`);
+    }
+  }
 });
 
 test('never picks a fact without strategy text, whichever fact is coldest', () => {
@@ -109,14 +164,127 @@ test('returns exactly learnFacts when enough eligible facts exist', () => {
   assert.equal(picked.length, CONFIG.learnFacts);
 });
 
-test('picks the eligible facts in allFacts() order when all are equally cold', () => {
-  // The documented tie-break. 2x2, 2x3, 2x4 are the first three eligible facts
-  // row-major: everything with a 0 or 1 operand is filtered out ahead of them.
-  const picked = pickLearnFacts(allCold(), CONFIG);
-  assert.deepEqual(
-    picked.map(label),
-    ['2x2', '2x3', '2x4'],
+test('a fresh model opens with the HARDEST facts, never with 2x2', () => {
+  // The regression this ordering exists for. On a fresh log every fact is
+  // equally cold, so rank does not discriminate and difficulty decides alone.
+  // Without it selection falls through to allFacts() order and opens 2x2, 2x3,
+  // 2x4 — the three easiest facts in the table, in a mode whose entire job is
+  // the hard ones.
+  const picked = pickLearnFacts(allCold(), CONFIG).map(label);
+
+  assert.deepEqual(picked, ['6x7', '7x6', '7x8']);
+  assert.ok(!picked.includes('2x2'), 'learn mode must not open on 2x2');
+
+  // Every picked fact is from the no-pattern-hook set: both operands in
+  // {6,7,8,9}, the part of the table with nothing to lever off.
+  for (const fact of pickLearnFacts(allCold(), CONFIG)) {
+    assert.ok(fact.a >= 6 && fact.b >= 6, `${label(fact)} is not a hard fact`);
+  }
+});
+
+test('difficulty ranks by pattern support, not by product size', () => {
+  // The x10 row holds the biggest products in the set and is the easiest thing
+  // in it. A product-descending sort would open with 10x9; this asserts it does
+  // not, and that the x2 and x10 rows sit below the 6-8 block.
+  const order = pickLearnFacts(allCold(), { ...CONFIG, learnFacts: 78 }).map(label);
+  const rank = (name) => order.indexOf(name);
+
+  assert.ok(rank('7x8') < rank('10x9'), 'x10 must not outrank 7x8');
+  assert.ok(rank('6x7') < rank('2x9'), 'doubling is easier than 6x7');
+  assert.ok(rank('7x8') < rank('9x8'), 'ten-minus-one is a hook, 7 is not');
+  assert.ok(rank('3x8') < rank('5x8'), 'half-of-ten is easier than double-and-add');
+  assert.equal(order.length, 78, 'every learnable fact is ordered, none dropped');
+});
+
+test('difficulty ordering is deterministic, ties in allFacts() order', () => {
+  const first = pickLearnFacts(allCold(), { ...CONFIG, learnFacts: 78 }).map(label);
+  const second = pickLearnFacts(allCold(), { ...CONFIG, learnFacts: 78 }).map(label);
+  assert.deepEqual(first, second);
+
+  // 6x7 and 7x6 are equally hard and equally cold. The tie-break is table
+  // order, which puts the smaller `a` first — and it must not wobble.
+  assert.ok(first.indexOf('6x7') < first.indexOf('7x6'));
+  assert.ok(first.indexOf('3x7') < first.indexOf('7x3'));
+});
+
+test('cold-and-untaught outranks cold-and-taught', () => {
+  // Every fact cold; the three hardest already taught. They must step aside for
+  // untaught facts even though nothing about their temperature changed.
+  const taught = new Set(['*:6x7', '*:7x6', '*:7x8']);
+  const model = modelWith(
+    () => 'cold',
+    (fact) => taught.has(factId(fact)),
   );
+
+  const picked = pickLearnFacts(model, CONFIG).map(label);
+  assert.deepEqual(picked, ['8x7', '3x7', '4x7']);
+  for (const name of ['6x7', '7x6', '7x8']) {
+    assert.ok(!picked.includes(name), `${name} was already taught`);
+  }
+});
+
+test('a taught cold fact still outranks any warm or hot fact', () => {
+  // Rank 2 is not exile. Once the untaught facts are exhausted, a fact shown
+  // once but never drilled comes back round — before anything warmer does.
+  const model = modelWith(
+    (fact) => (factId(fact) === '*:6x7' ? 'cold' : 'warm'),
+    () => true,
+  );
+
+  assert.equal(label(pickLearnFacts(model, CONFIG)[0]), '6x7');
+});
+
+test('a second learn session does not repeat the first one', () => {
+  // The bug this ordering fixes, reproduced end to end. Learn attempts are
+  // excluded from mastery by design, so a re-derived model is unchanged in
+  // bucket terms and a purely temperature-based picker hands back the identical
+  // three facts every session, indefinitely. `taught` is what breaks the loop.
+  const events = [];
+  const first = pickLearnFacts(deriveMastery(events, CONFIG), CONFIG);
+
+  // Play the whole session: every fact, every pass.
+  for (const fact of buildLearnSession(first, CONFIG)) {
+    events.push(learnAttempt(fact));
+  }
+
+  const model = deriveMastery(events, CONFIG);
+  const second = pickLearnFacts(model, CONFIG);
+
+  // The buckets genuinely did not move — this is not a test of mastery drifting.
+  for (const fact of first) {
+    assert.equal(model.byId.get(factId(fact)).bucket, 'cold');
+    assert.equal(model.byId.get(factId(fact)).taught, true);
+  }
+
+  assert.equal(second.length, CONFIG.learnFacts);
+  for (const fact of second) {
+    assert.ok(
+      !first.some((seen) => factId(seen) === factId(fact)),
+      `${label(fact)} was taught last session and came straight back`,
+    );
+  }
+});
+
+test('successive learn sessions keep advancing through the table', () => {
+  // Six sessions, no repeats anywhere: the loop is broken for good, not just
+  // for one round.
+  const events = [];
+  const seen = new Set();
+
+  for (let session = 0; session < 6; session += 1) {
+    const picked = pickLearnFacts(deriveMastery(events, CONFIG), CONFIG);
+    assert.equal(picked.length, CONFIG.learnFacts);
+
+    for (const fact of picked) {
+      assert.ok(!seen.has(factId(fact)), `${label(fact)} repeated in session ${session}`);
+      seen.add(factId(fact));
+    }
+    for (const fact of buildLearnSession(picked, CONFIG)) {
+      events.push(learnAttempt(fact));
+    }
+  }
+
+  assert.equal(seen.size, 18);
 });
 
 test('prefers cold over warm over hot', () => {
@@ -174,10 +342,24 @@ test('returns nothing when learnFacts is zero', () => {
   assert.deepEqual(pickLearnFacts(allCold(), { ...CONFIG, learnFacts: 0 }), []);
 });
 
-test('picks distinct facts', () => {
-  for (const model of [allCold(), allHot(), modelWith(() => 'warm')]) {
-    const picked = pickLearnFacts(model, CONFIG);
-    assert.equal(new Set(picked.map(factId)).size, picked.length);
+test('picks distinct facts, whatever the rank mix', () => {
+  // Selection walks the eligible list once per rank, so overlapping rank
+  // predicates would serve the same fact twice in one session. The mixed-taught
+  // arrangements below are the ones that expose it: a cold fact matching both
+  // "cold and untaught" and a loosely-written "cold".
+  const arrangements = [
+    allCold(),
+    allHot(),
+    modelWith(() => 'warm'),
+    modelWith(() => 'cold', (fact) => fact.a % 2 === 0),
+    modelWith(() => 'cold', () => true),
+    modelWith((fact) => (fact.a > 8 ? 'cold' : 'hot'), (fact) => fact.b > 8),
+  ];
+
+  for (const model of arrangements) {
+    const picked = pickLearnFacts(model, { ...CONFIG, learnFacts: 78 });
+    assert.equal(new Set(picked.map(factId)).size, picked.length, 'duplicate pick');
+    assert.equal(picked.length, 78, 'every learnable fact must be offered once');
   }
 });
 
@@ -297,8 +479,8 @@ test('the returned facts are not shared state between calls', () => {
   first[0].a = 99;
 
   assert.deepEqual(pickLearnFacts(allCold(), CONFIG).map(label), [
-    '2x2',
-    '2x3',
-    '2x4',
+    '6x7',
+    '7x6',
+    '7x8',
   ]);
 });
