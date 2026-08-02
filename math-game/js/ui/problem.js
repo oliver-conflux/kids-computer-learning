@@ -7,14 +7,37 @@
 // therefore idempotent: rendering the same ProblemState twice produces the same
 // DOM and no side effects.
 //
+// That rule survives the reveal button. `onRevealClick` registers a callback and
+// nothing more — the click does not call the engine from in here and does not
+// mutate anything. main.js owns every state transition, including this one.
+//
 // The one deliberate exception is the wrong-answer pulse, which is an animation
 // and so is inherently about a TRANSITION rather than about a state. See
 // `renderPulse` — that comment is the important one in this file.
 //
-// Exports: mountProblemScreen, renderProblem, renderProgress.
+// TWO MODES, TWO SCREENS:
+//
+//   drill  problem, slots, and after the timer the answer greyed into the slots.
+//          NO hint region at all — not an empty one, not a hidden one that still
+//          takes space. Blocks and strategy text do not exist in this mode for
+//          any of the 121 facts.
+//   learn  strategy text and (where the product allows) a block array ALONGSIDE
+//          it, both on screen from the first frame, plus a "Show me the answer"
+//          button. No clock touches any of it.
+//
+// The reserved-space rule holds WITHIN each mode: nothing that appears or
+// disappears during a problem may move the numerals. In drill that is trivial
+// because nothing appears. In learn the strategy and blocks are up from the
+// first frame and never change, and the button's row keeps its height when the
+// button goes — so the only thing that ever changes mid-problem is the content
+// of the slots.
+//
+// Exports: mountProblemScreen, renderProblem, renderProgress, onRevealClick.
 
 import { answerOf, answerDigits } from '../facts.js';
 import { strategyFor } from '../strategies.js';
+import { blocksApply } from '../hints.js';
+import { CONFIG } from '../config.js';
 
 /**
  * The last ProblemState rendered into each container, kept BY REFERENCE for the
@@ -29,6 +52,23 @@ const lastRendered = new WeakMap();
 /** Pending pulse-clear timers, one per container. @type {WeakMap<Element, number>} */
 const pulseTimers = new WeakMap();
 
+/**
+ * The reveal handler registered for each container, and the set of containers
+ * that already carry the delegated click listener.
+ *
+ * The listener is delegated to the CONTAINER rather than bound to the button
+ * because `mountProblemScreen` empties the container and builds a fresh button
+ * every time it runs. A listener on the button would be thrown away with it and
+ * the wiring would silently stop working after the first remount, which is the
+ * kind of bug that only shows up on the second session.
+ *
+ * @type {WeakMap<Element, () => void>}
+ */
+const revealHandlers = new WeakMap();
+
+/** @type {WeakSet<Element>} */
+const delegatedContainers = new WeakSet();
+
 /** How long the amber pulse runs. Must match --pulse-ms in base.css. */
 const PULSE_MS = 400;
 
@@ -40,9 +80,11 @@ const OP_GLYPHS = { '*': '×', '+': '+', '-': '−', '/': '÷' };
  * was there. Call once per screen; `renderProblem` calls it for you if the
  * skeleton is missing, so mounting is never a precondition you can get wrong.
  *
- * The structure is fixed and only its text, attributes and slot count change on
- * render — the hint region in particular is always present and always the same
- * height, so no stage firing can move the layout.
+ * Every node the two modes need is built here and only ever shown or hidden
+ * afterwards, so a render can never create or destroy a node mid-problem. The
+ * whole skeleton starts hidden below the numerals and is opened up by
+ * `renderProblem` according to the mode it is given — which means the default,
+ * un-rendered screen is the drill screen: numerals, slots, nothing else.
  *
  * @param {Element} container
  * @returns {Element} the .problem-screen root
@@ -52,6 +94,7 @@ export function mountProblemScreen(container) {
 
   const screen = el('section', 'problem-screen');
   screen.dataset.stage = 'clean';
+  screen.dataset.mode = 'drill';
 
   const problem = el('div', 'problem');
   problem.append(
@@ -62,16 +105,32 @@ export function mountProblemScreen(container) {
     el('span', 'slots', { role: 'slots' }),
   );
 
-  // Reserved space. Both children live here permanently and are shown or hidden
-  // by stage; neither is ever created or destroyed, so the region cannot resize.
+  // The learn view. Strategy and blocks sit SIDE BY SIDE in one row rather than
+  // stacked: they are alternative representations of the same fact for
+  // different developmental stages (spec §3), not degrees of the same help, so
+  // neither is above the other — and a row keeps both on screen without the
+  // tall region a stack would need.
   const hint = el('div', 'hint', { role: 'hint' });
   const strategy = el('p', 'hint__strategy', { role: 'strategy' });
   const blocks = el('div', 'hint__blocks', { role: 'blocks' });
-  strategy.hidden = true;
-  blocks.hidden = true;
   hint.append(strategy, blocks);
 
-  screen.append(problem, hint);
+  // The button's row keeps its height when the button goes, so the numerals do
+  // not jump upward the moment the kid presses it.
+  const revealBar = el('div', 'reveal-bar', { role: 'reveal-bar' });
+  const revealButton = el('button', 'reveal-bar__button', { role: 'reveal' });
+  revealButton.type = 'button';
+  revealButton.textContent = 'Show me the answer';
+  revealBar.append(revealButton);
+
+  // Hidden until a render says otherwise. Drill never says otherwise.
+  hint.hidden = true;
+  strategy.hidden = true;
+  blocks.hidden = true;
+  revealBar.hidden = true;
+  revealButton.hidden = true;
+
+  screen.append(problem, hint, revealBar);
   container.append(screen);
 
   lastRendered.delete(container);
@@ -82,24 +141,78 @@ export function mountProblemScreen(container) {
  * Render one ProblemState. Safe to call on every animation frame — the same
  * state object rendered twice is a no-op, including for the pulse.
  *
+ * `mode` is a parameter rather than being read off the state because the engine
+ * deliberately has no mode field: what mode a problem is in is a property of the
+ * SESSION, and main.js is the only thing that knows it. It defaults to 'drill'
+ * so a caller that has not been taught about modes yet gets the hint-free
+ * screen, which is the safe default — a missing argument can never leak a hint
+ * into a fluency session.
+ *
  * @param {Element} container the element mountProblemScreen was given
  * @param {object} state ProblemState from engine.js
+ * @param {'drill'|'learn'} [mode] which screen to draw
  * @returns {void}
  */
-export function renderProblem(container, state) {
+export function renderProblem(container, state, mode = 'drill') {
   const screen =
     container.querySelector('.problem-screen') ?? mountProblemScreen(container);
 
   const { fact } = state;
+  const learning = mode === 'learn';
 
   screen.dataset.stage = state.stage;
+  screen.dataset.mode = learning ? 'learn' : 'drill';
   find(screen, 'a').textContent = String(fact.a);
   find(screen, 'op').textContent = OP_GLYPHS[fact.op] ?? fact.op;
   find(screen, 'b').textContent = String(fact.b);
 
   renderSlots(screen, state);
-  renderHint(screen, state);
+  renderHint(screen, state, learning);
+  renderReveal(screen, state, learning);
   renderPulse(container, screen, state);
+}
+
+/**
+ * Register the handler for the learn-mode "Show me the answer" button. Call once
+ * per container, at wiring time; it survives every remount of the screen.
+ *
+ * THE HANDLER IS CALLED WITH NO ARGUMENTS AND ITS RETURN VALUE IS IGNORED. This
+ * module does not hold the ProblemState and must not be handed one — main.js
+ * owns the state, calls `revealAnswer` itself, and renders the result. Passing
+ * state in here so the UI could transition it would put a second writer on the
+ * game's only mutable value and would break the pulse identity guard the moment
+ * the two disagreed about which object is current.
+ *
+ * The listener is delegated to the container, so registering before the first
+ * mount is fine and re-mounting does not lose the wiring. Registering twice
+ * replaces the handler rather than stacking a second one.
+ *
+ * @param {Element} container the element mountProblemScreen was given
+ * @param {() => void} handler called on each click of the reveal button
+ * @returns {void}
+ */
+export function onRevealClick(container, handler) {
+  revealHandlers.set(container, handler);
+
+  if (delegatedContainers.has(container)) {
+    return;
+  }
+  delegatedContainers.add(container);
+
+  container.addEventListener('click', (event) => {
+    const target = event.target;
+    if (target === null || typeof target.closest !== 'function') {
+      return;
+    }
+    const button = target.closest('[data-role="reveal"]');
+    if (button === null || !container.contains(button)) {
+      return;
+    }
+    const current = revealHandlers.get(container);
+    if (typeof current === 'function') {
+      current();
+    }
+  });
 }
 
 /**
@@ -163,7 +276,9 @@ export function renderProgress(container, done, total) {
  *
  * At the 'reveal' stage every slot the kid has not yet filled shows its digit of
  * the answer, greyed. The help lands inside the slots because that is where the
- * kid is already looking (spec §5).
+ * kid is already looking (spec §5). This is the same in both modes — what
+ * differs is how the stage was reached: a timer in drill, the kid's own button
+ * press in learn.
  */
 function renderSlots(screen, state) {
   const slots = find(screen, 'slots');
@@ -198,40 +313,85 @@ function renderSlots(screen, state) {
 }
 
 /**
- * Whichever rung is current: 'strategy' shows the text, 'blocks' draws the
- * array, 'clean' and 'reveal' show nothing here. Both children stay in the DOM
- * and are only toggled, so the reserved region never changes size.
+ * The learn view's help, or nothing at all.
+ *
+ * DRILL RENDERS NO HINTS, EVER. Not for the 53 facts small enough to draw, not
+ * at the last stage, not for one frame. The whole region is taken out of the
+ * layout, so the numerals sit in the same place at 'clean' and at 'reveal' and
+ * the screen holds still while the kid is trying to retrieve (spec §1).
+ *
+ * LEARN RENDERS BOTH AT ONCE, FROM THE FIRST FRAME. Strategy text and, where the
+ * product allows, a block array beside it — not instead of it. Neither is a
+ * stage in v2, so nothing here reads `state.stage`: the help is a property of
+ * the FACT, and it is up before the kid has done anything and stays up through
+ * the reveal. That is the point of the whole redesign; an answer that arrives
+ * without its derivation is the flashcard we are not building (spec §2).
+ *
+ * The two predicates are INDEPENDENT and both-empty is a real combination —
+ * `0 x 7` has no strategy text and no drawable array. The learn selector never
+ * offers such a fact, but this function is a pure function of its arguments and
+ * has to survive being handed one, so an empty region collapses out of the
+ * layout rather than reserving a blank box under the problem.
  */
-function renderHint(screen, state) {
+function renderHint(screen, state, learning) {
+  const hint = find(screen, 'hint');
   const strategy = find(screen, 'strategy');
   const blocks = find(screen, 'blocks');
 
-  if (state.stage === 'strategy') {
-    // The ladder only includes this rung when strategyFor is non-null, but the
-    // fallback keeps a bad ladder from rendering the word "null" at a child.
-    strategy.textContent = strategyFor(state.fact) ?? '';
-    strategy.hidden = false;
+  if (!learning) {
+    hint.hidden = true;
+    strategy.hidden = true;
     blocks.hidden = true;
     return;
   }
 
-  if (state.stage === 'blocks') {
-    strategy.hidden = true;
+  const text = strategyFor(state.fact);
+  const drawBlocks = blocksApply(state.fact, CONFIG);
+
+  strategy.textContent = text ?? '';
+  strategy.hidden = text === null;
+
+  if (drawBlocks) {
     renderBlocks(blocks, state.fact);
-    blocks.hidden = false;
+  }
+  blocks.hidden = !drawBlocks;
+
+  hint.hidden = text === null && !drawBlocks;
+}
+
+/**
+ * The "Show me the answer" button — learn mode only, and gone once it has been
+ * used. Drill has no button because drill has no help to ask for; the answer
+ * arrives on the clock and there is nothing for the kid to decide.
+ *
+ * The row it sits in keeps its height when the button is hidden, so pressing it
+ * does not yank the numerals upward at the exact moment the kid is reading the
+ * answer that appeared in the slots.
+ *
+ * `state.revealed` is the contract flag, but the terminal stage is checked too:
+ * offering to show an answer that is already on screen would be nonsense however
+ * the state got there.
+ */
+function renderReveal(screen, state, learning) {
+  const bar = find(screen, 'reveal-bar');
+  const button = find(screen, 'reveal');
+
+  if (!learning) {
+    bar.hidden = true;
+    button.hidden = true;
     return;
   }
 
-  strategy.hidden = true;
-  blocks.hidden = true;
+  bar.hidden = false;
+  button.hidden = state.revealed === true || state.stage === 'reveal';
 }
 
 /**
  * `a` rows of `b` squares — the array as it is spoken: "6 groups of 7".
  *
- * An operand of 0 draws an empty grid, which is the honest picture of "zero
- * groups of 5" and is the only case that reaches this rung with nothing in it.
- * Rebuilt only when the shape changes.
+ * Never called for a zero product: `blocksApply` screens those out precisely so
+ * this cannot draw an empty grid, which would be a blank box where a picture
+ * should be. Rebuilt only when the shape changes.
  */
 function renderBlocks(blocks, fact) {
   const rows = fact.a;
