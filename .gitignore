@@ -19,6 +19,18 @@
 # stops it growing; it does not erase it.
 data/*.jsonl
 
+# API keys. This repo has a public origin, so a key committed here is a key
+# published — and a leaked key is not recoverable by deleting the file, because
+# the commit keeps it. Nothing in the repo reads a key except tools/fetch-words.js,
+# and it reads it from the environment only.
+#
+# The negation matters: .env.example is the tracked template and carries no key.
+# It exists so a fresh clone can see WHICH variables to set without anyone having
+# to remember. Keep every real value out of it.
+.env
+.env.*
+!.env.example
+
 # Merriam-Webster's terms forbid duplicating or redistributing their data, and
 # committing a cache to a repo with a public origin is redistribution. Each
 # clone brings its own MW_KEY and builds its own cache via tools/fetch-words.js.

@@ -29,7 +29,13 @@
 // pure modules may not.
 //
 // Usage:
-//   MW_KEY=... node tools/fetch-words.js [--limit=N] [--words=a,b,c] [--dry-run]
+//   node --env-file-if-exists=.env tools/fetch-words.js [--limit=N] [--words=a,b,c] [--dry-run]
+//
+// The key is read from the ENVIRONMENT and nowhere else. `--env-file-if-exists`
+// is Node's own loader (22+) and is the recommended way to supply it: the keys
+// live in a gitignored .env, so they never reach a shell history, a process
+// listing, or a commit. `MW_KEY=... node tools/fetch-words.js` still works, and
+// an already-exported variable wins over the file.
 
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -69,7 +75,7 @@ const CONFIG = {
 };
 
 const USAGE = [
-  'Usage: MW_KEY=<key> node tools/fetch-words.js [options]',
+  'Usage: node --env-file-if-exists=.env tools/fetch-words.js [options]',
   '',
   '  --limit=N        stop after N words are newly fetched (the daily cap is 1000)',
   '  --words=a,b,c    fetch only these words, ignoring the spine',
@@ -85,6 +91,10 @@ const USAGE = [
   'Get a free key at https://dictionaryapi.com/register/index — this project ships',
   'no key and every clone brings its own. Set MW_KEY_INTERMEDIATE as well if you',
   'registered the Intermediate dictionary too; it is used as a fallback.',
+  '',
+  'Keys are read from the environment. Put them in .env (gitignored — copy',
+  '.env.example) and pass --env-file-if-exists=.env as above, or export them by',
+  'hand. An exported variable overrides the file.',
 ].join('\n');
 
 // --- pure rules -----------------------------------------------------------
@@ -606,8 +616,11 @@ async function main(argv, env) {
       'No MW_KEY in the environment.\n\n' +
         'This project ships no API key and never will — it is open source, and every\n' +
         'clone brings its own. Register a free key for the Elementary Dictionary at\n' +
-        'https://dictionaryapi.com/register/index and then:\n\n' +
-        '  MW_KEY=your-key node tools/fetch-words.js\n\n' +
+        'https://dictionaryapi.com/register/index, put it in .env (copy .env.example,\n' +
+        'which lists the variables; .env itself is gitignored) and then:\n\n' +
+        '  node --env-file-if-exists=.env tools/fetch-words.js\n\n' +
+        'If you passed --env-file-if-exists and still see this, the file exists but\n' +
+        'MW_KEY is still empty in it.\n\n' +
         'You do not need one to play. Without a cache the game speaks each word with\n' +
         "the browser's own voice, which is the default experience and works today.\n",
     );
