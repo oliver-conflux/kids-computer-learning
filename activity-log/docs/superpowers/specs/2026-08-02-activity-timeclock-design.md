@@ -56,10 +56,20 @@ one `LOG_PATHS` entry and one shim.
 `data/activity-log.jsonl`, three event types:
 
 ```json
-{"type":"clock-in", "t":"2026-08-04T17:00:31.482Z","id":"a_7f3c","activity":"typing","description":"Lesson 4","at":"2026-08-04T10:00"}
-{"type":"clock-out","t":"2026-08-04T18:02:14.907Z","id":"a_7f3c","at":"2026-08-04T11:00"}
-{"type":"clock-void","t":"2026-08-05T18:11:02.114Z","id":"a_9b21","reason":"stale"}
+{"type":"clock-in", "t":"2026-08-04T17:00:31.482Z","build":"a1","id":"a_7f3c","activity":"typing","description":"Lesson 4","at":"2026-08-04T10:00"}
+{"type":"clock-out","t":"2026-08-04T18:02:14.907Z","build":"a1","id":"a_7f3c","at":"2026-08-04T11:00"}
+{"type":"clock-void","t":"2026-08-05T18:11:02.114Z","build":"a1","id":"a_9b21","reason":"stale"}
 ```
+
+`build` is the version tag every other log in this repo already carries. It is
+here for the same reason: when a rule changes, comparing before and after across
+an append-only file has to be a filter rather than a guess.
+
+`reason` on `clock-void` is `'stale'` when the clock was left running past its
+day, and `'discarded'` when she threw a same-day measurement away. Two honest
+values rather than one that is sometimes a lie — nothing reads the field yet,
+but a record of *why* a measurement was dropped is worth more later than a
+record that one was.
 
 ### `t` and `at` are different kinds of time
 

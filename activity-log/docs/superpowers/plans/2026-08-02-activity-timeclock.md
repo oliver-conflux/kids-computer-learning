@@ -317,7 +317,18 @@ Start the server, open the menu, and actually run these through the UI, checking
 4. End time before start time → rejected, nothing written.
 5. A 6-hour span → the "split it into two timers" copy.
 6. Throw one away → a `clock-void` line appears; nothing is deleted.
-7. Stop the server, then clock in. The app refuses to start.
+7. Confirm the app refuses to run without somewhere to save.
+
+   **Not by stopping the server and reloading** — that outcome cannot exist. The
+   server that would serve the page is the one that is down, so the browser shows
+   `ERR_CONNECTION_REFUSED` and none of the app's code ever runs. Real play
+   proved this; the wording here used to ask for something impossible.
+
+   The two reachable paths, both of which must refuse visibly:
+   - **`file://`** — she double-clicks `index.html` in Finder. The classic-script
+     guard fires before any module loads.
+   - **Page served, `/api/log` unreachable** — the case `showNotice()` was
+     actually written for. The start form must be absent, not merely disabled.
 
 For the stale path, hand-append a `clock-in` dated yesterday to the log, reload,
 and confirm the "you probably forgot to clock out" screen with a correct hour
@@ -367,6 +378,19 @@ Once that key lands, this is a one-line addition to `CONFIG.activities` in
 
 Do it at Wave 3 close-out if geography's log exists by then; otherwise carry it
 as a standing follow-up.
+
+## Findings from real play
+
+- **`cache-control: no-store` on every response** (`server/serve.js:148`)
+  disqualifies every page here from Chrome's back/forward cache. The menu's
+  `pageshow`/`persisted` handler therefore never fires as the app is served —
+  Back is always a fresh load, which redraws the bar correctly anyway. The
+  handler is correct and harmless, and becomes live the moment those headers
+  change. Verified by direct event dispatch, not by a real bfcache restore.
+- **The wall-clock format must stay one fact.** It briefly lived in three files
+  and the third copy — hardcoded slice offsets in `bar.js` — would have rendered
+  `started undefined at NaN: PM` on the games menu if core's pattern were ever
+  relaxed, with nothing thrown. `core/timeclock.js` now exports `wallParts`.
 
 ## Findings from Wave 0 that later waves must honour
 
