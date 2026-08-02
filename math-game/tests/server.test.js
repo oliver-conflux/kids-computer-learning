@@ -353,10 +353,15 @@ test('an unknown game is rejected on POST too, and writes nothing', async () => 
   await close(server);
 });
 
-// --- the spelling game joins the allowlist ----------------------------------
+// --- the spelling and geography games join the allowlist --------------------
 
-test('LOG_PATHS names a spelling log, and every log path stays inside the repo root', () => {
+test('LOG_PATHS names a spelling and a geography log, and every log path stays inside the repo root', () => {
   assert.equal(LOG_PATHS.spelling, path.join(REPO_ROOT, 'data', 'spelling-log.jsonl'));
+  // A game absent from this allowlist is not a game that logs badly — it is a
+  // game whose serverIsUp() check fails at boot, so it refuses to start and
+  // shows the "start the game first" notice on a server that IS running. That
+  // failure names the wrong cause, which is why the entry is pinned here.
+  assert.equal(LOG_PATHS.geography, path.join(REPO_ROOT, 'data', 'geography-log.jsonl'));
   for (const [game, file] of Object.entries(LOG_PATHS)) {
     assert.equal(path.resolve(file), file, `${game} is not an absolute resolved path`);
     assert.ok(file.startsWith(REPO_ROOT + path.sep), `${game} escapes the repo root`);
