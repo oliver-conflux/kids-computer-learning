@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Activity Timer</title>
+
+    <!--
+      Zero dependencies, no build step, no CDN. One local stylesheet and one
+      local module, exactly like the three games. Nothing is fetched from an
+      external host, fonts included.
+    -->
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+
+  <body>
+    <div class="page">
+      <h1 class="page__title">⏱️ Activity Timer</h1>
+
+      <!--
+        BAR MOUNT. Deliberately empty and deliberately unstyled by
+        css/style.css: activity-log/js/bar.js renders into this node and ships
+        its own CSS, because games-menu.html mounts the same bar without ever
+        loading this stylesheet. Anything styled here would exist on this page
+        and vanish on the menu.
+
+        The bar shows a START TIME, never a ticking counter. See the note on the
+        start-time field below — it is the same rule.
+      -->
+      <div id="timer-bar"></div>
+
+      <!--
+        THREE SCREENS, exactly one visible at a time, swapped with the `hidden`
+        attribute the way spelling-game/js/main.js:422 already does it.
+
+        All three ship hidden. main.js decides which one to reveal after it has
+        checked the server and folded the log, so there is no flash of the start
+        form before that decision is made. That matters more than it looks: the
+        start form must be unreachable while a clock is running, and a screen
+        that is visible until JavaScript hides it is briefly reachable.
+
+        Failing this way is also the cheaper failure. If the routing ever
+        breaks, the page renders blank — obvious, and nothing gets written. Had
+        the start screen defaulted to visible, the same break would silently
+        offer a second clock-in over a running one.
+      -->
+
+      <!-- ============================ START ============================ -->
+      <section class="card screen" id="screen-start" hidden>
+        <h2 class="card__title">Start a timer</h2>
+
+        <div class="field">
+          <label class="field__label" for="activity-select">What are you doing?</label>
+          <!--
+            SHIPS EMPTY ON PURPOSE. main.js fills it from CONFIG.activities, so
+            the option values stay identical to the server's LOG_PATHS keys with
+            no second copy of that list to drift. An <option> typed here would
+            be exactly that second copy.
+          -->
+          <select class="field__input" id="activity-select"></select>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="description-input">
+            What are you working on? <span class="field__note">(you can leave this empty)</span>
+          </label>
+          <input
+            class="field__input"
+            id="description-input"
+            type="text"
+            placeholder="Lesson 4"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="start-time-input">
+            What time is it? Look at the clock and type what it says.
+          </label>
+
+          <!--
+            THE POINT OF THE WHOLE FEATURE, in two elements.
+
+            The time field has NO `value` attribute and must never be given one.
+            She reads a real clock and types what she read; that reading is the
+            measurement, and the exercise is taking it. Prefilling this field
+            would have the machine take the measurement for her and leave
+            nothing to learn.
+
+            #clock-hint sits BESIDE the field, never inside it. main.js writes
+            the machine's current time into it as a REFERENCE she can check
+            herself against — a second opinion, not an answer. Keeping it a
+            sibling is what keeps it a reference: text next to a field is
+            something you read, text inside a field is something you submit.
+
+            #clock-hint is empty here because its contents are the current time.
+            main.js owns every word in it.
+          -->
+          <div class="field__row">
+            <input class="field__input field__input--time" id="start-time-input" type="time" />
+            <p class="hint" id="clock-hint"></p>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn--go" id="btn-clock-in" type="button">Start my timer!</button>
+        </div>
+      </section>
+
+      <!-- ============================= STOP ============================= -->
+      <section class="card screen" id="screen-stop" hidden>
+        <h2 class="card__title">Your timer is running</h2>
+
+        <!--
+          Read-outs of the open clock. All three are filled by main.js from the
+          derived OpenClock and are empty here. #stop-description can legitimately
+          be '' (the field is optional), so its row hides itself when empty rather
+          than showing a dangling label.
+        -->
+        <dl class="readout">
+          <div class="readout__row">
+            <dt class="readout__label">Doing</dt>
+            <dd class="readout__value" id="stop-activity"></dd>
+          </div>
+          <div class="readout__row">
+            <dt class="readout__label">Working on</dt>
+            <dd class="readout__value" id="stop-description"></dd>
+          </div>
+          <div class="readout__row">
+            <dt class="readout__label">Started</dt>
+            <dd class="readout__value" id="stop-started"></dd>
+          </div>
+        </dl>
+
+        <div class="field">
+          <label class="field__label" for="end-time-input">
+            What time did you finish? Look at the clock and type what it says.
+          </label>
+          <!--
+            Same rule as the start field: no `value`, ever, and no counter
+            anywhere on this screen quietly totalling it up for her. The
+            arithmetic is shown only after she has committed to a reading — on
+            the done screen.
+
+            The label stays deliberately neutral about WHICH day. On the
+            different-day path main.js names the day in #stop-message ("What
+            time did you finish on Tuesday?"), and a static label that assumed
+            today would contradict it.
+          -->
+          <input class="field__input field__input--time" id="end-time-input" type="time" />
+        </div>
+
+        <!--
+          EMPTY ON PURPOSE. Every word that lands here is written by main.js:
+          the different-day explanation, the end-before-start rejection, and the
+          over-maximum "split it into two timers" copy. That copy was written
+          for a child and lives in one place; duplicating any of it here would
+          give it two places to be edited and one to be forgotten.
+
+          Hidden by CSS while empty, so no blank box sits under the field.
+        -->
+        <p class="message" id="stop-message" role="status" aria-live="polite"></p>
+
+        <div class="actions">
+          <button class="btn btn--go" id="btn-clock-out" type="button">Stop my timer!</button>
+          <!--
+            Throwing away appends a `clock-void` — it never erases the
+            clock-in. Styled as the quiet option so it is hard to hit by
+            accident and easy to find on purpose.
+          -->
+          <button class="btn btn--quiet" id="btn-void" type="button">Throw it away</button>
+        </div>
+      </section>
+
+      <!-- ============================= DONE ============================= -->
+      <section class="card screen" id="screen-done" hidden>
+        <h2 class="card__title">All done! 🎉</h2>
+
+        <!--
+          The arithmetic, in her own numbers:
+
+              10:00 AM → 11:15 AM = 1 hour 15 minutes
+
+          Written by main.js from validateClockOut's result. Empty here because
+          this is the one thing on the page the machine IS supposed to work out
+          for her — after she has done the measuring.
+        -->
+        <p class="summary" id="done-summary"></p>
+
+        <div class="actions">
+          <button class="btn btn--go" id="btn-new-timer" type="button">New timer?</button>
+        </div>
+      </section>
+    </div>
+
+    <!--
+      Guard for file:// — deliberately a CLASSIC script, not a module.
+
+      ES modules are blocked over file:// (origin null fails CORS), so the
+      module below never runs and the page would otherwise sit here as three
+      hidden screens and a blank bar, looking broken rather than not started.
+      A module-based check cannot catch this, because the module is exactly what
+      does not run. This one does.
+    -->
+    <script>
+      if (location.protocol === 'file:') {
+        document.body.innerHTML =
+          '<div class="startup-notice">' +
+          '<h1>Start the games first</h1>' +
+          '<p>The timer needs its little server running so it can remember what you did.</p>' +
+          '<p><b>Double-click <code>play.command</code></b> in the games folder, ' +
+          'then pick the timer from the menu that opens.</p>' +
+          '</div>';
+      }
+    </script>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
