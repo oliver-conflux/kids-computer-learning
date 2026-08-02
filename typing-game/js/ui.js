@@ -129,9 +129,9 @@ export function highlightNext(ch, level) {
  * is framed as unlocking a harder challenge — never as losing a help (spec §1).
  *
  * @param {{stars: number, accuracy: number, wpm: number, bestStreak: number,
- *          canStepDown: boolean, hasNext: boolean}} summary
+ *          canStepDown: boolean, hasNext: boolean, keepGoing: boolean}} summary
  * @param {{onAgain: Function, onMenu: Function, onNext: Function,
- *          onStepDown: Function}} handlers
+ *          onKeepGoing: Function, onStepDown: Function}} handlers
  * @returns {void}
  */
 export function showResults(summary, handlers) {
@@ -182,7 +182,17 @@ export function showResults(summary, handlers) {
   again.textContent = 'Again';
   again.addEventListener('click', handlers.onAgain);
   actions.appendChild(again);
-  if (summary.hasNext) {
+  // A keep-going run offers another keep-going pick INSTEAD of Next, not
+  // alongside it. Two near-identical primary buttons is a choice a kid should
+  // not have to parse mid-flow, and "Next" would break the run anyway by
+  // stepping to the strict next rung rather than to what nextup.js chose.
+  if (summary.keepGoing) {
+    const keep = document.createElement('button');
+    keep.textContent = 'Keep going →';
+    keep.className = 'primary';
+    keep.addEventListener('click', handlers.onKeepGoing);
+    actions.appendChild(keep);
+  } else if (summary.hasNext) {
     const next = document.createElement('button');
     next.textContent = 'Next →';
     next.className = 'primary';

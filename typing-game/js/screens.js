@@ -57,11 +57,32 @@ function rungButton(lesson, progress, onLesson) {
 }
 
 /**
+ * "Keep going" — the first button in a track, for a kid who does not want to
+ * read eighteen titles to find where they were. It shows no stars because it is
+ * not a rung: what it plays is chosen by nextup.js from the log.
+ *
+ * One per track rather than one overall, because the two ladders are
+ * deliberately independent (curriculum.js) and a single button would have to
+ * silently pick a track on the kid's behalf.
+ */
+function keepGoingButton(track, onKeepGoing) {
+  const button = document.createElement('button');
+  button.className = 'rung keep-going';
+  button.appendChild(Object.assign(document.createElement('span'),
+    { className: 'rung-title', textContent: 'Keep going' }));
+  button.appendChild(Object.assign(document.createElement('span'),
+    { className: 'rung-stars', textContent: '→' }));
+  button.addEventListener('click', () => onKeepGoing(track));
+  return button;
+}
+
+/**
  * The menu. Every rung is clickable — the ladder is a soft gate and nothing is
  * ever locked (spec §9). Stars are the pull to come back, not a wall.
  *
  * @param {Record<string, object>} progress from progress.allProgress
- * @param {{onLesson: (id: string) => void, onPractice: (tab: string) => void}} handlers
+ * @param {{onLesson: (id: string) => void, onPractice: (tab: string) => void,
+ *          onKeepGoing: (track: string) => void}} handlers
  * @returns {void}
  */
 export function showMenu(progress, handlers) {
@@ -70,6 +91,7 @@ export function showMenu(progress, handlers) {
   for (const track of ['letters', 'numbers']) {
     const host = document.getElementById(`track-${track}`);
     host.textContent = '';
+    host.appendChild(keepGoingButton(track, handlers.onKeepGoing));
     for (const lesson of lessonsForTrack(track)) {
       host.appendChild(rungButton(lesson, progress, handlers.onLesson));
     }

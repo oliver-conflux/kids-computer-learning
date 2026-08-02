@@ -17,6 +17,7 @@ import { renderHands } from './hands.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { loadEvents, record, flushOutbox, serverIsUp } from './log.js';
 import { allProgress, starsFor } from './progress.js';
+import { pickNext } from './nextup.js';
 import {
   renderLines, renderPrompt, renderProgress, applyGuidance,
   highlightNext, showResults, hideResults, shakeLine,
@@ -38,6 +39,12 @@ let roundErrors = 0;
 let roundBestStreak = 0;
 let roundStartedAt = null;
 let shiftSide = null;
+
+// The track a "Keep going" run is walking, or null if the kid picked this round
+// off the menu themselves. Session-only and deliberately NOT persisted: what to
+// play next is derived from the log by nextup.js, and this is only the UI
+// question of whether the results screen offers another one.
+let keepGoingTrack = null;
 
 // The loaded log tail, kept so a finished round can be folded in immediately.
 // record() is fire-and-forget, so re-fetching after a round would race the
@@ -151,11 +158,13 @@ function finishRound() {
       stars, accuracy, wpm, bestStreak: roundBestStreak,
       canStepDown: stars === 3 && settings.guidance > 0,
       hasNext: nextLesson(lesson.id) !== null,
+      keepGoing: keepGoingTrack !== null,
     },
     {
       onAgain: () => replayRound(),
       onMenu: () => openMenu(),
       onNext: () => playLesson(nextLesson(lesson.id).id),
+      onKeepGoing: () => playKeepGoing(keepGoingTrack),
       onStepDown: () => {
         settings = { ...settings, guidance: settings.guidance - 1 };
         saveSettings(settings);
@@ -204,6 +213,9 @@ function onKeyDown(e) {
 
 function playLesson(id) {
   hideResults();
+  // Cleared here, set again by playKeepGoing — so picking a lesson off the menu
+  // by hand ends a keep-going run rather than silently continuing it.
+  keepGoingTrack = null;
   lesson = lessonById(id);
   items = itemsFor(id, Math.random);
   itemIndex = 0;
@@ -211,11 +223,24 @@ function playLesson(id) {
   roundErrors = 0;
   roundBestStreak = 0;
   roundStartedAt = Date.now();
-  settings = { ...settings, lastLesson: id };
-  saveSettings(settings);
 
   document.getElementById('lesson-title').textContent = lesson.title;
   startItem(); // applies this item's guidance itself
+}
+
+/**
+ * "Keep going" — hand the choice to nextup.js and play what it says.
+ *
+ * The rng is Math.random here for the same reason itemsFor gets it here: this
+ * is the impure module, and the picker stays reproducible in a test.
+ *
+ * @param {string} track 'letters' or 'numbers'
+ */
+function playKeepGoing(track) {
+  const id = pickNext(events, track, Math.random);
+  if (id === null) return; // a track with nothing to offer; leave the kid where they are
+  playLesson(id);
+  keepGoingTrack = track;
 }
 
 /**
@@ -228,6 +253,12 @@ function playLesson(id) {
  */
 function playPractice(tab) {
   hideResults();
+  // Practice is not on either ladder, so it ends a keep-going run rather than
+  // continuing one. Without this, a kid who picks practice mid-run gets a
+  // "Keep going" button on the practice results screen that jumps them back
+  // onto the ladder — and the comment above about offering only Again stops
+  // being true.
+  keepGoingTrack = null;
   lesson = {
     id: `practice-${tab}`,
     track: 'practice',
@@ -270,6 +301,7 @@ function openMenu() {
   showMenu(progress, {
     onLesson: (id) => { hideMenu(); playLesson(id); },
     onPractice: (tab) => { hideMenu(); playPractice(tab); },
+    onKeepGoing: (track) => { hideMenu(); playKeepGoing(track); },
   });
 }
 
