@@ -114,6 +114,16 @@
     <div class="container">
         <h1>🎮 Fun Learning Games 🎮</h1>
 
+        <!--
+          The timer bar. Above the grid, because it answers a question that comes
+          before "what shall I play" — whether a clock she started earlier is
+          still running. Empty in the markup: everything inside it is built by
+          activity-log/js/bar.js, which also ships its own styles, so this page
+          links no extra stylesheet and shows nothing at all if the script never
+          arrives.
+        -->
+        <div id="timer-bar"></div>
+
         <div class="games-grid">
             <!-- Typing Game -->
             <div class="game-card">
@@ -150,6 +160,18 @@
                 </p>
                 <a href="math-game/index.html?mode=drill" class="play-button">Play Game</a>
             </div>
+
+            <!-- Timer -->
+            <div class="game-card">
+                <div class="game-icon">⏱️</div>
+                <h2 class="game-title">Timer</h2>
+                <div class="age-badge">All Ages</div>
+                <p class="game-description">
+                    Keep track of how long you spend on something. Start a timer when
+                    you begin, stop it when you finish, and see how long it took.
+                </p>
+                <a href="activity-log/index.html" class="play-button">Open Timer</a>
+            </div>
         </div>
     </div>
     <!--
@@ -171,6 +193,81 @@
           '<code style="background:#d9dde3;color:#2f3742;padding:.15em .4em;border-radius:6px">' +
           'play.command</code> in this folder instead — it opens this menu for you.</p>' +
           '</div>';
+      }
+    </script>
+    <!--
+      The timer bar's boot. A SECOND script rather than an edit to the one above,
+      and that is the load-bearing part: the guard is a classic inline script that
+      runs the moment the parser reaches it, while a module is always deferred
+      until after the document is parsed. So the guard wins by the language's own
+      rules, not by source order, and there is no way to reorder these two files
+      into a race. Converting the guard to a module would have put the guard and
+      the bar in a tie and let a page that cannot reach the server render a timer
+      offering to start one.
+    -->
+    <script type="module">
+      // Nothing is imported at the top level on purpose. Static imports are
+      // fetched before a single line of this script runs, so on file:// — where
+      // the guard has just replaced the body with the "start the server" notice —
+      // the browser would go after four module URLs it refuses to load and stack
+      // CORS errors under a page that is already saying the right thing. Behind
+      // the check, a dead page loads nothing at all, and #timer-bar being gone
+      // stops mattering.
+      if (location.protocol !== 'file:') {
+        const [{ loadEvents }, { deriveOpenClocks }, { renderBar }] = await Promise.all([
+          import('./activity-log/js/log.js'),
+          import('./core/timeclock.js'),
+          import('./activity-log/js/bar.js'),
+        ]);
+
+        function goToTimer() {
+          location.href = 'activity-log/index.html';
+        }
+
+        /**
+         * Read the log, work out whether a clock is running, draw the strip.
+         *
+         * THE MENU NEVER WRITES AN EVENT. Both buttons do the same thing — open
+         * the timer — because starting and stopping are decisions that need the
+         * screens that can validate them: a start needs an activity and a typed
+         * time, a stop needs an end time checked against the start. A bar button
+         * that recorded anything from here would be recording a time she never
+         * gave. So this is a read and a navigation, and nothing else.
+         *
+         * `flushOutbox` is deliberately not called for the same reason — it puts
+         * queued events on disk, which is a write. The cost is that a clock-in
+         * typed while the server was down sits in the outbox unseen and this bar
+         * reports "no timer running". That degrades the right way: pressing Start
+         * lands on the timer page, which flushes, finds the clock-in and routes
+         * her to the clock-out screen. She sees the truth one click later instead
+         * of the menu inventing it.
+         */
+        async function showBar() {
+          // Resolves to [] when the server is down, so a menu opened without one
+          // draws the idle bar rather than failing. The timer page is where that
+          // distinction gets made and refused; here it is only a garnish.
+          const events = await loadEvents();
+          const open = deriveOpenClocks(events);
+          renderBar(document.getElementById('timer-bar'), open[0] ?? null, {
+            onStart: goToTimer,
+            onStop: goToTimer,
+          });
+        }
+
+        // Back from the timer page can be served out of the bfcache, which restores
+        // the DOM exactly as it was — including a bar that predates the clock she
+        // just started. Redraw whenever the page is shown from that cache.
+        addEventListener('pageshow', (event) => {
+          if (event.persisted) {
+            showBar().catch(() => {});
+          }
+        });
+
+        // Swallowed, not reported. A bar that cannot draw itself must cost her
+        // nothing: the games are already on screen and every link works.
+        showBar().catch((error) => {
+          console.warn('games-menu: timer bar unavailable', error);
+        });
       }
     </script>
 </body>
