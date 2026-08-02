@@ -64,11 +64,13 @@ test('every ladder ends in reveal and has exactly two stages', () => {
 });
 
 test('the ladder does not vary with the presence of strategy text', () => {
-  // The hard middle and the trivial rows get the same shape. 7 x 7 has no
+  // The hard middle and the trivial rows get the same shape. 1 x 7 has no
   // strategy text at all and its learn ladder is still strategy -> reveal; what
-  // the strategy region shows for such a fact is the renderer's problem.
-  assert.equal(strategyFor(fact(7, 7)), null);
-  assert.deepEqual(ladderFor(fact(7, 7), CONFIG, 'learn'), LEARN_LADDER);
+  // the strategy region shows for such a fact is the renderer's problem. (Note
+  // the learn SELECTOR never offers such a fact — but the ladder is a pure
+  // function of mode and must not vary.)
+  assert.equal(strategyFor(fact(1, 7)), null);
+  assert.deepEqual(ladderFor(fact(1, 7), CONFIG, 'learn'), LEARN_LADDER);
   assert.deepEqual(ladderFor(fact(6, 7), CONFIG, 'learn'), LEARN_LADDER);
   assert.deepEqual(ladderFor(fact(7, 7), CONFIG, 'drill'), DRILL_LADDER);
   assert.deepEqual(ladderFor(fact(6, 7), CONFIG, 'drill'), DRILL_LADDER);
@@ -312,10 +314,18 @@ test('near-square and halve-and-double text for the hard middle', () => {
   assert.equal(strategyFor(fact(7, 8)), '7 x 7 = 49, add one more 7');
 });
 
-test('squares in the hard middle have no strategy', () => {
-  assert.equal(strategyFor(fact(6, 6)), null);
-  assert.equal(strategyFor(fact(7, 7)), null);
-  assert.equal(strategyFor(fact(8, 8)), null);
+test('squares in the hard middle DO have a strategy', () => {
+  // v1 left these null on the reasoning that a square is an anchor the other
+  // strategies lever off. True of deriving a square from another square, but
+  // the consequence was that 6x6, 7x7 and 8x8 had no teaching anywhere in the
+  // game: drill shows no hints, and learn mode only offers facts with strategy
+  // text. 7 x 7 = 49 is one of the hardest facts in the set and was the one
+  // learn mode could never reach. Each now levers off a x5 or x4 fact instead.
+  for (const [a, b] of [[6, 6], [7, 7], [8, 8]]) {
+    const text = strategyFor(fact(a, b));
+    assert.ok(text !== null, `${a}x${b} must be teachable`);
+    assert.ok(text.length <= 40, `${a}x${b} strategy too long: ${text}`);
+  }
 });
 
 test('strategy text is symmetric across every pair', () => {

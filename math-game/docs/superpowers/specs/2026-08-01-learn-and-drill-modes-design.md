@@ -390,3 +390,11 @@ Two things worth settling when it is built:
   designing for an imagined kid. Whatever the answer is, it must not become a
   streak or a target: the same reasoning that keeps a clock off the drill screen
   applies to anything that punishes a day off.
+- **Strategy dependency ordering.** Strategies lever off anchors — `6 x 7` is
+  taught as "6 x 6 = 36, add one more 6" — so strategies form a dependency graph
+  the difficulty ordering knows nothing about. Observed in practice: session 2
+  teaches `7 x 8` via `7 x 7`, which session 1 already covered (correct by luck),
+  while session 1 teaches `6 x 7` via `6 x 6`, which is not taught until session
+  3 (inverted). A soft failure, since squares are often picked up early anyway,
+  but ordering anchors before their dependents would make the curriculum
+  genuinely sequential rather than incidentally so.

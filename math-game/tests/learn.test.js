@@ -80,12 +80,12 @@ const bucketSnapshot = (model) =>
 
 // --- eligibility -----------------------------------------------------------
 
-test('exactly 78 of the 121 facts are eligible for learn mode', () => {
+test('exactly 81 of the 121 facts are eligible for learn mode', () => {
   // The spec's number. If this moves, the strategy table moved, and the
   // "trivial facts cannot enter learn mode" guarantee needs re-reading.
   assert.equal(allFacts().length, 121);
-  assert.equal(eligibleFacts().length, 78);
-  assert.equal(allFacts().filter(isLearnable).length, 78);
+  assert.equal(eligibleFacts().length, 81);
+  assert.equal(allFacts().filter(isLearnable).length, 81);
 });
 
 test('isLearnable agrees exactly with having strategy text', () => {
@@ -172,7 +172,9 @@ test('a fresh model opens with the HARDEST facts, never with 2x2', () => {
   // the hard ones.
   const picked = pickLearnFacts(allCold(), CONFIG).map(label);
 
-  assert.deepEqual(picked, ['6x7', '7x6', '7x8']);
+  // 7x7 leads: difficulty 5+5 = 10, the highest score in the table. It was
+  // unteachable until strategy text was added for the three squares.
+  assert.deepEqual(picked, ['7x7', '6x7', '7x6']);
   assert.ok(!picked.includes('2x2'), 'learn mode must not open on 2x2');
 
   // Every picked fact is from the no-pattern-hook set: both operands in
@@ -186,19 +188,19 @@ test('difficulty ranks by pattern support, not by product size', () => {
   // The x10 row holds the biggest products in the set and is the easiest thing
   // in it. A product-descending sort would open with 10x9; this asserts it does
   // not, and that the x2 and x10 rows sit below the 6-8 block.
-  const order = pickLearnFacts(allCold(), { ...CONFIG, learnFacts: 78 }).map(label);
+  const order = pickLearnFacts(allCold(), { ...CONFIG, learnFacts: 81 }).map(label);
   const rank = (name) => order.indexOf(name);
 
   assert.ok(rank('7x8') < rank('10x9'), 'x10 must not outrank 7x8');
   assert.ok(rank('6x7') < rank('2x9'), 'doubling is easier than 6x7');
   assert.ok(rank('7x8') < rank('9x8'), 'ten-minus-one is a hook, 7 is not');
   assert.ok(rank('3x8') < rank('5x8'), 'half-of-ten is easier than double-and-add');
-  assert.equal(order.length, 78, 'every learnable fact is ordered, none dropped');
+  assert.equal(order.length, 81, 'every learnable fact is ordered, none dropped');
 });
 
 test('difficulty ordering is deterministic, ties in allFacts() order', () => {
-  const first = pickLearnFacts(allCold(), { ...CONFIG, learnFacts: 78 }).map(label);
-  const second = pickLearnFacts(allCold(), { ...CONFIG, learnFacts: 78 }).map(label);
+  const first = pickLearnFacts(allCold(), { ...CONFIG, learnFacts: 81 }).map(label);
+  const second = pickLearnFacts(allCold(), { ...CONFIG, learnFacts: 81 }).map(label);
   assert.deepEqual(first, second);
 
   // 6x7 and 7x6 are equally hard and equally cold. The tie-break is table
@@ -210,15 +212,15 @@ test('difficulty ordering is deterministic, ties in allFacts() order', () => {
 test('cold-and-untaught outranks cold-and-taught', () => {
   // Every fact cold; the three hardest already taught. They must step aside for
   // untaught facts even though nothing about their temperature changed.
-  const taught = new Set(['*:6x7', '*:7x6', '*:7x8']);
+  const taught = new Set(['*:7x7', '*:6x7', '*:7x6']);
   const model = modelWith(
     () => 'cold',
     (fact) => taught.has(factId(fact)),
   );
 
   const picked = pickLearnFacts(model, CONFIG).map(label);
-  assert.deepEqual(picked, ['8x7', '3x7', '4x7']);
-  for (const name of ['6x7', '7x6', '7x8']) {
+  assert.deepEqual(picked, ['7x8', '8x7', '3x7']);
+  for (const name of ['7x7', '6x7', '7x6']) {
     assert.ok(!picked.includes(name), `${name} was already taught`);
   }
 });
@@ -292,7 +294,7 @@ test('prefers cold over warm over hot', () => {
   // picked first if temperature beats position. 2x2 is eligible and first.
   const model = modelWith((fact) => {
     if (fact.a === 9 && fact.b === 9) return 'cold';
-    if (fact.a === 8 && fact.b === 8) return 'cold'; // ineligible: a square
+    if (fact.a === 1 && fact.b === 8) return 'cold'; // ineligible: trivial operand
     if (fact.a === 2 && fact.b === 2) return 'warm';
     return 'hot';
   });
@@ -329,12 +331,12 @@ test('falls back through warm to hot rather than returning short', () => {
 });
 
 test('returns fewer only when eligible facts run out', () => {
-  // learnFacts beyond the eligible set: 78 back, not 121, and no duplicates.
+  // learnFacts beyond the eligible set: 81 back, not 121, and no duplicates.
   const config = { ...CONFIG, learnFacts: 200 };
   const picked = pickLearnFacts(allCold(), config);
 
-  assert.equal(picked.length, 78);
-  assert.equal(new Set(picked.map(factId)).size, 78);
+  assert.equal(picked.length, 81);
+  assert.equal(new Set(picked.map(factId)).size, 81);
   assert.ok(picked.every(isEligible));
 });
 
@@ -357,9 +359,9 @@ test('picks distinct facts, whatever the rank mix', () => {
   ];
 
   for (const model of arrangements) {
-    const picked = pickLearnFacts(model, { ...CONFIG, learnFacts: 78 });
+    const picked = pickLearnFacts(model, { ...CONFIG, learnFacts: 81 });
     assert.equal(new Set(picked.map(factId)).size, picked.length, 'duplicate pick');
-    assert.equal(picked.length, 78, 'every learnable fact must be offered once');
+    assert.equal(picked.length, 81, 'every learnable fact must be offered once');
   }
 });
 
@@ -479,8 +481,8 @@ test('the returned facts are not shared state between calls', () => {
   first[0].a = 99;
 
   assert.deepEqual(pickLearnFacts(allCold(), CONFIG).map(label), [
+    '7x7',
     '6x7',
     '7x6',
-    '7x8',
   ]);
 });
