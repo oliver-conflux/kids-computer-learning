@@ -266,3 +266,45 @@ function buildSpine() {
 export function spinePositionOf(word) {
   return SPINE.findIndex((entry) => entry.word === word);
 }
+
+/**
+ * The spine trimmed to words we can actually say out loud.
+ *
+ * A word with no audio is not merely worse in drill mode, it is UNANSWERABLE:
+ * the screen is a row of empty boxes and the only statement of the question is
+ * the sound. Merriam-Webster has no recording for irregular inflections — it
+ * puts the pronunciation on the base headword, so `said`, `went`, `feet` and 25
+ * others come back with an entry and no audio (see docs/audio-sourcing.md).
+ * Serving them is asking a child to spell a word nobody told her.
+ *
+ * TWO CASES DELIBERATELY RETURN THE SPINE WHOLE rather than an empty list:
+ *
+ *   - `audioWords` is null — the caller could not find out. A failed lookup must
+ *     not silently empty the game.
+ *   - nothing overlaps — an empty cache is the normal state of a fresh clone,
+ *     which is meant to be fully playable through speechSynthesis (spec §5).
+ *     Trimming to nothing would turn "no mp3s yet" into "no game".
+ *
+ * The failure mode being avoided in both is the same: a trim that removes
+ * everything looks exactly like a game with no words, and nothing on screen
+ * would say why.
+ *
+ * Order is preserved, so spine position — which is difficulty — still means what
+ * it meant. This does NOT renumber `rank`: rank records where a word sits in
+ * Fry's frequency list, which is a fact about English, not about our cache.
+ *
+ * @param {{word: string, rank: number, dolch: boolean}[]} spine
+ * @param {string[] | Set<string> | null} audioWords words with a pronunciation
+ * @returns {{word: string, rank: number, dolch: boolean}[]}
+ */
+export function playableSpine(spine, audioWords) {
+  if (audioWords === null || audioWords === undefined) {
+    return spine;
+  }
+  const have = audioWords instanceof Set ? audioWords : new Set(audioWords);
+  if (have.size === 0) {
+    return spine;
+  }
+  const trimmed = spine.filter((entry) => have.has(entry.word));
+  return trimmed.length === 0 ? spine : trimmed;
+}

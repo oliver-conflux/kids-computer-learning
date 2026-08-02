@@ -11,6 +11,7 @@ import {
   start,
   createServer,
   mimeTypeFor,
+  audioDirFor,
   HOST,
   DEFAULT_TAIL,
   resolveSafe,
@@ -461,4 +462,59 @@ test('cached pronunciations are served as audio/mpeg, not octet-stream', () => {
   assert.equal(mimeTypeFor('/data/audio/BAT.MP3'), 'audio/mpeg', 'extension match is case-insensitive');
   assert.equal(mimeTypeFor('/data/words/bat.json'), 'application/json; charset=utf-8');
   assert.equal(mimeTypeFor('/data/audio/bat.wav'), 'application/octet-stream', 'only what we cache is claimed');
+});
+
+// /api/audio tells the spelling game which words it can pronounce. Safety-shaped
+// like the rest of this file: the concern is that a directory read never emits a
+// name that could not already be requested as /data/audio/<word>.mp3.
+test('/api/audio lists cached words and refuses anything that is not one', async () => {
+  const dir = freshTempDir();
+  const audioDir = path.join(dir, 'data', 'audio');
+  fs.mkdirSync(audioDir, { recursive: true });
+  for (const name of [
+    'bat.mp3',
+    'at.mp3',
+    'friend.mp3',
+    'notes.txt',            // not audio
+    'bat.mp3.bak',          // not audio
+    'UPPER.mp3',            // not the lowercase-a-z contract
+    'two words.mp3',        // ditto
+    'nine9.mp3',            // ditto
+    '..evil.mp3',           // must never be echoed back as a word
+  ]) {
+    fs.writeFileSync(path.join(audioDir, name), 'x');
+  }
+
+  const server = createServer({ root: dir, logPaths: { math: path.join(dir, 'math.jsonl') } });
+  const base = await listen(server);
+  try {
+    const res = await fetch(`${base}/api/audio`);
+    assert.equal(res.status, 200);
+    const { words } = await res.json();
+    assert.deepEqual(words, ['at', 'bat', 'friend'], 'sorted, .mp3 only, lowercase a-z only');
+
+    const post = await fetch(`${base}/api/audio`, { method: 'POST' });
+    assert.equal(post.status, 405);
+  } finally {
+    await close(server);
+  }
+});
+
+test('/api/audio answers [] when there is no cache directory at all', async () => {
+  // The state of a fresh clone. It is not an error, and the game reads it as
+  // "trim nothing" rather than "no words".
+  const dir = freshTempDir();
+  const server = createServer({ root: dir, logPaths: { math: path.join(dir, 'math.jsonl') } });
+  const base = await listen(server);
+  try {
+    const res = await fetch(`${base}/api/audio`);
+    assert.equal(res.status, 200);
+    assert.deepEqual((await res.json()).words, []);
+  } finally {
+    await close(server);
+  }
+});
+
+test('audioDirFor stays under the root it is given', () => {
+  assert.equal(audioDirFor('/tmp/some-root'), path.join('/tmp/some-root', 'data', 'audio'));
 });

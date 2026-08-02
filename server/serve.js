@@ -29,6 +29,22 @@ export const DEFAULT_LOG_PATH = LOG_PATHS.math;
 export const DEFAULT_TAIL = 2000;
 
 /**
+ * Where tools/fetch-words.js writes cached pronunciations, relative to the
+ * server's root. Derived from `root` rather than from REPO_ROOT so that a server
+ * given a different root reads that root's cache — which is what makes it
+ * testable, and what stops a test from reporting on the developer's real cache.
+ *
+ * @param {string} root
+ * @returns {string}
+ */
+export function audioDirFor(root) {
+  return path.join(root, 'data', 'audio');
+}
+
+/** The spine's word contract, and therefore the cache's filename contract. */
+export const SAFE_WORD = /^[a-z]+$/;
+
+/**
  * Resolve `?game=` to a log path through an ALLOWLIST.
  *
  * This value reaches the filesystem, so it is never interpolated into a path.
@@ -257,6 +273,46 @@ export function createServer(options = {}) {
         return;
       }
       send(res, 405, 'Method Not Allowed', { 'content-type': MIME_TYPES['.txt'] });
+      return;
+    }
+
+    // Which words actually have a pronunciation on disk.
+    //
+    // The spelling game trims its word list to this, because a word with no
+    // audio is unanswerable in drill mode — the kid is shown empty boxes and
+    // asked to spell something she was never told. Merriam-Webster has no
+    // recording for irregular inflections (`said`, `went`, `feet`), so without
+    // this the game serves words it cannot pronounce.
+    //
+    // A LIVE DIRECTORY READ, not a manifest file, so that dropping new mp3s in
+    // is all it takes — no regeneration step to forget. That matters because the
+    // gap words are expected to arrive later from a different voice source (see
+    // spelling-game/docs/audio-sourcing.md).
+    //
+    // Read-only, no parameters, one fixed directory that never leaves the repo:
+    // there is no user input here to smuggle a path through. Names are filtered
+    // to the same lowercase-a–z contract the spine and the cache filenames use,
+    // so nothing that could not already be requested as /data/audio/<word>.mp3
+    // is ever named.
+    if (url.pathname === '/api/audio') {
+      if (req.method !== 'GET') {
+        send(res, 405, 'Method Not Allowed', { 'content-type': MIME_TYPES['.txt'] });
+        return;
+      }
+      let words = [];
+      try {
+        words = fs
+          .readdirSync(audioDirFor(root))
+          .filter((name) => name.endsWith('.mp3'))
+          .map((name) => name.slice(0, -'.mp3'.length))
+          .filter((word) => SAFE_WORD.test(word))
+          .sort();
+      } catch {
+        // No cache directory at all is the expected state of a fresh clone, and
+        // it is not an error: an empty list tells the game to trim nothing.
+        words = [];
+      }
+      sendJson(res, 200, { words });
       return;
     }
 

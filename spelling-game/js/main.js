@@ -13,7 +13,7 @@
 // wrong and no profile to pick.
 
 import { CONFIG } from './config.js';
-import { SPINE } from './spine.js';
+import { SPINE, playableSpine } from './spine.js';
 import { spellingSpace } from './space.js';
 import { activeWindow } from './frontier.js';
 import { typingCost, KEYMAP } from './typing-cost.js';
@@ -51,6 +51,21 @@ const TICK_MS = 100;
 
 const engine = createEngine(spellingSpace);
 const audio = createAudio();
+
+/**
+ * The spine we actually draw from: SPINE trimmed to words with a pronunciation
+ * on disk. Set once at startup by loadPlayable() and read by every session.
+ *
+ * It starts as the whole spine so that any path which skips startup — a test, a
+ * future direct call — still gets a playable game rather than an empty one.
+ *
+ * NOTE THAT `spellingSpace.allItems` IS NOT TRIMMED, on purpose. That is the
+ * item universe used to resolve ids, and a log written before the trim contains
+ * events naming `said`. Narrowing it would make those events unresolvable and
+ * quietly drop real history the kid earned. The trim belongs at the FRONTIER —
+ * which words get served — not at the space, which is what the ids mean.
+ */
+let PLAYABLE = SPINE;
 
 const now = () => Date.now();
 const rng = () => Math.random();
@@ -318,7 +333,7 @@ async function runSession(mode) {
   // stale exactly when it mattered.
   let model = deriveMastery(sittingEvents, CONFIG, spellingSpace);
   const startBuckets = new Map([...model.byId].map(([id, stats]) => [id, stats.bucket]));
-  let frontierIds = activeWindow(SPINE, model, CONFIG.windowSize);
+  let frontierIds = activeWindow(PLAYABLE, model, CONFIG.windowSize);
 
   // THE WHOLE SPINE IS HOT. `activeWindow` returns [] and core's `pickNext`
   // throws on an empty candidate set — deliberately, because for the math game
@@ -403,7 +418,7 @@ async function runSession(mode) {
     // evidence. core/scheduler.js documents the measurement.
     model = deriveMastery(sittingEvents, CONFIG, spellingSpace);
     if (mode === 'drill') {
-      frontierIds = activeWindow(SPINE, model, CONFIG.windowSize);
+      frontierIds = activeWindow(PLAYABLE, model, CONFIG.windowSize);
       if (frontierIds.length === 0) {
         break; // she finished the spine mid-session; the results screen still runs
       }
@@ -473,7 +488,7 @@ async function runSession(mode) {
  */
 function frontierPosition(model) {
   let reached = 0;
-  SPINE.forEach((entry, index) => {
+  PLAYABLE.forEach((entry, index) => {
     const stats = model.byId.get(spellingSpace.itemId(entry));
     if (stats !== undefined && stats.bucket !== 'cold') {
       reached = index + 1;
@@ -530,6 +545,48 @@ function onAction(action) {
   });
 }
 
+/**
+ * Ask the server which words have a pronunciation, and trim the spine to them.
+ *
+ * Failure is not an error here. A server without the endpoint, a network blip, a
+ * malformed body — every one of them leaves PLAYABLE as the whole spine, which
+ * is the behaviour a fresh clone with no cache needs anyway. There is nothing a
+ * kid could do about it and nothing worth interrupting her for.
+ *
+ * What IS worth saying, to the console, is how many words got dropped. A trim is
+ * invisible on screen — the game just quietly never offers `said` — and a silent
+ * trim of the wrong size is the kind of thing that goes unnoticed for months.
+ */
+async function loadPlayable() {
+  let words = null;
+  try {
+    const response = await fetch('/api/audio');
+    if (response.ok) {
+      const body = await response.json();
+      if (Array.isArray(body?.words)) {
+        words = body.words;
+      }
+    }
+  } catch {
+    // Offline, or an older server. Keep the whole spine.
+  }
+
+  PLAYABLE = playableSpine(SPINE, words);
+
+  if (PLAYABLE.length === SPINE.length) {
+    console.info(
+      `spelling-game: ${SPINE.length} words, none trimmed` +
+        (words === null || words.length === 0 ? ' (no audio cache — words will be spoken)' : ''),
+    );
+    return;
+  }
+  const dropped = SPINE.filter((entry) => !PLAYABLE.includes(entry)).map((entry) => entry.word);
+  console.info(
+    `spelling-game: playing ${PLAYABLE.length} of ${SPINE.length} words; ` +
+      `${dropped.length} have no pronunciation and were trimmed: ${dropped.join(' ')}`,
+  );
+}
+
 async function main() {
   // REFUSE TO START RATHER THAN PLAY WITH NOWHERE TO SAVE. loadEvents() cannot
   // answer this — it returns [] both for "server down" and for "first run on a
@@ -551,6 +608,9 @@ async function main() {
   // ends up complete, so nothing looks wrong afterwards.
   await flushOutbox();
   sittingEvents = await loadEvents();
+
+  // Before the first session, because runSession reads PLAYABLE immediately.
+  await loadPlayable();
 
   document.addEventListener('keydown', onKeyDown);
   onResultsAction(resultsRegion, onAction);
