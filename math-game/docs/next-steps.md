@@ -143,9 +143,15 @@ which facts land together, so do these two at the same time.
 
 ## 6. Housekeeping
 
-- **`games-menu.html` will conflict.** `typing-game-redesign` is being built in
-  parallel and touches the same file. Both were independent of `master` when the
-  math game landed; the typing branch will need a merge.
+- ~~**`games-menu.html` will conflict.**~~ **Resolved 2026-08-02.** The typing
+  redesign merged after the math game landed, and git auto-merged the file —
+  master's edits were in the two math cards, the typing branch's in the typing
+  card and a trailing script. All three cards are present.
+- **The typing game has its own list** at `typing-game/docs/next-steps.md`. One
+  item there is cross-cutting: the server now routes `/api/log` by game through
+  an allowlist, so it owns `data/math-log.jsonl` and `data/typing-log.jsonl`
+  separately. A request with no `?game=` still means math, which is why the
+  math client needed no change.
 - **`master` is not pushed.** `origin/master` is still at the pre-math-game
   commit.
 - **The log is committed deliberately** (v1 spec §14) and now holds three real
