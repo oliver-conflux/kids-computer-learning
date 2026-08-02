@@ -40,7 +40,7 @@
 // engine and never shown.
 //
 // Exports: mountCountryScreen, promptHost, renderCountry, renderProgress,
-// slotGroups, revealLadder, revealedCount.
+// slotGroups, revealLadder, revealedCount, onRevealClick.
 
 import { geographySpace } from '../space.js';
 import { itemKeyOf } from '../../../core/space.js';
@@ -52,6 +52,18 @@ import { itemKeyOf } from '../../../core/space.js';
  * the day the binding changes.
  */
 const ITEM_KEY = itemKeyOf(geographySpace);
+
+/**
+ * The handler registered by `onRevealClick`, per container, and the set of
+ * containers whose delegated listener is already attached.
+ *
+ * Two maps rather than one so that re-registering REPLACES the handler instead
+ * of stacking a second listener that would fire the reveal twice per click.
+ *
+ * @type {WeakMap<Element, () => void>}
+ */
+const revealHandlers = new WeakMap();
+const delegatedContainers = new WeakSet();
 
 /**
  * The prefix for a reveal rung. Stage names reach the log, so this string is
@@ -98,7 +110,15 @@ export function mountCountryScreen(container) {
   const prompt = el('div', 'prompt', { role: 'prompt' });
   const slots = el('div', 'slots', { role: 'slots' });
 
-  screen.append(prompt, slots);
+  // The bar keeps its height when the button goes, so the slots do not jump
+  // upward the moment the kid presses it.
+  const revealBar = el('div', 'reveal-bar', { role: 'reveal-bar' });
+  const revealButton = el('button', 'reveal-bar__button', { role: 'reveal' });
+  revealButton.type = 'button';
+  revealButton.textContent = "I don't know";
+  revealBar.append(revealButton);
+
+  screen.append(prompt, slots, revealBar);
   container.append(screen);
 
   lastRendered.delete(container);
@@ -139,7 +159,74 @@ export function renderCountry(container, state) {
   screen.dataset.stage = state.stage;
 
   renderSlots(screen, state);
+  renderReveal(screen, state);
   renderPulse(container, screen, state);
+}
+
+/**
+ * The "I don't know" button — present from the first frame, gone once the whole
+ * name is on screen.
+ *
+ * ALWAYS AVAILABLE, unlike the math game's, which is learn-mode only because
+ * drill there reveals on a timer instead. This game has one mode and no timer,
+ * and its ladder only advances on a WRONG ANSWER — so without this button a kid
+ * who simply does not know a country has no way out except to type letters they
+ * know are wrong, five or six times, to buy the reveal one rung at a time. That
+ * is a bad thing to teach and it poisons the log: the interference guard reads
+ * wrong answers as confusions, and deliberate junk typed to escape is not a
+ * confusion.
+ *
+ * It hides at the last rung rather than staying and doing nothing, because a
+ * button that does nothing when pressed reads as broken.
+ */
+function renderReveal(screen, state) {
+  const button = find(screen, 'reveal');
+  if (button === null) {
+    return; // a screen mounted before this button existed — nothing to draw
+  }
+  button.hidden = state.revealed === true;
+}
+
+/**
+ * Register the handler for the "I don't know" button. Call once per container,
+ * at wiring time; it survives every remount of the screen.
+ *
+ * THE HANDLER IS CALLED WITH NO ARGUMENTS AND ITS RETURN VALUE IS IGNORED. This
+ * module does not hold the ProblemState and must not be handed one — main.js
+ * owns the state, calls `revealAnswer` itself, and renders the result. Passing
+ * state in so the UI could transition it would put a second writer on the game's
+ * only mutable value and break the pulse identity guard the moment the two
+ * disagreed about which object is current.
+ *
+ * The listener is delegated to the container, so registering before the first
+ * mount is fine and re-mounting does not lose the wiring.
+ *
+ * @param {Element} container the element mountCountryScreen was given
+ * @param {() => void} handler called on each click of the reveal button
+ * @returns {void}
+ */
+export function onRevealClick(container, handler) {
+  revealHandlers.set(container, handler);
+
+  if (delegatedContainers.has(container)) {
+    return;
+  }
+  delegatedContainers.add(container);
+
+  container.addEventListener('click', (event) => {
+    const target = event.target;
+    if (target === null || typeof target.closest !== 'function') {
+      return;
+    }
+    const button = target.closest('[data-role="reveal"]');
+    if (button === null || !container.contains(button)) {
+      return;
+    }
+    const current = revealHandlers.get(container);
+    if (typeof current === 'function') {
+      current();
+    }
+  });
 }
 
 /**

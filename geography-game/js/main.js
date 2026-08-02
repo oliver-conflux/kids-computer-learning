@@ -37,6 +37,7 @@ import {
   renderProgress,
   revealLadder,
   revealedCount,
+  onRevealClick,
 } from './ui/country.js';
 import { renderMap } from './ui/map.js';
 import { renderFlag } from './ui/flag.js';
@@ -190,6 +191,27 @@ function onKeyDown(event) {
   apply(engine.typeChar(active.state, char, now()));
 }
 
+/**
+ * The kid pressed "I don't know". Jump to the last rung of the ladder, which
+ * puts the whole name on screen.
+ *
+ * NOT LOGGED AS A WRONG ANSWER, and that distinction is the point. `wrong` is
+ * read by the scheduler's interference guard as evidence that two countries are
+ * confusable; "I don't know" is evidence of no such thing. `revealAnswer` moves
+ * the stage and sets `revealed`, so the attempt is correctly not clean and
+ * cannot count as retrieval — the country stays cold and comes back.
+ *
+ * Safe to call at any time: `revealAnswer` on a state already at the last rung
+ * returns that state BY REFERENCE, so `apply` sees no change and does not
+ * redraw. That is also why no guard is needed for a double click.
+ */
+function revealCurrent() {
+  if (active === null) {
+    return;
+  }
+  apply(engine.revealAnswer(active.state, now()));
+}
+
 function apply(next) {
   if (active === null || next === active.state) {
     return; // by-reference no-op: nothing happened, nothing to draw
@@ -290,6 +312,7 @@ async function runSession() {
   const previousFrontier = lastSessionFrontier();
 
   mountCountryScreen(stage);
+  onRevealClick(stage, revealCurrent);
 
   const total = CONFIG.sessionLength;
   const history = [];
