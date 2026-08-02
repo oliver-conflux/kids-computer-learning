@@ -169,7 +169,70 @@ round) rather than to add content that does not exist.
 
 ---
 
-## 4. Open questions needing a human, not a fix
+## 4. Type the spelling words, at their earliest availability — **measured**
+
+**The ask.** Every word in the spelling game's early Fry bands that CAN be typed
+with the keys a rung has taught SHOULD appear in that rung, as early as it
+becomes available. Not instead of the existing content — alongside it.
+
+**Why it is worth doing.** It does double duty. The kid practises the letters
+she has just been taught by typing words she will shortly be asked to spell, so
+one sitting builds both. And it removes a confound that currently sits under the
+whole spelling game: when a spelling attempt goes wrong, nothing distinguishes
+"cannot spell it" from "cannot type it". Words drilled here first arrive at the
+spelling game already typable.
+
+It also answers §3 above with real words rather than padding.
+
+**What is actually available** — measured against the sourced Fry 1000
+(`spelling-game/data/fry-1000.txt`), counting only words typable with the keys
+taught so far, drawn from bands 1-4 (400 words):
+
+    after home row  asdfjkl        6 of 400     a as all ask add fall
+    + gh                           8            had has
+    + e i                         27            is he his said she if
+    + r u                         46            are use her large here read
+    + t y                         94            the that it they at this
+    + w o                        172            of to you was for with
+    + n b                        352            and in on be one by
+    + c                          398            can each which could call come
+
+**The handoff point is `top-ei`.** Home row plus `gh` yields eight words, which
+is not a lesson. Adding `e` and `i` — the two commonest vowels — takes it to 27,
+which is enough for a real round, and `r u` makes it comfortable at 46. So the
+pairing cannot start at rung 0 and does not need to: it starts at rung 2.
+
+**A convergence worth noticing:** what unlocks first is short, high-frequency and
+heavily irregular — Fry's first hundred is 47% irregular. `said`, `she`, `his`,
+`if`. Those are sight words, which is exactly what a beginning speller should be
+drilling. The curriculum's key order and early spelling pedagogy agree here
+without being made to.
+
+**The one tension.** `n` arrives at `bot-nb`, the ninth letter rung, and unlocks
+88 words by itself — `and in on one not`. It is among the commonest letters in
+English and it is late for legitimate mechanical reasons: it is a bottom-row
+reach and the ladder is built around fingers, not around word availability.
+Those two goals genuinely conflict. Moving `n` earlier is the single biggest
+lever on this whole item, and it is a typing-curriculum decision that should be
+made on typing grounds first.
+
+**Where to start.** `typing-game/js/content.js` is where lesson words live, and
+`curriculum.js` already accumulates `availableKeys` down the track — so the
+filter is one predicate. The word list is committed and needs no fetching. Keep
+the existing content; add to it.
+
+**Related, and needed before any of this can be judged:** the log records
+`keystrokes`, `errors` and `ms` per item but no per-keystroke timing, so nothing
+here can distinguish touch typing from fast hunt-and-peck. The test exists if
+the timings do — a touch typist is measurably faster on hand-alternating
+digraphs than same-hand ones, and a hunt-and-peck typist is not, because they
+are searching visually either way. `spelling-game/js/typing-cost.js` already
+encodes that expectation (`sameHand: 0.15`), so there is a prediction to test
+rather than a hunch. See §2, which wants the log opened up anyway.
+
+---
+
+## 5. Open questions needing a human, not a fix
 
 - **The cheers and prompts.** Carried straight from the spec's §14 and still
   unexamined: "Howdy Petra!", "Nice! Try the other shift next time." Whether
@@ -190,7 +253,7 @@ round) rather than to add content that does not exist.
 
 ---
 
-## 5. Deferred by design
+## 6. Deferred by design
 
 - **Numbers row symbols** — `~ @ # $ % ^ &` and the bracket cluster remain out
   of scope. `!` is taught (it is shift-1, on `num-10`), which makes the boundary
@@ -206,7 +269,7 @@ round) rather than to add content that does not exist.
 
 ---
 
-## 6. Housekeeping
+## 7. Housekeeping
 
 - **`data/typing-log.jsonl` is gitignored**, unlike the math log which is
   committed. It records the kid's name alongside their keystroke errors, and
