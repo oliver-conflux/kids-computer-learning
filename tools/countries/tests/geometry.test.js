@@ -74,3 +74,60 @@ test('boxFor bounds the projected geometry, in projected units', () => {
   assert.ok(Math.abs(w - (x1 - x0)) < ROUNDING);
   assert.ok(Math.abs(h - (y1 - y0)) < ROUNDING);
 });
+
+/** A ring shaped like a wedge, so a box over it has real width and height. */
+function wedge(west, east) {
+  return [[west, 0], [east, 0], [east, 10], [west, 10], [west, 0]];
+}
+
+const centreOf = ([x, , width]) => x + width / 2;
+
+// The antimeridian. Russia and Fiji have rings near +179 AND rings near -179, so
+// a naive min/max over longitude reports them as 2000 units wide -- the whole
+// world -- and viewBoxFor then centres their prompt on longitude 0. Russia's map
+// showed the North Sea; Fiji's showed empty Atlantic. Both unanswerable.
+
+test('boxFor bounds a seam-crossing geometry across the seam, not the world', () => {
+  const straddling = {
+    type: 'MultiPolygon',
+    coordinates: [[wedge(160, 175)], [wedge(-175, -170)]],
+  };
+  const box = boxFor(straddling);
+
+  // The landmass runs 160E to 190E, so it is centred on 175E -- not on 0.
+  assert.ok(Math.abs(centreOf(box) - project(175, 0)[0]) < ROUNDING, `centred at ${centreOf(box)}`);
+  assert.ok(box[2] < WORLD.width / 2, `width ${box[2]} should not span the world`);
+});
+
+test('boxFor wraps a seam-crossing box back onto the canvas', () => {
+  // Mostly east of the seam, so the unwrapped box centres past the right edge.
+  const straddling = {
+    type: 'MultiPolygon',
+    coordinates: [[wedge(175, 180)], [wedge(-180, -160)]],
+  };
+  const box = boxFor(straddling);
+
+  assert.ok(Math.abs(centreOf(box) - project(-172.5, 0)[0]) < ROUNDING, `centred at ${centreOf(box)}`);
+  assert.ok(centreOf(box) < WORLD.width, 'the centre is a point on the canvas');
+});
+
+// The regression guard that matters most: 170 countries take this same path and
+// none of them cross the seam. A country on the prime meridian has negative
+// longitudes too, and must not be mistaken for one that crosses.
+
+test('boxFor leaves a geometry that does not cross the seam alone', () => {
+  const eastern = { type: 'Polygon', coordinates: [wedge(10, 50)] };
+  const [x, , w] = boxFor(eastern);
+  assert.ok(Math.abs(x - project(10, 0)[0]) < ROUNDING);
+  assert.ok(Math.abs(w - (project(50, 0)[0] - project(10, 0)[0])) < ROUNDING);
+});
+
+test('boxFor leaves a geometry straddling the prime meridian alone', () => {
+  const acrossZero = {
+    type: 'MultiPolygon',
+    coordinates: [[wedge(-10, -2)], [wedge(1, 8)]],
+  };
+  const [x, , w] = boxFor(acrossZero);
+  assert.ok(Math.abs(x - project(-10, 0)[0]) < ROUNDING);
+  assert.ok(Math.abs(w - (project(8, 0)[0] - project(-10, 0)[0])) < ROUNDING);
+});
