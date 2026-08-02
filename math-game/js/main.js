@@ -173,6 +173,18 @@ function previousSessionMedian(events) {
   for (const event of events) {
     if (event === null || typeof event !== 'object') continue;
     if (event.type !== 'session' || !Number.isFinite(event.medianMs)) continue;
+    // DRILL SESSIONS ONLY. A drill median measures retrieval against a clock; a
+    // learn median measures how long a kid took to work through a derivation
+    // with the strategy in front of them and the answer behind a button. Spec §5
+    // is explicit that those do not share a scale, and comparing them is exactly
+    // what the learn results strip already refuses to do. Without this filter a
+    // drill session run straight after a learn session reported "quicker than
+    // last time" against a number that means something else entirely.
+    //
+    // An ABSENT `mode` is a drill session — every session line written before
+    // v2 predates the field, and all of them were drills. Same rule as attempt
+    // events, so all existing history keeps working with no migration.
+    if (event.mode === 'learn') continue;
     if (best === null) {
       best = event;
       continue;
@@ -617,6 +629,12 @@ async function runSession(mode) {
     t: new Date(now()).toISOString(),
     build: CONFIG.build,
     session,
+    // Which mode produced these numbers. Without it a drill session cannot tell
+    // whether the preceding session's median is comparable to its own, and
+    // `previousSessionMedian` would compare a retrieval median against a
+    // derivation median — the comparison spec §5 forbids. Absent means drill,
+    // matching the attempt-event rule, so v1 history needs no migration.
+    mode,
     items,
     cleanRate,
     medianMs,
