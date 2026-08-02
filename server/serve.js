@@ -62,6 +62,12 @@ export const MIME_TYPES = {
   '.ico': 'image/x-icon',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  // The spelling game's cached Merriam-Webster pronunciations. Without this the
+  // fallback is application/octet-stream, and while browsers will often sniff an
+  // mp3 anyway, "often" is not a thing to rest a kid's only clue on: in drill
+  // mode the audio IS the question, and a refused decode looks exactly like a
+  // working game with empty boxes.
+  '.mp3': 'audio/mpeg',
   '.txt': 'text/plain; charset=utf-8',
   '.md': 'text/plain; charset=utf-8',
 };

@@ -10,6 +10,7 @@ import path from 'node:path';
 import {
   start,
   createServer,
+  mimeTypeFor,
   HOST,
   DEFAULT_TAIL,
   resolveSafe,
@@ -446,4 +447,18 @@ test('an unknown ?game= is a 400 rather than a fallback to a real log', async ()
   assert.deepEqual(fs.readdirSync(dir), ['spelling-log.jsonl']);
 
   await close(server);
+});
+
+// The header above says no exhaustive MIME coverage, and this is not that — it
+// is one type, pinned because it is the one whose absence is INAUDIBLE. Served
+// as application/octet-stream an mp3 may still play, because browsers sniff; it
+// may also be refused, and which one you get depends on the browser. In drill
+// mode the pronunciation IS the question, so a refused decode leaves a child
+// staring at empty boxes with no way to know what was asked. Everything else in
+// the table announces itself when wrong: a mistyped .css is an unstyled page.
+test('cached pronunciations are served as audio/mpeg, not octet-stream', () => {
+  assert.equal(mimeTypeFor('/data/audio/bat.mp3'), 'audio/mpeg');
+  assert.equal(mimeTypeFor('/data/audio/BAT.MP3'), 'audio/mpeg', 'extension match is case-insensitive');
+  assert.equal(mimeTypeFor('/data/words/bat.json'), 'application/json; charset=utf-8');
+  assert.equal(mimeTypeFor('/data/audio/bat.wav'), 'application/octet-stream', 'only what we cache is claimed');
 });
