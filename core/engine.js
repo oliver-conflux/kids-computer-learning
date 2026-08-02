@@ -34,6 +34,8 @@
 // The hint ladder arrives as a parameter — this module does not know how it was
 // built and never imports a game's hints table.
 //
+import { itemKeyOf } from './space.js';
+
 // WHY A FACTORY. The item space reaches five of the six transitions: what counts
 // as a typable keystroke, what string must be matched, how a wrong entry is
 // coerced for the log, and what fields identify the item on an attempt event.
@@ -75,24 +77,17 @@ function isLearnLadder(ladder) {
 /**
  * Bind the state machine to one item space.
  *
+ * The state field holding the item is named by `space.itemKey` — see
+ * core/space.js for why that name is a binding-time choice rather than a rename
+ * at the seam. It matters most here, because this module's no-op transitions
+ * return their input BY REFERENCE and a renaming wrapper would break every
+ * caller that compares identity.
+ *
  * @param {import('./space.js').ItemSpace} space
- * @param {{itemKey?: string}} [options]
- *
- *   `itemKey` names the state field the item is stored under, defaulting to
- *   `item`. It exists for exactly one reason: the math game shipped first and
- *   calls that field `fact`, in its UI and in its tests. The obvious alternative
- *   — a shim that rewraps each returned state as `{...state, fact: state.item}`
- *   — is not available, because the no-op transitions here return their input BY
- *   REFERENCE and callers compare identity to detect that nothing happened.
- *   Rewrapping would return a fresh object every time and quietly break every
- *   such caller. Carrying a second alias field alongside `item` is not available
- *   either: math's tests deep-equal the whole state object, and an extra key
- *   fails. So the name is a parameter, chosen once at binding time. A new game
- *   should not pass it.
- *
  * @returns {object} the six transitions
  */
-export function createEngine(space, { itemKey = 'item' } = {}) {
+export function createEngine(space) {
+  const itemKey = itemKeyOf(space);
   /**
    * A fresh state with `typed` and `history` cleared and the ladder parked at its
    * first stage.

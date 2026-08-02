@@ -12,6 +12,11 @@ const DIGIT_PATTERN = /^[0-9]$/;
 
 /** @type {import('../../core/space.js').ItemSpace} */
 export const mathSpace = {
+  // This game calls an item a `fact`, in its UI and throughout its tests. See
+  // core/space.js for why the name is bound here rather than renamed at each
+  // seam. A new game leaves this out.
+  itemKey: 'fact',
+
   allItems: allFacts,
 
   itemId: factId,

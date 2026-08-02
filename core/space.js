@@ -36,8 +36,40 @@
  *   isValidWrong: (value: unknown) => boolean,
  *   answerValue: (item: Item) => unknown,
  *   eventFields: (item: Item) => object,
+ *   itemKey?: string,
  * }} ItemSpace
  */
+
+/**
+ * The field name a game's own code uses for the item, on a ProblemState and on
+ * an ItemStats entry. Defaults to `item`, and a new game should never set it.
+ *
+ * It exists for one game: math shipped first and calls that field `fact`, in its
+ * UI and throughout its tests. Neither obvious workaround is available. Aliasing
+ * — carrying `item` AND `fact` on the same object — fails because math's tests
+ * deep-equal whole state and stats objects against literals, so an extra key is
+ * a contract change. Rewrapping in the shim fails harder: the engine's no-op
+ * transitions return their input BY REFERENCE and callers compare identity to
+ * detect that nothing happened, so a wrapper would hand back a fresh object
+ * every time and silently break them.
+ *
+ * So the name is bound once, here, alongside everything else that varies between
+ * games — and it is read the same way by all three core modules rather than each
+ * inventing its own rename. The alternative we started with had the engine take
+ * a binding-time option while mastery and scheduler rebuilt all 121 entries on
+ * the caller's side, twice, once in each direction. Same problem, three answers.
+ */
+export const DEFAULT_ITEM_KEY = 'item';
+
+/**
+ * The field name this space stores its item under.
+ *
+ * @param {object} space
+ * @returns {string}
+ */
+export function itemKeyOf(space) {
+  return space.itemKey ?? DEFAULT_ITEM_KEY;
+}
 
 /**
  * The contract, member by member.
@@ -137,6 +169,9 @@ export function validateSpace(space) {
     if (typeof space[member] !== 'function') {
       problems.push(`missing member: ${member}`);
     }
+  }
+  if (space.itemKey !== undefined && (typeof space.itemKey !== 'string' || space.itemKey === '')) {
+    problems.push('itemKey is present but is not a non-empty string');
   }
   if (problems.length > 0) {
     return problems; // nothing below can run against an incomplete adapter
