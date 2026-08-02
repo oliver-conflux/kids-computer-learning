@@ -9,8 +9,11 @@
 //   rank   Fry frequency rank; 0 for the hand-authored opener that precedes Fry
 //   dolch  Dolch sight-word membership
 //
-// Committed source data, not generated and not cached. It is checked in because
-// it is a curriculum decision, and a curriculum decision belongs in review.
+// Committed source data, checked in because it is a curriculum decision and a
+// curriculum decision belongs in review. The OPENER below is hand-authored; the
+// Fry half is GENERATED into js/fry.js from spelling-game/data/*.txt by
+// tools/build-fry.js and committed alongside it, so the browser still imports a
+// plain module and there is no build step to forget.
 //
 // TWO SECTIONS, AND THEY ARE ORDERED ON DIFFERENT PRINCIPLES.
 //
@@ -28,6 +31,8 @@
 // most often, whatever their spelling looks like.
 //
 // Pure module: no DOM, no network, no clock, no randomness.
+
+import { FRY } from './fry.js';
 
 /**
  * The hand-authored CVC opener, grouped in rime families from the very first
@@ -113,101 +118,15 @@ const OPENER = [
   { word: 'yet', dolch: true },
 ];
 
-/**
- * Fry's first 300, in rank order, with Dolch membership flagged.
- *
- * WHY IT STOPS AT 300 AND NOT 1000. The plan asked for Fry 1000. Three hundred
- * is what is committed here, because these ranks were written from knowledge
- * rather than transcribed from the published list, and confidence falls off
- * sharply past the first few hundred. A spine whose ordering is invented is
- * worse than a short one: it silently teaches the wrong words first, and nothing
- * in the game would ever surface the error — the kid simply gets a worse
- * curriculum for a year.
- *
- * Three hundred is not a placeholder. Fry's first 300 covers roughly 65% of all
- * written English, and with the opener ahead of it this is around 355 words —
- * far more than the frontier will reach in a long time, since `activeWindow`
- * only ever exposes `frontierSize` non-hot words at once.
- *
- * EXTENDING IT: append to this array in rank order from a real source. Nothing
- * else changes — no consumer reads `rank` for ordering, `patternsFor` is total
- * over any input, and the frontier is derived from the log rather than stored.
- * See spelling-game/docs/next-steps.md.
- */
-const FRY = [
-  // 1-25
-  ['the', true], ['of', false], ['and', true], ['a', true], ['to', true],
-  ['in', true], ['is', true], ['you', true], ['that', true], ['it', true],
-  ['he', true], ['was', true], ['for', true], ['on', true], ['are', true],
-  ['as', true], ['with', true], ['his', true], ['they', true],
-  ['at', true], ['be', true], ['this', true], ['have', true], ['from', true],
-  // 26-50
-  ['or', true], ['one', true], ['had', true], ['by', true], ['words', false],
-  ['but', true], ['not', true], ['what', true], ['all', true], ['were', true],
-  ['we', true], ['when', true], ['your', true], ['can', true], ['said', true],
-  ['there', true], ['use', true], ['each', false], ['which', false], ['she', true],
-  ['do', true], ['how', true], ['their', true], ['if', true], ['will', true],
-  // 51-75
-  ['up', true], ['other', false], ['about', true], ['out', true], ['many', true],
-  ['then', true], ['them', true], ['these', false], ['so', true], ['some', true],
-  ['her', true], ['would', true], ['make', true], ['like', true], ['him', true],
-  ['into', true], ['time', false], ['has', true], ['look', true], ['two', true],
-  ['more', false], ['write', true], ['go', true], ['see', true], ['number', false],
-  // 76-100
-  ['no', true], ['way', false], ['could', true], ['people', false], ['my', true],
-  ['than', false], ['first', true], ['water', false], ['been', true], ['call', false],
-  ['who', true], ['oil', false], ['its', false], ['now', true], ['find', true],
-  ['long', false], ['down', true], ['day', false], ['did', true], ['get', true],
-  ['come', true], ['made', false], ['may', true], ['part', false], ['over', true],
-  // 101-125
-  ['new', true], ['sound', false], ['take', true], ['only', true], ['little', true],
-  ['work', true], ['know', true], ['place', false], ['year', false], ['live', true],
-  ['me', true], ['back', false], ['give', true], ['most', false], ['very', true],
-  ['after', true], ['thing', false], ['our', true], ['just', true], ['name', false],
-  ['good', true], ['sentence', false], ['man', false], ['think', true], ['say', true],
-  // 126-150
-  ['great', false], ['where', true], ['help', true], ['through', false], ['much', true],
-  ['before', true], ['line', false], ['right', true], ['too', false], ['mean', false],
-  ['old', true], ['any', true], ['same', false], ['tell', true], ['boy', false],
-  ['following', false], ['came', false], ['want', true], ['show', true], ['also', false],
-  ['around', true], ['form', false], ['three', true], ['small', false], ['set', false],
-  // 151-175
-  ['put', true], ['end', false], ['does', true], ['another', false], ['well', true],
-  ['large', false], ['must', true], ['big', true], ['even', false], ['such', false],
-  ['because', true], ['turn', false], ['here', true], ['why', true], ['ask', true],
-  ['went', true], ['men', false], ['read', true], ['need', false], ['land', false],
-  ['different', false], ['home', false], ['us', true], ['move', false], ['try', true],
-  // 176-200
-  ['kind', true], ['hand', false], ['picture', false], ['again', true], ['change', false],
-  ['off', true], ['play', true], ['spell', false], ['air', false], ['away', true],
-  ['animal', false], ['house', false], ['point', false], ['page', false], ['letter', false],
-  ['mother', false], ['answer', false], ['found', true], ['study', false], ['still', false],
-  ['learn', false], ['should', false], ['world', false], ['high', false],
-  // 201-225
-  ['every', true], ['near', false], ['add', false], ['food', false], ['between', false],
-  ['own', true], ['below', false], ['country', false], ['plant', false], ['last', false],
-  ['school', false], ['father', false], ['keep', true], ['tree', false], ['never', true],
-  ['start', true], ['city', false], ['earth', false], ['eye', false], ['light', true],
-  ['thought', false], ['head', false], ['under', true], ['story', false], ['saw', true],
-  // 226-250
-  ['left', false], ['few', false], ['while', false], ['along', false],
-  ['might', false], ['close', false], ['something', false], ['seem', false], ['next', false],
-  ['hard', false], ['open', true], ['example', false], ['begin', false], ['life', false],
-  ['always', true], ['those', true], ['both', true], ['paper', false], ['together', true],
-  ['got', true], ['group', false], ['often', false], ['run', true], ['important', false],
-  // 251-275
-  ['until', false], ['children', false], ['side', false], ['feet', false], ['car', false],
-  ['mile', false], ['night', false], ['walk', true], ['white', true], ['sea', false],
-  ['began', false], ['grow', true], ['took', true], ['river', false], ['four', true],
-  ['carry', true], ['state', false], ['once', true], ['book', false], ['hear', false],
-  ['stop', true], ['without', false], ['second', false], ['later', false], ['miss', false],
-  // 276-300
-  ['idea', false], ['enough', false], ['eat', true], ['face', false], ['watch', false],
-  ['far', true], ['really', false], ['almost', false], ['let', true],
-  ['above', false], ['girl', false], ['sometimes', false], ['mountain', false], ['cut', true],
-  ['young', false], ['talk', false], ['soon', true], ['list', false], ['song', false],
-  ['being', false], ['leave', false], ['family', false], ['its', false], ['body', false],
-];
+// The Fry list now lives in a generated module built from the committed word
+// lists — see tools/build-fry.js. It used to be an inline array of 296 entries
+// written from memory, and the comment above it said so; measured against a
+// sourced list, its exact ranks agreed 6% of the time. Generating it means the
+// ordering has one origin and nobody hand-shifts 700 ranks to insert a word.
+//
+// Entries are [word, publishedRank, isDolch]. The rank is Fry's own, kept even
+// though 28 untypable words were dropped, so that `band` — ceil(rank / 100) —
+// stays comparable to anyone else's copy of the list.
 
 /**
  * The spine: the opener, then Fry, with duplicates dropped.
@@ -219,14 +138,16 @@ const FRY = [
  * learning the -at family should not come round again three hundred places later
  * as though it were new.
  *
- * Fry also contains genuine duplicates of itself in some published orderings
- * (`its` appears twice in the list above, at 88 and 299). The de-duplication
- * here is by word, first occurrence wins, so that resolves too rather than
- * putting a second `w:its` into a space whose ids must be unique — which
- * `validateSpace` would reject outright.
+ * De-duplication is by word, first occurrence wins. It also covers the case
+ * where a published Fry ordering repeats itself, which they do — two entries for
+ * one word would put a second `w:its` into a space whose ids must be unique, and
+ * `validateSpace` would reject it outright.
  *
- * The single-letter Fry entries `a` and `i` are kept. They are real words, they
- * are typable, and a one-slot problem is a legitimate one.
+ * The single-letter entry `a` is kept: a real word, typable, and a one-slot
+ * problem is a legitimate one. `I` is NOT, because the engine accepts a-z and
+ * cannot type a capital — it is one of the 28 words fry.js drops. An earlier
+ * version of this comment claimed both were kept and `i` had never been in the
+ * array at all.
  *
  * @type {{word: string, rank: number, dolch: boolean}[]}
  */
@@ -244,12 +165,16 @@ function buildSpine() {
     spine.push({ word: entry.word, rank: 0, dolch: entry.dolch });
   }
 
-  FRY.forEach(([word, dolch], index) => {
+  // `rank` is Fry's PUBLISHED rank, not the array index. 28 untypable words were
+  // dropped when fry.js was generated, and using position here would pull every
+  // word after each gap into the wrong hundred — which is the one number
+  // downstream code is allowed to trust.
+  FRY.forEach(([word, rank, dolch]) => {
     if (seen.has(word)) {
       return;
     }
     seen.add(word);
-    spine.push({ word, rank: index + 1, dolch });
+    spine.push({ word, rank, dolch });
   });
 
   return spine;
