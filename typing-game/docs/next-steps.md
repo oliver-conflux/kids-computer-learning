@@ -20,7 +20,7 @@ from inside the game, and one of those only in one direction:
 |---|---|
 | `guidance` | **Down only** — via the step-down offer after a 3-star round |
 | `name` | Once, at first run |
-| `lastLesson` | Automatic |
+| `lastLesson` | Written automatically — **and read by nothing** |
 | `blockOnError` | **Never** |
 | `accent`, `skin` | **Never — and nothing reads them at all** |
 
@@ -45,12 +45,21 @@ the menu rather than anything reachable mid-round. Guidance already has a
 working write path in `main.js` (`onStepDown`); it needs an up as well as a
 down, and a home that is not the results screen.
 
-**While you are there:** `accent` and `skin` are dead schema. `base.css`
-hardcodes `--accent: #7b6bd6` and `--skin: #e8b7ac`, and nothing reads the
-stored values. Either wire them to the CSS custom properties — the design file
-documents four alternates of each, and letting a kid choose their own hand
-colour is a cheap bit of ownership — or delete them from the schema. Leaving a
-setting that silently does nothing is the worse option.
+**While you are there — three fields are written and never read.**
+
+`accent` and `skin` are dead schema: `base.css` hardcodes `--accent: #7b6bd6`
+and `--skin: #e8b7ac`, and nothing consults the stored values. Either wire them
+to the CSS custom properties — the design file documents four alternates of
+each, and letting a kid pick their own hand colour is a cheap bit of ownership —
+or delete them. A setting that silently does nothing is the worse option.
+
+`lastLesson` is different: it *was* read. The original `boot()` resumed
+`settings.lastLesson ?? 'home-base'`, but the menu replaced that flow and the
+write outlived the read. So either restore the behaviour (a "carry on where you
+left off" default on the menu is genuinely nice for a kid who plays daily) or
+drop the field. This is a small instance of a general risk in staged builds:
+task N+1 replaces task N's entry point, and the now-orphaned bookkeeping keeps
+running because nothing fails when it does.
 
 ---
 
