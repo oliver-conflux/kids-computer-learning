@@ -295,10 +295,18 @@ function differentDayCopy(openClock) {
   const ranMinutes = elapsedMinutesSince(openClock.t, now());
   const startedDay = dayName(openClock.at);
 
-  if (ranMinutes === null) {
-    // Can only happen if the log holds a clock-in whose `t` will not parse,
-    // which the fold already rejects. Say the true part and drop the number
-    // rather than printing a made-up one.
+  if (ranMinutes === null || ranMinutes < 0) {
+    // `null` means the log holds a clock-in whose `t` will not parse, which the
+    // fold already rejects. Negative means `t` is ahead of the machine clock —
+    // a backward clock correction, or a log someone edited by hand, which the
+    // plan's own stale-path check instructs a verifier to do.
+    //
+    // `formatDuration` keeps the sign deliberately, because reporting a
+    // backwards session as positive would be a lie. But this sentence pairs the
+    // number with an accusation, and "your timer has been running -40 hours
+    // 21 minutes. You probably forgot to clock out" tells a child something
+    // false and something meaningless at once. Say the true part, drop the
+    // number.
     return `You clocked in <strong>${startedText}</strong>. You probably forgot to `
       + `clock out. What time did you finish on ${startedDay}?`;
   }

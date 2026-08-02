@@ -81,23 +81,6 @@ function pad(value, width) {
 }
 
 /**
- * A wall-clock reading as a number, for arithmetic only.
- *
- * The reading is deliberately interpreted as if it were UTC. That is not a
- * mistake and not a timezone conversion — it is what makes wall-clock
- * subtraction mean what she means by it. Two readings on one day differ by the
- * number of minutes the clock face advanced, and reading that off a fixed-offset
- * scale gives exactly that, immune to the ambient timezone and to daylight
- * saving. Interpreting the readings as local instants instead would make a
- * session that spans 2 AM on a shift day come out an hour wrong.
- *
- * The returned number is meaningful only when subtracted from another value from
- * this same function. It is not an instant and must never be treated as one.
- *
- * @param {unknown} wall
- * @returns {number | null} null when `wall` is not a well-formed reading
- */
-/**
  * The five numbers in a wall-clock reading, or null if it is not one.
  *
  * Exported because the display code needs these numbers and has no other honest
@@ -145,6 +128,23 @@ export function wallParts(wall) {
   return { year, month, day, hour, minute };
 }
 
+/**
+ * A wall-clock reading as a number, for arithmetic only.
+ *
+ * The reading is deliberately interpreted as if it were UTC. That is not a
+ * mistake and not a timezone conversion — it is what makes wall-clock
+ * subtraction mean what she means by it. Two readings on one day differ by the
+ * number of minutes the clock face advanced, and reading that off a fixed-offset
+ * scale gives exactly that, immune to the ambient timezone and to daylight
+ * saving. Interpreting the readings as local instants instead would make a
+ * session that spans 2 AM on a shift day come out an hour wrong.
+ *
+ * The returned number is meaningful only when subtracted from another value from
+ * this same function. It is not an instant and must never be treated as one.
+ *
+ * @param {unknown} wall
+ * @returns {number | null} null when `wall` is not a well-formed reading
+ */
 function wallToNominalMs(wall) {
   const parts = wallParts(wall);
   if (parts === null) {
@@ -156,13 +156,24 @@ function wallToNominalMs(wall) {
 /**
  * The local calendar date of a wall-clock reading.
  *
- * This is the same-day rule in its entirety, and it is a string operation on
- * purpose. `at` is already local, so the date is already sitting in the first
- * ten characters and no conversion can go wrong in between. Had `at` been stored
- * as a UTC instant, a 5 PM Pacific session would carry the *next* day's date and
- * the same-day rule would reject every afternoon a child ever logs.
+ * This is the same-day rule in its entirety, and it stays in local terms on
+ * purpose. `at` is already local, so the date is already in the reading and no
+ * conversion can go wrong in between. Had `at` been stored as a UTC instant, a
+ * 5 PM Pacific session would carry the *next* day's date and the same-day rule
+ * would reject every afternoon a child ever logs.
  *
- * The whole reading is validated before the date is sliced off it. That is the
+ * The answer is BUILT FROM `wallParts`, never sliced out of the string. That
+ * distinction is the whole point and it is worth stating plainly, because
+ * slicing looks equivalent and is not: it silently assumes the pattern is
+ * fixed-width. Relax that pattern to accept '2026-8-2' and a slice returns
+ * '2026-8-2T9' — a date that equals nothing, so `isStale` calls a one-hour-old
+ * timer stale and `validateClockOut` rejects every end time she can type as the
+ * wrong day. She would be accused of forgetting to clock out on a timer she
+ * started an hour ago, with no way to close it but to throw it away. Building
+ * from the parsed numbers cannot drift from the parser that validated them, and
+ * canonicalises the width the string comparison depends on.
+ *
+ * The whole reading is validated before the date is derived from it. That is the
  * contract the caller in `validateClockOut` leans on: once two readings have
  * both produced a non-null date, their times are known good too, so the duration
  * arithmetic that follows cannot come back null.
@@ -171,10 +182,11 @@ function wallToNominalMs(wall) {
  * @returns {string | null} 'YYYY-MM-DD', or null when `wall` is malformed
  */
 export function localDate(wall) {
-  if (wallToNominalMs(wall) === null) {
+  const parts = wallParts(wall);
+  if (parts === null) {
     return null;
   }
-  return wall.slice(0, 10);
+  return `${pad(parts.year, 4)}-${pad(parts.month, 2)}-${pad(parts.day, 2)}`;
 }
 
 /**

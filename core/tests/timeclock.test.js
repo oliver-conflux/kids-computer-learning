@@ -704,6 +704,63 @@ test('wallParts rejects everything localDate rejects, and agrees with it exactly
   }
 });
 
+test('localDate builds its answer from wallParts rather than slicing the string', () => {
+  // Agreeing about VALIDITY is not enough, and the first version of the test
+  // above only checked that. The bug it missed: `localDate` slicing ten
+  // characters off a reading whose pattern had been relaxed. Both functions
+  // still returned non-null — they "agreed" — while one returned '2026-8-2T9',
+  // a date equal to nothing. `isStale` then calls a one-hour-old timer stale and
+  // `validateClockOut` rejects every end time as the wrong day, so she cannot
+  // close a timer she started an hour ago.
+  //
+  // So this pins the VALUE against the parsed numbers. Be honest about its
+  // reach: while the pattern is fixed-width a slice returns the same bytes, so
+  // this test alone would not have caught that bug. It catches other drift in
+  // what localDate returns, and the structural test below covers the slice.
+  const readings = ['2026-08-04T10:00', '2026-01-01T00:00', '2026-12-31T23:59'];
+  for (const wall of readings) {
+    const parts = wallParts(wall);
+    const expected = `${String(parts.year).padStart(4, '0')}-`
+      + `${String(parts.month).padStart(2, '0')}-`
+      + `${String(parts.day).padStart(2, '0')}`;
+    assert.equal(localDate(wall), expected, `localDate must rebuild ${wall} from its parts`);
+  }
+});
+
+test('a date is always ten characters, so the same-day rule can compare strings', () => {
+  // validateClockOut decides "same day" with ===, which is only sound while
+  // every date comes out canonically padded. A hand-cut date could not promise
+  // that; one derived from the numbers can.
+  for (const wall of ['2026-08-04T10:00', '2026-01-09T09:05', '2026-11-30T23:00']) {
+    assert.match(localDate(wall), /^\d{4}-\d{2}-\d{2}$/);
+    assert.equal(localDate(wall).length, 10);
+  }
+});
+
+test('no date in this module is cut out of a string with an offset', () => {
+  // A STRUCTURAL test, in the style of the purity test below, and it exists
+  // because behaviour cannot express this one. While the pattern is fixed-width,
+  // slicing ten characters and building from the parsed numbers produce byte-
+  // identical answers — every behavioural test passes against either. The two
+  // only diverge once someone relaxes the pattern, and at that point the slicing
+  // version returns '2026-8-2T9': a date equal to nothing, which calls a
+  // one-hour-old timer stale and rejects every end time she can type.
+  //
+  // This exact hazard has already moved once. It lived in bar.js as hardcoded
+  // offsets, was removed from there, and turned out to be sitting in localDate
+  // too. So the rule is pinned where a reader will trip over it rather than left
+  // to the next person to rediscover: in this module, a date comes from
+  // wallParts, never from an offset into the reading.
+  const source = readFileSync(new URL('../timeclock.js', import.meta.url), 'utf8');
+
+  const offsetCuts = source.match(/\bwall\w*\.slice\s*\(/g) ?? [];
+  assert.deepEqual(
+    offsetCuts,
+    [],
+    'a wall-clock reading must be read through wallParts, not sliced at an offset',
+  );
+});
+
 test('wallParts refuses anything that is not a string', () => {
   for (const value of [null, undefined, 20260804, {}, [], new Date()]) {
     assert.equal(wallParts(value), null);
