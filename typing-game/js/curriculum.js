@@ -15,13 +15,32 @@
 //
 // Pure module: no DOM, no network, no clock, no randomness.
 
+// A rung with `newKeys: []` teaches no key. It is a SIBLING of the rung above
+// it — same availableKeys, different content — and it exists because the home
+// row is where a kid spends the longest on the fewest keys. Six short rungs on
+// nine keys beat two long ones, and each sibling carries its own stars, which
+// is the whole pull to play it. Note that guidanceForItem() in main.js forces
+// full hands only for drills containing a NEW key, so a sibling correctly
+// follows whatever guidance level the kid has set.
 const LETTER_RUNGS = [
-  { id: 'home-base',     title: 'Home row',        newKeys: [...'asdfjkl;', ' '],
-    hint: 'Rest your fingers on the home row. Thumbs on the space bar.',
-    mix: { drills: 6, words: 4, sentences: 0 } },
+  { id: 'home-left',     title: 'Left hand',       newKeys: [...'asdf', ' '],
+    hint: 'Left fingers on a s d f. Feel the bump on f. Thumbs on the space bar.',
+    mix: { drills: 8, words: 2, sentences: 0 } },
+  { id: 'home-right',    title: 'Right hand',      newKeys: [...'jkl;'],
+    hint: 'Right fingers on j k l semicolon. Feel the bump on j.',
+    mix: { drills: 7, words: 3, sentences: 0 } },
+  { id: 'home-base',     title: 'Home row',        newKeys: [],
+    hint: 'Both hands now. All eight fingers rest on the home row.',
+    mix: { drills: 5, words: 5, sentences: 0 } },
+  { id: 'home-words',    title: 'Home row words',  newKeys: [],
+    hint: 'Real words this time. Bring your fingers home between each one.',
+    mix: { drills: 2, words: 8, sentences: 0 } },
   { id: 'home-stretch',  title: 'Home stretch',    newKeys: [...'gh'],
     hint: 'Stretch your index finger inward, then bring it straight back.',
     mix: { drills: 5, words: 5, sentences: 0 } },
+  { id: 'home-stretch-words', title: 'Home stretch words', newKeys: [],
+    hint: 'More words, now that g and h are yours.',
+    mix: { drills: 2, words: 8, sentences: 0 } },
   { id: 'top-ei',        title: 'Top row: e i',    newKeys: [...'ei'],
     hint: 'Middle fingers reach straight up.',
     mix: { drills: 4, words: 4, sentences: 2 } },

@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 
 import { LESSONS, lessonById, lessonsForTrack, nextLesson } from '../js/curriculum.js';
 
-test('there are 14 letter rungs and 5 number rungs', () => {
-  assert.equal(lessonsForTrack('letters').length, 14);
+test('there are 18 letter rungs and 5 number rungs', () => {
+  assert.equal(lessonsForTrack('letters').length, 18);
   assert.equal(lessonsForTrack('numbers').length, 5);
-  assert.equal(LESSONS.length, 19);
+  assert.equal(LESSONS.length, 23);
 });
 
 test('lesson ids are unique', () => {
@@ -76,11 +76,38 @@ test('the tracks are independent: numbers inherit no letters, letters no digits'
   }
 });
 
-test('home-base introduces space with the home row', () => {
+test('home-left introduces space with the left hand', () => {
+  const left = lessonById('home-left');
+  assert.deepEqual([...left.newKeys].sort(), [' ', 'a', 'd', 'f', 's']);
+  assert.ok(left.availableKeys.includes(' '));
+});
+
+test('the home row is whole by home-base, which teaches no key of its own', () => {
   const home = lessonById('home-base');
-  assert.deepEqual([...home.newKeys].sort(), [' ', ';', 'a', 'd', 'f', 'j', 'k', 'l', 's']);
-  assert.ok(home.availableKeys.includes(' '));
-  assert.equal(home.mix.sentences, 0, 'asdfjkl; cannot make a sentence');
+  assert.deepEqual([...home.newKeys], []);
+  assert.deepEqual([...home.availableKeys].sort(),
+    [' ', ';', 'a', 'd', 'f', 'j', 'k', 'l', 's']);
+});
+
+// Sibling rungs teach nothing new, so `newKeys: []` must stay legal. The rule
+// it would otherwise trip is "new keys were NOT available in the previous
+// rung", which passes vacuously — that is intended, not an oversight.
+test('sibling rungs teach no new key and inherit the rung above', () => {
+  for (const id of ['home-base', 'home-words', 'home-stretch-words']) {
+    const sibling = lessonById(id);
+    assert.deepEqual(sibling.newKeys, [], `${id} should teach no new key`);
+    const rungs = lessonsForTrack('letters');
+    const above = rungs[rungs.findIndex((l) => l.id === id) - 1];
+    assert.deepEqual(sibling.availableKeys, above.availableKeys,
+      `${id} should have exactly ${above.id}'s keys`);
+  }
+});
+
+test('no home-row rung asks for a sentence — asdfjkl;gh cannot make one', () => {
+  for (const id of ['home-left', 'home-right', 'home-base', 'home-words',
+    'home-stretch', 'home-stretch-words']) {
+    assert.equal(lessonById(id).mix.sentences, 0, `${id} cannot make a sentence`);
+  }
 });
 
 test('the letter ladder ends with punctuation, and ! is NOT there', () => {
@@ -145,7 +172,8 @@ test('no number lesson has sentences — digits alone cannot make one', () => {
 });
 
 test('nextLesson walks a track and stops at its end', () => {
-  assert.equal(nextLesson('home-base').id, 'home-stretch');
+  assert.equal(nextLesson('home-base').id, 'home-words');
+  assert.equal(nextLesson('home-words').id, 'home-stretch');
   assert.equal(nextLesson('num-38').id, 'num-47');
   assert.equal(nextLesson('punctuation'), null, 'letters end here');
   assert.equal(nextLesson('num-10'), null, 'numbers end here');
