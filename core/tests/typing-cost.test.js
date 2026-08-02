@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { typingCost, KEYMAP } from '../js/typing-cost.js';
+import { typingCost, KEYMAP } from '../typing-cost.js';
 
 // config.js belongs to another task; these tests pass the one key this function
 // reads, per spec §12.

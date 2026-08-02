@@ -23,7 +23,7 @@
 //
 // Pure module: no DOM, no network, no clock, no randomness.
 
-export * as KEYMAP from '../../typing-game/js/keymap.js';
+export * as KEYMAP from '../typing-game/js/keymap.js';
 
 /** `ROWS` index of the home row — the resting position everything is measured from. */
 const HOME_ROW = 2;
@@ -175,8 +175,8 @@ function bigramCost(first, second) {
 /**
  * Read and check the one quantity that does come from config.
  *
- * This throws rather than defaulting, and it is the only thing in the spelling
- * game's pure modules that does. The "a corrupt line must never break a session"
+ * This throws rather than defaulting, which almost nothing else in the pure
+ * modules does. The "a corrupt line must never break a session"
  * rule is about DATA — a log written months ago by an older build. A missing
  * `typingWeightFloor` is a programming error in a table that ships with the code,
  * it is the same on every run, and a silent default would hide it while quietly

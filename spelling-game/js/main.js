@@ -16,13 +16,13 @@ import { CONFIG } from './config.js';
 import { SPINE, playableSpine } from './spine.js';
 import { spellingSpace } from './space.js';
 import { activeWindow } from './frontier.js';
-import { typingCost, KEYMAP } from './typing-cost.js';
 import { pickLearnFamily, buildLearnSession } from './learn.js';
 import { createAudio } from './audio.js';
 import { hasHomophone } from './homophones.js';
 import { serverIsUp, loadEvents, record, flushOutbox } from './log.js';
 
 import { deriveMastery } from '../../core/mastery.js';
+import { typingCost, KEYMAP } from '../../core/typing-cost.js';
 import { pickNext } from '../../core/scheduler.js';
 import { createEngine } from '../../core/engine.js';
 

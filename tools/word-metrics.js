@@ -22,8 +22,8 @@ import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 
 import { patternsFor, IRREGULAR } from '../spelling-game/js/patterns.js';
-import { typingCost, KEYMAP } from '../spelling-game/js/typing-cost.js';
 import { CONFIG } from '../spelling-game/js/config.js';
+import { typingCost, KEYMAP } from '../core/typing-cost.js';
 
 // Piping into `head` or `less` closes stdout early, and Node's default is to
 // throw EPIPE and print a stack trace over the output you were reading. For a
