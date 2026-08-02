@@ -194,7 +194,17 @@ export function backspace(state, now) {
  * @returns {object} ProblemState
  */
 export function tick(state, now, delayMs) {
-  if (state.status !== 'active' || now - state.stageAt < delayMs) {
+  // A LEARN problem never advances on elapsed time — spec §1: "'reveal' is
+  // reached by the kid pressing the button, never by elapsed time." Until this
+  // guard existed that rule rested entirely on main.js remembering not to run a
+  // tick loop in learn mode, and one tick past the cold delay would advance
+  // strategy -> reveal and log {stage:'reveal', mode:'learn', revealed:false} —
+  // a clock in the mode whose defining property is not having one. Make it
+  // structurally impossible rather than a caller's promise.
+  if (state.status !== 'active' || isLearnLadder(state.ladder)) {
+    return state;
+  }
+  if (now - state.stageAt < delayMs) {
     return state;
   }
   const next = stageAfter(state.ladder, state.stage);
@@ -227,8 +237,14 @@ export function tick(state, now, delayMs) {
  * @returns {object} ProblemState
  */
 export function revealAnswer(state, now) {
+  // Resolved problems are immutable, like every other transition here. Without
+  // this a press landing after the answer was already typed correctly would log
+  // a learn attempt claiming the reveal was reached and the button pressed —
+  // false on both counts, and it corrupts the one signal learn mode records.
+  // The other three transitions all guard on status; this one was the odd one
+  // out, and neither behaviour was pinned by a test until now.
   const last = state.ladder[state.ladder.length - 1];
-  if (last === undefined || state.stage === last) {
+  if (state.status !== 'active' || last === undefined || state.stage === last) {
     return state;
   }
   return { ...state, stage: last, stageAt: now, pulse: false, revealed: true };

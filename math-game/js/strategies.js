@@ -41,8 +41,8 @@ const PAIR_STRATEGIES = new Map([
   // teaching anywhere in the game. 7 x 7 = 49 is on the short list of facts that
   // genuinely need work, and it was the one fact learn mode could never reach.
   //
-  // Each of these levers off a x5 fact instead, which every kid gets early and
-  // which the x5 rule already teaches.
+  // Each levers off an easier fact the kid already has: 6x6 and 7x7 off their
+  // x5 neighbour, 8x8 off 4x8 and a double.
   ['6,6', '5 x 6 = 30, add one more 6'],
   ['7,7', '5 x 7 = 35, then two more 7s'],
   ['8,8', '4 x 8 = 32, then double it'],

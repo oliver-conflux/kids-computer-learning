@@ -486,3 +486,22 @@ test('the returned facts are not shared state between calls', () => {
     '7x6',
   ]);
 });
+
+test('a model predating the taught field still yields a full learn session', () => {
+  // V2-Review-W1 SMALL 4 — surviving mutation. The rank predicate is
+  // `taught !== true`, not `taught === false`, precisely so a FactStats without
+  // the field ranks as untaught. Under `=== false` such a fact matches neither
+  // cold rank and then fails warm and hot too, and the session comes back EMPTY.
+  const legacy = { byId: new Map(), confusions: new Map() };
+  for (const f of allFacts()) {
+    const id = factId(f);
+    legacy.byId.set(id, {
+      id, fact: f, bucket: 'cold', attempts: [], cleanCount: 0, medianCleanMs: null,
+      // no `taught` key at all
+    });
+    legacy.confusions.set(id, new Set());
+  }
+  const picked = pickLearnFacts(legacy, CONFIG);
+  assert.equal(picked.length, CONFIG.learnFacts, 'a legacy model must not yield an empty session');
+  assert.deepEqual(picked.map((f) => `${f.a}x${f.b}`), ['7x7', '6x7', '7x6']);
+});

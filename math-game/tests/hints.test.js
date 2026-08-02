@@ -366,3 +366,63 @@ test('a fact with neither strategy text nor blocks still gets a learn ladder', (
   assert.equal(blocksApply(fact(0, 7), CONFIG), false);
   assert.deepEqual(ladderFor(fact(0, 7), CONFIG, 'learn'), LEARN_LADDER);
 });
+
+// --- strategy arithmetic (V2-Review-W1, SMALL 6) ---------------------------
+//
+// The <=40-char rule was tested; the SUMS were not. Mutating 6x6 to
+// "5 x 6 = 31, add one more 6", or 8x8 to "4 x 8 = 30, then double it" — which
+// teaches a kid that 8 x 8 is 60 — passed the entire suite. Strategy text is
+// content, and wrong content in a teaching game is worse than absent content:
+// the kid trusts it.
+
+test('every arithmetic claim inside a strategy string is true', () => {
+  const patterns = [
+    // "5 x 7 = 35, ..." / "10 x 4 = 40, ..."
+    { re: /(\d+) x (\d+) = (\d+)/g, check: (m) => Number(m[1]) * Number(m[2]) === Number(m[3]),
+      describe: (m) => `${m[1]} x ${m[2]} = ${m[3]}` },
+    // "double 7 = 14, ..."
+    { re: /double (\d+) = (\d+)/g, check: (m) => Number(m[1]) * 2 === Number(m[2]),
+      describe: (m) => `double ${m[1]} = ${m[2]}` },
+    // "double 7: 7 + 7"
+    { re: /double (\d+): (\d+) \+ (\d+)/g,
+      check: (m) => m[1] === m[2] && m[2] === m[3],
+      describe: (m) => `double ${m[1]}: ${m[2]} + ${m[3]}` },
+    // "double 7 twice: 14, 28"
+    { re: /double (\d+) twice: (\d+), (\d+)/g,
+      check: (m) => Number(m[1]) * 2 === Number(m[2]) && Number(m[1]) * 4 === Number(m[3]),
+      describe: (m) => `double ${m[1]} twice: ${m[2]}, ${m[3]}` },
+  ];
+
+  let claimsChecked = 0;
+  for (const f of allFacts()) {
+    const text = strategyFor(f);
+    if (text === null) continue;
+    for (const { re, check, describe } of patterns) {
+      for (const m of text.matchAll(re)) {
+        claimsChecked += 1;
+        assert.ok(check(m), `${factId(f)} strategy is arithmetically wrong: "${text}" claims ${describe(m)}`);
+      }
+    }
+  }
+  // Guard the guard: if the patterns stop matching anything, this test would
+  // pass vacuously while checking nothing.
+  // Guards the guard against passing vacuously. Not every rule states an
+  // equation — "7 then a 0 on the end" has nothing to check — so this is well
+  // below the total number of strategies.
+  assert.ok(claimsChecked >= 60, `only ${claimsChecked} claims parsed — patterns may have drifted`);
+});
+
+test('a strategy never states the answer it is teaching', () => {
+  // "6 x 7 = 42, ..." would hand over the very thing the kid is meant to derive,
+  // turning the strategy rung into a second reveal.
+  for (const f of allFacts()) {
+    const text = strategyFor(f);
+    if (text === null) continue;
+    for (const m of text.matchAll(/(\d+) x (\d+) = (\d+)/g)) {
+      const statesThisFact =
+        (Number(m[1]) === f.a && Number(m[2]) === f.b) ||
+        (Number(m[1]) === f.b && Number(m[2]) === f.a);
+      assert.ok(!statesThisFact, `${factId(f)} strategy gives away its own answer: "${text}"`);
+    }
+  }
+});

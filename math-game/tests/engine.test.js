@@ -741,3 +741,46 @@ test('the fact and ladder are carried through every transition unchanged', () =>
   assert.deepEqual(state.ladder, FULL);
   assert.deepEqual(state.startedAt, 0);
 });
+
+// --- v2 review findings (V2-Review-W1, SMALL 1 and SMALL 2) -----------------
+
+test('tick never advances a learn problem, however long it sits', () => {
+  // Spec §1: 'reveal' is reached by the kid pressing the button, never by
+  // elapsed time. Before this guard the rule rested on main.js remembering not
+  // to run a tick loop in learn mode, and one tick past the delay would log
+  // {stage:'reveal', mode:'learn', revealed:false} — a clock in the mode whose
+  // defining property is not having one.
+  const fact = { op: '*', a: 6, b: 7 };
+  let state = startProblem(fact, ['strategy', 'reveal'], 0);
+  for (const elapsed of [1, 4000, 60_000, 3_600_000]) {
+    const ticked = tick(state, elapsed, 4000);
+    assert.equal(ticked, state, `advanced after ${elapsed}ms`);
+    assert.equal(ticked.stage, 'strategy');
+    assert.equal(ticked.revealed, false);
+  }
+});
+
+test('tick still advances a drill problem on time', () => {
+  // The guard must be mode-specific, not a blanket disable.
+  const fact = { op: '*', a: 6, b: 7 };
+  const state = startProblem(fact, ['clean', 'reveal'], 0);
+  assert.equal(tick(state, 3999, 4000), state, 'before the delay it is a no-op');
+  assert.equal(tick(state, 4000, 4000).stage, 'reveal');
+});
+
+test('revealAnswer is a no-op once the problem has resolved', () => {
+  // Without a status guard, a press landing after the correct answer was typed
+  // logs a learn attempt claiming the reveal was reached and the button pressed
+  // — false on both counts, and it corrupts the one signal learn mode records.
+  const fact = { op: '*', a: 6, b: 7 };
+  let state = startProblem(fact, ['strategy', 'reveal'], 0);
+  state = typeDigit(state, '4', 10);
+  state = typeDigit(state, '2', 20);
+  assert.equal(state.status, 'correct');
+  assert.equal(state.stage, 'strategy', 'resolved without ever revealing');
+
+  const after = revealAnswer(state, 30);
+  assert.equal(after, state, 'must return the input by reference');
+  assert.equal(after.revealed, false);
+  assert.equal(after.stage, 'strategy');
+});

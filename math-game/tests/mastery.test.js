@@ -1040,3 +1040,40 @@ test('deriveMastery does not mutate a mixed-mode event list', () => {
   deriveMastery(events, CONFIG);
   assert.deepEqual(events, before);
 });
+
+test('the retain window keeps exactly config.retain, not one more', () => {
+  // V2-Review-W1 SMALL 5 — surviving mutation. `all.length > config.retain`
+  // mutated to `> config.retain + 1` passed the whole suite: with exactly
+  // retain+1 attempts the window silently widened to 6. Needs a case where the
+  // extra attempt is load-bearing, i.e. where keeping it changes the bucket.
+  const at = (i, ms) => ({
+    type: 'attempt', t: `2026-07-28T10:${String(i).padStart(2, '0')}:00.000Z`,
+    build: 'm2', session: 's', op: '*', a: 6, b: 7, ms, stage: 'clean', typed: [], wrong: [],
+  });
+  // Six attempts: one ancient slow one, then five fast. Retaining 5 gives hot;
+  // retaining 6 drags the median and gives warm.
+  const stats = deriveMastery(
+    [at(0, 50_000), at(1, 800), at(2, 850), at(3, 900), at(4, 820), at(5, 870)],
+    CONFIG,
+  ).byId.get('*:6x7');
+
+  assert.equal(stats.attempts.length, 5, 'the window is exactly retain');
+  assert.equal(stats.cleanCount, 5);
+  assert.equal(stats.bucket, 'hot', 'the 50s attempt must have fallen out');
+  assert.ok(stats.attempts.every((a) => a.ms < 1000), 'no ancient attempt retained');
+});
+
+test('maxPlausibleMs is inclusive at the boundary', () => {
+  // V2-Review-W1 SMALL 7 — `<=` mutated to `<` passed the whole suite.
+  const at = (i, ms) => ({
+    type: 'attempt', t: `2026-07-28T10:${String(i).padStart(2, '0')}:00.000Z`,
+    build: 'm2', session: 's', op: '*', a: 6, b: 7, ms, stage: 'clean', typed: [], wrong: [],
+  });
+  const exactly = deriveMastery([at(0, CONFIG.maxPlausibleMs)], CONFIG).byId.get('*:6x7');
+  assert.equal(exactly.cleanCount, 1, 'exactly maxPlausibleMs counts');
+  assert.equal(exactly.medianCleanMs, CONFIG.maxPlausibleMs);
+
+  const overBy1 = deriveMastery([at(0, CONFIG.maxPlausibleMs + 1)], CONFIG).byId.get('*:6x7');
+  assert.equal(overBy1.cleanCount, 0, 'one millisecond over does not');
+  assert.equal(overBy1.medianCleanMs, null);
+});
