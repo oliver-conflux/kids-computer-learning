@@ -143,7 +143,7 @@ expected to grow.
 Fact selection: the coldest facts that **have strategy text**. That filter does
 real work — `0 ×` and `1 ×` facts have no strategy at all, since there is no
 route to teach for "anything times zero", so the trivial facts cannot enter learn
-mode by construction. 78 of the 121 facts are eligible.
+mode by construction. 81 of the 121 facts are eligible — the 40 trivial ones are excluded.
 
 ### Learn mode is deliberately blocked, and drill deliberately interleaved
 
