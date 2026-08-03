@@ -60,10 +60,24 @@ both direct observations of the shipped product.
 ```
   ⌨️  Typing Game          ✖️  Numbers          📖  Learn Spelling   …
                                 ↓
-                        math-game/menu.html
+                     math-game/index.html   (no ?mode=)
 ```
 
-**`math-game/menu.html`** is a new page and the only new page. Three routes out:
+**The math menu is a screen, not a page.** `index.html` already holds `#stage`
+and `#results` and swaps between them with `hidden`; the menu is a third region
+beside them, rendered by `js/ui/menu.js` the way results are rendered by
+`js/ui/results.js`. There is no second HTML file.
+
+A separate page would mean a second bootstrap of a thing the app already does
+once — and would do it worse. It would fetch the log tail to draw its bars, then
+navigate to `index.html`, which fetches the same tail again a second later. It
+would need its own `flushOutbox()`-before-`loadEvents()` ordering, duplicating
+the trap documented at `js/main.js:710` into a second place where it can be got
+wrong. And it would put a page load between a kid and a game, in an app whose
+results screen already goes to the trouble of starting sessions with no reload
+at all (v2 §8).
+
+Three routes out of the menu screen:
 
 ```
   Numbers
@@ -86,6 +100,23 @@ both direct observations of the shipped product.
 
   [ Back to all games ]
 ```
+
+The three routes do **not** navigate. They call `runSession(mode)` directly, the
+way the results screen's continuation buttons already do — the menu hides, the
+stage appears. `?mode=` on the URL remains the deep link and the thing
+`games-menu.html` could still point at; it is simply no longer how the buttons
+work.
+
+### No `?mode=` means the menu, not a default mode
+
+`readMode()` returns `null` when the URL carries no recognised mode, and `null`
+shows the menu instead of starting anything. `CONFIG.mode` stops being a fallback
+for any real user path.
+
+This answers `next-steps.md` §5's open question — *"should `learn` be the default
+mode when the URL carries no `?mode=`?"*, currently `drill`, which teaches
+nothing. The answer is **neither**. A kid arriving with no query string has not
+chosen a mode, and picking one for her was always a guess.
 
 ### The table list lives on the menu, not behind another click
 
@@ -328,18 +359,23 @@ Both take the MasteryModel rather than raw events, since §6 puts the rung
 computation in `core/mastery.js` where every consumer already looks. `ordered.js`
 is then purely about rows and prefixes.
 
-### New: `math-game/menu.html`
+### New: `math-game/js/ui/menu.js`
 
-Reads the log through the existing `js/log.js` `loadEvents()`, derives the model,
-and renders §1. Presentation only; every number on it comes from
-`tableProgress`.
+Renders the menu screen into `#menu`. Presentation only, the same contract
+`ui/results.js` has: it holds no state, starts nothing, and reports which button
+was pressed through an `onMenuAction` callback that `main.js` acts on. Every
+number it draws comes from `tableProgress(model)`.
 
-**It must `await flushOutbox()` before `loadEvents()`**, in that order. This is
-the same trap `js/main.js:710` documents: a previous session that lost the server
-queued its events to the localStorage outbox, and reading the tail first means
-the menu renders progress from a history missing everything the last session
-recorded. The kid would finish a run and watch the bar not move. Getting the
-order wrong fails silently — the log ends up complete on disk either way.
+It needs no log access of its own. `main.js` has already flushed the outbox,
+read the tail and derived the model before anything renders, and the menu is
+re-rendered from the current model each time it is shown — so a run finished
+this sitting moves the bar without a reload.
+
+**The shell's progress bar must be cleared when the menu is shown.** It lives in
+`#shell` (`index.html:35`), outside `#stage`, so hiding the stage does not hide
+it: the menu would render under a stale `7 of 7` left over from the session that
+just ended. Nothing throws and no test goes red — it just quietly reads as
+progress through a menu.
 
 ### Changed
 
@@ -351,7 +387,10 @@ order wrong fails silently — the log ends up complete on disk either way.
 | `js/main.js:187` | Accept only `mode === 'drill'` or absent, replacing the current reject-list on `'learn'` | See below |
 | `js/hints.js:46` | `ordered: ['strategy', 'reveal']` | Same rungs as learn |
 | `js/main.js:98` | `MODES` gains `'ordered'` | |
-| `js/main.js:95` | `MENU_URL` becomes `./menu.html` | Done should return to the game's own home, not skip past it to the top level. One click back to the main menu from there |
+| `js/main.js:115` | `readMode()` returns `null` for an unrecognised or absent mode, instead of falling back to `CONFIG.mode` | No `?mode=` means show the menu — §1 |
+| `js/main.js:686` | `onAction` gains `'menu'`, which shows the menu screen rather than navigating | `Done` returns to the game's own home |
+| `js/main.js:95` | `MENU_URL` unchanged, now reached only from the menu screen's "Back to all games" | It is the one place a real navigation still happens |
+| `index.html` | A third region, `#menu`, beside `#stage` and `#results` | §1 |
 | `js/config.js` | `unaidedRuns: 2` | §3 |
 | `js/ui/results.js` | Ordered branch on the strip; three-rung block in the detail panel — §7 | |
 | `games-menu.html` | Two math cards become one | §1 |
