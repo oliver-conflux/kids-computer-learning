@@ -16,11 +16,20 @@
 //   core/scheduler.js weights, noRepeatWithin, governorWindow, governorFloor
 //   core/engine.js    build
 //   core/log.js       logTail
-//   game-only         mode, sessionLength, learnWords, learnPasses, windowSize,
-//                     delays, letterStepMs, typingWeightFloor
+//   game-only         mode, sessionLength, learnWords, learnPasses, delays,
+//                     letterStepMs, typingWeightFloor, probeMargin, drillCap,
+//                     probesPerSession, cursorStepUp, cursorStepDown,
+//                     markSpanSessions
 
 export const CONFIG = {
-  build: 's1',
+  // `s2` — PROBE AND RELEASE. Bumped here, with the commit that wires placement
+  // into main.js, because this is where what the kid actually sees changes: the
+  // window is gone, misses far past her frontier are released rather than
+  // drilled, and a word she gets right first time is finished with. Events
+  // stamped `s1` were produced under rules where a word cost three clean
+  // answers whatever happened, so the two are not comparable and the log has to
+  // say which is which.
+  build: 's2',
 
   // Which mode a session runs in when the URL carries no ?mode= parameter. The
   // menu links to ?mode=learn and ?mode=drill, so this is a fallback for opening
@@ -41,10 +50,61 @@ export const CONFIG = {
   learnWords: 4,
   learnPasses: 3,
 
-  // How many non-hot words the frontier exposes at once. The kid's level is
-  // never stored — it is derived from the log every session — and this is the
-  // only number controlling how wide that derived window is.
-  windowSize: 20,
+  // PROBE AND RELEASE — see docs/superpowers/specs/2026-08-03-probe-and-release-design.md
+  //
+  // The one idea these six keys encode: a miss produces INFORMATION, not an
+  // OBLIGATION. Probing goes wide — any word in the catalogue, so a word she can
+  // already spell is found and retired on one sighting. Admission to drill goes
+  // narrow — a missed word only becomes a drill word if it is near her frontier.
+  // Fusing those two decisions is what made the old window both slow to advance
+  // and prone to clogging with words she had no chance on.
+
+  // How far PAST the frontier cursor a missed word may still be admitted to
+  // drill. Everything beyond is released: recorded as missed, kept out of the
+  // drill set, re-probed later once the cursor has moved.
+  //
+  // DELIBERATELY NOT 0, though 0 won every cell of the simulation (945 words
+  // mastered against 870 at 120, monotonically). The simulated learner gains a
+  // FIXED increment per exposure, which mechanically makes nearly-known words the
+  // cheapest thing to drill and hands the win to the tightest possible margin.
+  // Real acquisition is not that shape. 60 is a hedge against our own synthetic
+  // kid — mostly tight, a little stretch.
+  //
+  // WHAT TO WATCH once a real kid plays: a drill set that keeps running dry means
+  // this is too tight; a drill set pinned at `drillCap` full of words she has no
+  // traction on means too loose.
+  probeMargin: 60,
+
+  // The working set: how many missed-and-not-yet-marked words are drilled at
+  // once. Replaces `windowSize`.
+  //
+  // BIGGER IS WORSE, which is counterintuitive enough to record. Simulated at
+  // 10/20/40/80, mastery came out 834/830/821/804. A large set spreads
+  // repetitions thin and converts nothing; a small one concentrates them. Do not
+  // raise this hoping for faster coverage — coverage comes from probes.
+  drillCap: 20,
+
+  // Probes per `sessionLength` problems. Probes are indistinguishable from drill
+  // problems on screen: same audio, same reveal ladder, same logging. The kid
+  // must never be able to tell she is being tested, which is the whole reason
+  // there is no placement screen.
+  probesPerSession: 4,
+
+  // How the frontier cursor moves on each first sighting. ASYMMETRIC ON PURPOSE.
+  //
+  // A correct answer is strong evidence: guessing is impossible in typed spelling
+  // — you do not produce `because` by chance — so the cursor advances confidently
+  // past a word she got. A miss is WEAK evidence: slips, typos, mishearings and
+  // distraction are all common at seven. So the retreat is large and provisional
+  // rather than a verdict.
+  cursorStepUp: 40,
+  cursorStepDown: 180,
+
+  // Three clean answers mark a missed word off, and they must land in at least
+  // this many distinct sessions. Three in one sitting measures short-term memory;
+  // the point is retention, and a night's sleep is the cheapest test of it we
+  // have. The log already carries `session`, so this costs nothing to enforce.
+  markSpanSessions: 2,
 
   retain: 5,
 
