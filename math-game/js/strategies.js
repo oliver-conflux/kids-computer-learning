@@ -61,7 +61,13 @@ const OPERAND_STRATEGIES = [
   { anchor: 2, text: (other) => `double ${other}: ${other} + ${other}` },
   { anchor: 9, text: (other) => `10 x ${other} = ${other * 10}, take away ${other}` },
   { anchor: 5, text: (other) => `10 x ${other} = ${other * 10}, take half` },
-  { anchor: 4, text: (other) => `double ${other} twice: ${other * 2}, ${other * 4}` },
+  // NEVER WRITE THE LAST NUMBER. This one used to read `double 8 twice: 16, 32`
+  // and 32 is the answer — the kid reads it off the screen instead of doubling,
+  // and the strategy stage stops being a route and becomes a slower reveal.
+  // Every other rule here hands over an INTERMEDIATE and leaves the final step
+  // to her; this is that rule matching the rest. Found by playing the 4s, where
+  // the same text comes round nine times.
+  { anchor: 4, text: (other) => `double ${other} twice: ${other * 2}, then double that` },
   { anchor: 3, text: (other) => `double ${other} = ${other * 2}, add one more ${other}` },
 ];
 

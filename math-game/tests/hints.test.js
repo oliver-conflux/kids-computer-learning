@@ -408,10 +408,12 @@ test('every arithmetic claim inside a strategy string is true', () => {
     { re: /double (\d+): (\d+) \+ (\d+)/g,
       check: (m) => m[1] === m[2] && m[2] === m[3],
       describe: (m) => `double ${m[1]}: ${m[2]} + ${m[3]}` },
-    // "double 7 twice: 14, 28"
-    { re: /double (\d+) twice: (\d+), (\d+)/g,
-      check: (m) => Number(m[1]) * 2 === Number(m[2]) && Number(m[1]) * 4 === Number(m[3]),
-      describe: (m) => `double ${m[1]} twice: ${m[2]}, ${m[3]}` },
+    // "double 7 twice: 14, then double that" — only the INTERMEDIATE is stated,
+    // deliberately, so there is one number here to check and not two. The
+    // second was the answer; see the answer-leak test below.
+    { re: /double (\d+) twice: (\d+)/g,
+      check: (m) => Number(m[1]) * 2 === Number(m[2]),
+      describe: (m) => `double ${m[1]} twice: ${m[2]}` },
   ];
 
   let claimsChecked = 0;
@@ -436,14 +438,27 @@ test('every arithmetic claim inside a strategy string is true', () => {
 test('a strategy never states the answer it is teaching', () => {
   // "6 x 7 = 42, ..." would hand over the very thing the kid is meant to derive,
   // turning the strategy rung into a second reveal.
+  //
+  // THIS TEST USED TO CHECK ONLY THE EQUATION FORM — it matched `N x N = N` and
+  // asked whether that named this fact. It passed for two versions while `x4`
+  // shipped as `double 8 twice: 16, 32`, where 32 is the answer written as a
+  // bare number. Nine facts, every one of them wrong, and the test that exists
+  // to catch exactly this walked past because the leak was not an equation.
+  // Found by playing the 4s instead.
+  //
+  // So the check is now on the NUMBER, by any route: if the product appears
+  // anywhere in the text, the kid can read it instead of working it out — and
+  // the log records `stage: 'strategy'` on what was really a lookup, so the
+  // ordered and learn rungs clear on evidence of reading. Nothing here cares
+  // what shape the sentence takes, which is the point: the next leak will
+  // arrive in a shape nobody predicted.
   for (const f of allFacts()) {
     const text = strategyFor(f);
     if (text === null) continue;
-    for (const m of text.matchAll(/(\d+) x (\d+) = (\d+)/g)) {
-      const statesThisFact =
-        (Number(m[1]) === f.a && Number(m[2]) === f.b) ||
-        (Number(m[1]) === f.b && Number(m[2]) === f.a);
-      assert.ok(!statesThisFact, `${factId(f)} strategy gives away its own answer: "${text}"`);
-    }
+    const numbers = text.match(/\d+/g) ?? [];
+    assert.ok(
+      !numbers.includes(String(answerOf(f))),
+      `${factId(f)} strategy gives away its own answer ${answerOf(f)}: "${text}"`,
+    );
   }
 });
