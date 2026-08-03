@@ -519,6 +519,133 @@ function renderGrid(model) {
   return grid;
 }
 
+// THE THREE RUNGS (spec §3). The three modes are not three parallel
+// measurements — they are ONE measurement, can she produce this answer, taken at
+// three levels of scaffolding:
+//
+//   in order   strategy on screen, and she knows the last one was 2x6, so the
+//              sequence is carrying her            WEAKEST evidence
+//   learn      strategy on screen, randomized, nothing to lean on
+//   drill      no hints, randomized, against a clock  STRONGEST evidence
+//
+// So the useful question is not "did she get it" but AT WHICH LEVEL OF SUPPORT
+// can she still get it. The lines are drawn in that order, weakest first, which
+// is what makes the block readable at a glance: the boundary between the ticks
+// and the dots is her current level of support, and it says which mode to run
+// next.
+//
+// `never` is a third state and not a variety of `not yet`. "She has been through
+// the 2s twice and still needs the button" and "she has never been through the
+// 2s" say opposite things about what to do, and one glyph for both would hide
+// the difference in the case a parent most wants to see.
+const RUNG_MARK = { cleared: '✓', tried: '·', never: '—' };
+
+// For the aria-label, where a glyph reads as nothing useful.
+const RUNG_STATE_WORD = { cleared: 'cleared', tried: 'not yet', never: 'never tried' };
+
+/**
+ * @param {number} n
+ * @param {string} one
+ * @param {string} many
+ * @returns {string} e.g. "1 time" / "3 times"
+ */
+function count(n, one, many) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/**
+ * One line of the three-rung block.
+ *
+ * @param {string} name the rung, as the kid sees it
+ * @param {'cleared' | 'tried' | 'never'} state
+ * @param {string} note what the numbers say
+ * @returns {HTMLElement}
+ */
+function rungLine(name, state, note) {
+  const item = el('li', `results__rung results__rung--${state}`);
+  item.setAttribute('aria-label', `${name}: ${RUNG_STATE_WORD[state]}. ${note}`);
+  const mark = el('span', 'results__rung-mark', RUNG_MARK[state]);
+  mark.setAttribute('aria-hidden', 'true');
+  item.append(mark);
+  item.append(el('span', 'results__rung-name', name));
+  item.append(el('span', 'results__rung-note', note));
+  return item;
+}
+
+/**
+ * The three-rung block: at which level of support can she still produce this?
+ *
+ * TWO NUMBERS NAMED `attempts` MEAN DIFFERENT THINGS, and the copy has to keep
+ * them apart. `learn.attempts` counts ATTEMPTS — a learn session cycles its few
+ * facts and each pass is a separate ask. `ordered.attempts` counts RUNS, whole
+ * walks of the table, because an ordered run serves each fact exactly once and
+ * two attempts inside one run are one occasion seen twice. Hence "times
+ * through" on the ordered line and "tries" on the learn one. Rendering the
+ * ordered number as answers typed would be wrong today only in wording, and
+ * wrong in fact the moment a run stops serving each fact once.
+ *
+ * `taughtCount` is deliberately not rendered anywhere here. It counts
+ * INSTRUCTION OCCASIONS OF EITHER KIND now that ordered attempts set `taught`,
+ * so three ordered runs plus one learn session reads 4 — and any copy calling
+ * that a number of lessons is now wrong.
+ *
+ * Drill's line reports the numbers it already had and clears on `bucket ===
+ * 'hot'`, the rule it has always had. It is the only rung that DECAYS, and the
+ * only one whose tick is a claim that she knows the fact.
+ *
+ * @param {import('../mastery.js').FactStats} stats
+ * @returns {HTMLElement}
+ */
+function renderRungs(stats) {
+  const block = el('div', 'results__block');
+  block.append(el('h4', 'results__h4', 'How much help you still need'));
+
+  const list = el('ul', 'results__rungs');
+
+  const ordered = stats.ordered;
+  const orderedRuns = count(ordered.attempts, 'time', 'times');
+  list.append(
+    rungLine(
+      'in order',
+      ordered.cleared ? 'cleared' : ordered.attempts === 0 ? 'never' : 'tried',
+      ordered.attempts === 0
+        ? 'this table has not been walked through yet'
+        : ordered.cleared
+          ? `on your own ${ordered.unaided} of ${orderedRuns} through — the run starts past it now`
+          : `on your own ${ordered.unaided} of ${orderedRuns} through`,
+    ),
+  );
+
+  const learn = stats.learn;
+  const learnTries = count(learn.attempts, 'try', 'tries');
+  list.append(
+    rungLine(
+      'learn',
+      learn.cleared ? 'cleared' : learn.attempts === 0 ? 'never' : 'tried',
+      learn.attempts === 0
+        ? 'learn mode has not shown you this one yet'
+        : `on your own ${learn.unaided} of ${learnTries} with the strategy up`,
+    ),
+  );
+
+  const drilled = stats.attempts.length > 0;
+  list.append(
+    rungLine(
+      'drill',
+      stats.bucket === 'hot' ? 'cleared' : drilled ? 'tried' : 'never',
+      !drilled
+        ? 'not drilled yet'
+        : stats.cleanCount === 0
+          ? 'no answers straight from memory yet'
+          : `${stats.cleanCount} straight from memory, typically ${formatMs(stats.medianCleanMs)}`,
+    ),
+  );
+
+  block.append(list);
+  block.append(el('p', 'results__caption', 'most help at the top'));
+  return block;
+}
+
 /**
  * @param {import('../mastery.js').MasteryModel} model
  * @param {string} id FactId
@@ -536,11 +663,10 @@ function renderDetail(model, id) {
   heading.append(el('span', `results__pill results__pill--${state}`, STATE_WORD[state]));
   panel.append(heading);
 
-  const line =
-    stats.cleanCount === 0
-      ? 'No answers straight from memory yet.'
-      : `${stats.cleanCount} straight from memory, typically ${formatMs(stats.medianCleanMs)}.`;
-  panel.append(el('p', 'results__detail-line', line));
+  // The clean count and the typical time used to be a standalone line here.
+  // They are drill's rung and nothing else, so they moved onto drill's line
+  // rather than being said twice a few pixels apart.
+  panel.append(renderRungs(stats));
 
   // Which mode to send this fact to next — the whole reason the fourth state
   // exists. Eligibility is asked of learn.js rather than re-derived here.

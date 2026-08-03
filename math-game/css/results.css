@@ -594,6 +594,59 @@
   margin-top: 14px;
 }
 
+/* --- the three rungs ---------------------------------------------------- */
+
+/* Read top to bottom as increasing difficulty — in order, learn, drill — so the
+ * line where the ticks stop is the kid's current level of support. Everything
+ * here is laid out to keep that boundary scannable: one line each, the marks in
+ * a column of their own, the names in a fixed-width column so the notes line up
+ * too. Nothing is reordered by state; the order IS the meaning. */
+.results__rungs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.results__rung {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--page);
+  font-size: 14px;
+}
+
+.results__rung-mark {
+  flex: 0 0 14px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: center;
+}
+
+.results__rung-name {
+  flex: 0 0 68px;
+  font-weight: 700;
+}
+
+.results__rung-note {
+  flex: 1 1 180px;
+  color: var(--muted);
+}
+
+/* A cleared rung is the only one that gets the accent. `tried` and `never` are
+ * deliberately identical in weight — neither is a failure, and shading one of
+ * them darker would turn "not yet" into a mark against her. */
+.results__rung--cleared .results__rung-mark {
+  color: var(--accent);
+}
+
+.results__rung--cleared .results__rung-name {
+  color: var(--accent);
+}
+
 .results__chips {
   display: flex;
   flex-wrap: wrap;
