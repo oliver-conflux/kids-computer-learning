@@ -87,6 +87,10 @@ test('a fact with zero attempts is present, cold, and has a null median', () => 
     // form and stays; the count is what lets a learn picker rotate between
     // equally-cold groups instead of returning the same one forever.
     taughtCount: 0,
+    // The two instruction rungs. This deepEqual is also the shape test for
+    // them: a new field on FactStats has to be added here deliberately.
+    ordered: { attempts: 0, unaided: 0, cleared: false },
+    learn: { attempts: 0, unaided: 0, cleared: false },
   });
 });
 
@@ -1134,4 +1138,136 @@ test('ordered attempts interleaved through drill change nothing the drill earned
   assert.equal(after.cleanCount, before.cleanCount);
   assert.equal(after.medianCleanMs, before.medianCleanMs);
   assert.deepEqual(after.attempts, before.attempts);
+});
+
+// --- v3: the two instruction rungs (spec §3, §4) ---------------------------
+
+const NEVER = { attempts: 0, unaided: 0, cleared: false };
+
+/** Minutes apart on one morning, so "the last two" is unambiguous. */
+function minute(index) {
+  return `2026-08-01T09:${String(index).padStart(2, '0')}:00.000Z`;
+}
+
+test('unaided means the strategy stage AND nothing wrong typed first', () => {
+  const learnRung = (event) => statsFor([event], SIX_SEVEN).learn;
+
+  assert.deepEqual(learnRung(learnAttempt(6, 7, 9000)), {
+    attempts: 1,
+    unaided: 1,
+    cleared: false,
+  });
+  assert.deepEqual(
+    learnRung(learnAttempt(6, 7, 9000, [], 'reveal')),
+    { attempts: 1, unaided: 0, cleared: false },
+    'she pressed the button — tried, but not unaided',
+  );
+  assert.deepEqual(
+    learnRung(learnAttempt(6, 7, 9000, [42])),
+    { attempts: 1, unaided: 0, cleared: false },
+    'right in the end, but not on the first typed value',
+  );
+});
+
+test('one unaided attempt clears nothing; two consecutive clear the rung', () => {
+  assert.deepEqual(statsFor([learnAttempt(6, 7, 9000)], SIX_SEVEN).learn, {
+    attempts: 1,
+    unaided: 1,
+    cleared: false,
+  });
+
+  const twice = repeat(2, (index) => at(minute(index), learnAttempt(6, 7, 9000)));
+  assert.deepEqual(statsFor(twice, SIX_SEVEN).learn, {
+    attempts: 2,
+    unaided: 2,
+    cleared: true,
+  });
+
+  assert.equal(
+    statsFor(twice, SIX_SEVEN, { ...CONFIG, unaidedRuns: 3 }).learn.cleared,
+    false,
+    'the threshold is config.unaidedRuns, not a hard-coded 2',
+  );
+});
+
+test('only the last two count: unaided-then-aided does not clear', () => {
+  const slipped = [
+    at(minute(0), learnAttempt(6, 7, 9000)),
+    at(minute(1), learnAttempt(6, 7, 9000, [42])),
+  ];
+  const rung = statsFor(slipped, SIX_SEVEN).learn;
+  assert.equal(rung.unaided, 1);
+  assert.equal(rung.cleared, false, 'one unaided in the log is not two unaided at the end of it');
+});
+
+test('only the last two count: aided-then-two-unaided does clear', () => {
+  const recovered = [
+    at(minute(0), learnAttempt(6, 7, 9000, [42])),
+    at(minute(1), learnAttempt(6, 7, 9000)),
+    at(minute(2), learnAttempt(6, 7, 9000)),
+  ];
+  assert.deepEqual(statsFor(recovered, SIX_SEVEN).learn, {
+    attempts: 3,
+    unaided: 2,
+    cleared: true,
+  });
+});
+
+test('learn counts attempts and ordered counts runs — the same twice is not the same twice', () => {
+  // A learn session cycles its few facts config.learnPasses times, so one
+  // session can produce two attempts on one fact, and both are evidence.
+  const twiceInOneLesson = [
+    at(minute(0), learnAttempt(6, 7, 9000)),
+    at(minute(1), learnAttempt(6, 7, 9000)),
+  ];
+  assert.deepEqual(
+    statsFor(twiceInOneLesson, SIX_SEVEN).learn,
+    { attempts: 2, unaided: 2, cleared: true },
+    'two attempts, one session, and the learn rung clears',
+  );
+
+  // An ordered run serves each fact once. Two attempts sharing a session id are
+  // therefore one occasion seen twice — she did not come back to it a week
+  // later, which is the whole point of asking for two.
+  const twiceInOneRun = [
+    at(minute(0), orderedAttempt(6, 7, 9000, [], 'strategy', 'run_a')),
+    at(minute(1), orderedAttempt(6, 7, 9000, [], 'strategy', 'run_a')),
+  ];
+  assert.deepEqual(
+    statsFor(twiceInOneRun, SIX_SEVEN).ordered,
+    { attempts: 1, unaided: 1, cleared: false },
+    'one run, however many times that run served the fact',
+  );
+
+  // The same two attempts, on two visits. This is what clearing looks like.
+  const twoRuns = [
+    at(minute(0), orderedAttempt(6, 7, 9000, [], 'strategy', 'run_a')),
+    at(minute(1), orderedAttempt(6, 7, 9000, [], 'strategy', 'run_b')),
+  ];
+  assert.deepEqual(statsFor(twoRuns, SIX_SEVEN).ordered, {
+    attempts: 2,
+    unaided: 2,
+    cleared: true,
+  });
+});
+
+test('the rungs do not read each other, and drill is neither of them', () => {
+  const events = [
+    ...repeat(3, (index) => at(minute(index), attempt(6, 7, 400, 'clean'))),
+    at(minute(3), orderedAttempt(6, 7, 9000)),
+  ];
+  const stats = statsFor(events, SIX_SEVEN);
+  assert.equal(stats.bucket, 'hot', 'drill has its own rung and this is it');
+  assert.deepEqual(stats.learn, NEVER, 'neither drill nor ordered is learn evidence');
+  assert.deepEqual(stats.ordered, { attempts: 1, unaided: 1, cleared: false });
+});
+
+test('a fact never attempted carries both rungs at zero, and every fact carries both', () => {
+  const model = deriveMastery([learnAttempt(6, 7, 9000), orderedAttempt(2, 3, 9000)], CONFIG);
+  assert.deepEqual(model.byId.get('*:3x4').learn, NEVER);
+  assert.deepEqual(model.byId.get('*:3x4').ordered, NEVER);
+  for (const [id, stats] of model.byId) {
+    assert.equal(typeof stats.learn?.cleared, 'boolean', `${id} has no learn rung`);
+    assert.equal(typeof stats.ordered?.cleared, 'boolean', `${id} has no ordered rung`);
+  }
 });

@@ -22,8 +22,8 @@
 //   core/scheduler.js weights, noRepeatWithin, governorWindow, governorFloor
 //   core/engine.js    build
 //   core/log.js       logTail
-//   game-only         mode, sessionLength, learnFacts, learnPasses, delays,
-//                     blocksMaxProduct
+//   game-only         mode, sessionLength, learnFacts, learnPasses,
+//                     unaidedRuns, delays, blocksMaxProduct
 //
 // `delays` is game-only despite looking shared: the engine takes `delayMs` as a
 // parameter and never reads the table, so each game decides for itself how a
@@ -51,6 +51,22 @@ export const CONFIG = {
   // two modes have opposite structures. Expected to grow as the kids do.
   learnFacts: 3,
   learnPasses: 4,
+
+  // How many unaided occasions in a row clear an INSTRUCTION rung — the learn
+  // rung counting attempts, the ordered rung counting runs. Drill is not
+  // governed by this: it has the `hot` bucket, which was always measured
+  // properly.
+  //
+  // Two, not one, because in both instruction modes THE STRATEGY IS ON SCREEN.
+  // "She did not press the reveal button" can mean she read `double 7 → 14`
+  // off the display, and one weak signal would clear a rung — and in ordered
+  // mode peel the fact permanently off the front of the run, so she never
+  // meets it again. Two separate occasions does not eliminate a lucky read,
+  // but a lucky read does not usually survive being asked again a week later.
+  //
+  // The cost is real and accepted: a table stays full length until the second
+  // visit.
+  unaidedRuns: 2,
 
   retain: 5,
   hotMs: 1500,
