@@ -6,13 +6,14 @@
 // `Math.random` appear here and in log.js and NOWHERE ELSE under math-game/js/ —
 // there is a project check that greps for exactly those two strings.
 //
-// v2 shape: ONE game, TWO modes, and a results screen that is a hub rather than
-// a terminus. The mode arrives on the URL (`?mode=learn`), falls back to
-// CONFIG.mode, and can be changed by a button on the results screen without a
-// page reload — so `runSession` is called many times per sitting and everything
-// it touches has to be re-established each time.
+// v3 shape: ONE game, THREE modes, and a results screen that is a hub rather
+// than a terminus. The mode arrives on the URL (`?mode=learn`), and can be
+// changed by a button on the results screen without a page reload — so
+// `runSession` is called many times per sitting and everything it touches has to
+// be re-established each time. There is NO fallback mode: a URL with no
+// recognised `?mode=` is a kid who has not chosen one.
 //
-//   flushOutbox -> loadEvents -> [ runSession(mode) -> results -> ... ]*
+//   flushOutbox -> loadEvents -> [ runSession(mode, table) -> results -> ... ]*
 //
 // Within one session:
 //
@@ -20,11 +21,13 @@
 //
 // where N and the pick differ by mode:
 //
-//   drill  N = CONFIG.sessionLength, picked one at a time by the scheduler,
-//          a rAF tick loop driving the reveal timer.
-//   learn  N = the length of the session buildLearnSession returned, decided
-//          up front, and NO tick loop at all — the kid's button is the only
-//          thing that ever advances a learn problem.
+//   drill    N = CONFIG.sessionLength, picked one at a time by the scheduler,
+//            a rAF tick loop driving the reveal timer.
+//   learn    N = the length of the session buildLearnSession returned, decided
+//            up front, and NO tick loop at all — the kid's button is the only
+//            thing that ever advances a learn problem.
+//   ordered  N = the length of the run runFor returned for `?table=`, decided up
+//            front, and no tick loop either. The scheduler is not called at all.
 //
 // One problem at a time. `runProblem` returns a promise that settles when the
 // correct answer lands, so a session is a plain `for` loop with an `await` in it
@@ -39,10 +42,11 @@
 
 import { CONFIG } from './config.js';
 import { allFacts, factId } from './facts.js';
-import { deriveMastery } from './mastery.js';
+import { deriveMastery, previousSessionMedian } from './mastery.js';
 import { pickNext } from './scheduler.js';
 import { ladderFor, delayMsFor } from './hints.js';
 import { pickLearnFacts, buildLearnSession, isLearnable } from './learn.js';
+import { runFor, isTable } from './ordered.js';
 import {
   startProblem,
   typeDigit,
@@ -94,30 +98,53 @@ const ADVANCE_HOLD_MS = 350;
 /** Where the Done button goes. Relative to math-game/index.html. */
 const MENU_URL = '../games-menu.html';
 
-/** The only two modes. Anything else on the URL is not a mode. */
-const MODES = ['drill', 'learn'];
+/** The only three modes. Anything else on the URL is not a mode. */
+const MODES = ['drill', 'learn', 'ordered'];
 
 // ---------------------------------------------------------------------------
 // small helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Which mode this page was opened in.
+ * Which mode this page was opened in, or null for "the kid has not said".
  *
- * `?mode=` wins, `CONFIG.mode` is the fallback for someone opening index.html
- * directly, and anything unrecognised falls back rather than being passed on —
- * `ladderFor` throws on an unknown mode, and a typo in a bookmark should not be
- * a blank screen. The fallback itself is validated for the same reason: it is a
- * config value, and config values get edited.
+ * NULL IS A REAL ANSWER AND NOT A FAILURE. There is no fallback mode any more:
+ * `CONFIG.mode` is retired, because the three modes are different activities
+ * rather than difficulty levels and choosing one for a kid who arrived with no
+ * `?mode=` was always a guess — and the guess was `drill`, which teaches
+ * nothing. Null means show the game's own menu and let her pick.
  *
- * @returns {'drill' | 'learn'}
+ * Anything unrecognised is null for the same reason a missing mode is: a typo in
+ * a bookmark must land on the menu, never on a blank screen and never on
+ * `ladderFor`, which throws on a mode it does not know.
+ *
+ * @returns {'drill' | 'learn' | 'ordered' | null}
  */
 function readMode() {
   const requested = new URLSearchParams(window.location.search).get('mode');
-  if (MODES.includes(requested)) {
-    return requested;
+  return MODES.includes(requested) ? requested : null;
+}
+
+/**
+ * Which table `?table=` asks for, or null for "not a table".
+ *
+ * Only ordered mode reads this. The range check is `isTable` from ordered.js
+ * rather than a pair of bounds written out here, so there is one copy of "which
+ * rows are tables" in the codebase — two copies of a range is the divergence
+ * shape that has already bitten this project twice.
+ *
+ * `Number()` is deliberately not used: it turns '' into 0 and ' 3 ' into 3.
+ * `?table=` with nothing after it is a missing table, not the 0s.
+ *
+ * @returns {number | null}
+ */
+function readTable() {
+  const requested = new URLSearchParams(window.location.search).get('table');
+  if (requested === null || !/^\d+$/.test(requested)) {
+    return null;
   }
-  return MODES.includes(CONFIG.mode) ? CONFIG.mode : 'drill';
+  const table = Number.parseInt(requested, 10);
+  return isTable(table) ? table : null;
 }
 
 /**
@@ -150,50 +177,6 @@ function hold(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
-}
-
-/**
- * `previousMedianMs` for the results screen: the `medianMs` of the most recent
- * SessionEvent that PRECEDES the session about to start.
- *
- * Called with the loaded tail plus everything this sitting has recorded, so a
- * kid who chains three drill sessions is compared against the one they just
- * finished rather than against whatever the log ended with an hour ago. On a
- * first run there is nothing to compare and this returns null, which the results
- * screen renders as "first session — this is your starting point".
- *
- * TRAP's sibling: `t` values are compared as plain strings, which is
- * chronological only because every writer in this system emits `toISOString()`.
- *
- * @param {object[]} events
- * @returns {number | null}
- */
-function previousSessionMedian(events) {
-  let best = null;
-  for (const event of events) {
-    if (event === null || typeof event !== 'object') continue;
-    if (event.type !== 'session' || !Number.isFinite(event.medianMs)) continue;
-    // DRILL SESSIONS ONLY. A drill median measures retrieval against a clock; a
-    // learn median measures how long a kid took to work through a derivation
-    // with the strategy in front of them and the answer behind a button. Spec §5
-    // is explicit that those do not share a scale, and comparing them is exactly
-    // what the learn results strip already refuses to do. Without this filter a
-    // drill session run straight after a learn session reported "quicker than
-    // last time" against a number that means something else entirely.
-    //
-    // An ABSENT `mode` is a drill session — every session line written before
-    // v2 predates the field, and all of them were drills. Same rule as attempt
-    // events, so all existing history keeps working with no migration.
-    if (event.mode === 'learn') continue;
-    if (best === null) {
-      best = event;
-      continue;
-    }
-    const bestT = typeof best.t === 'string' ? best.t : '';
-    const eventT = typeof event.t === 'string' ? event.t : '';
-    if (eventT >= bestT) best = event;
-  }
-  return best === null ? null : best.medianMs;
 }
 
 /**
@@ -311,12 +294,12 @@ let running = false;
  * `mode` rides along because `renderProblem` needs it and ProblemState
  * deliberately has no mode field: what mode a problem is in is a property of the
  * SESSION, and this module is the only thing that knows it. `delayMs` is null in
- * learn mode, where there is no timer to have a delay for.
+ * both instruction modes, where there is no timer to have a delay for.
  *
  * @type {{
  *   state: object,
  *   delayMs: number | null,
- *   mode: 'drill' | 'learn',
+ *   mode: 'drill' | 'learn' | 'ordered',
  *   resolve: (state: object) => void,
  * } | null}
  */
@@ -420,12 +403,13 @@ function onReveal() {
  * unchanged by reference when the delay has not elapsed, so `apply` no-ops and
  * the DOM is not touched on the overwhelming majority of frames.
  *
- * Learn mode never starts this loop, and the `delayMs === null` guard means that
- * even if it somehow ran it could not advance a learn problem. `tick` itself
- * refuses a learn ladder too. Three independent guards for one rule, because
- * "no clock" is the defining property of the mode and a timer sneaking in would
- * show up only as an answer appearing on its own — which reads as a bug in the
- * kid's own memory of what they pressed.
+ * NEITHER INSTRUCTION MODE STARTS THIS LOOP, and the `delayMs === null` guard
+ * means that even if it somehow ran it could not advance a learn or an ordered
+ * problem. `tick` itself refuses a ['strategy','reveal'] ladder too, which is
+ * both of them. Three independent guards for one rule, because "no clock" is the
+ * defining property of those modes and a timer sneaking in would show up only as
+ * an answer appearing on its own — which reads as a bug in the kid's own memory
+ * of what they pressed.
  *
  * @returns {void}
  */
@@ -457,8 +441,8 @@ function stopTickLoop() {
  * @param {{op: string, a: number, b: number}} fact
  * @param {string[]} ladder
  * @param {number | null} delayMs the reveal delay for this fact's CURRENT
- *   bucket in drill; null in learn, which has no timer
- * @param {'drill' | 'learn'} mode
+ *   bucket in drill; null in learn and ordered, which have no timer
+ * @param {'drill' | 'learn' | 'ordered'} mode
  * @returns {Promise<object>} the resolved ProblemState
  */
 function runProblem(fact, ladder, delayMs, mode) {
@@ -492,16 +476,18 @@ function knownEvents() {
  * screen, a progress bar reset to zero, and the stage swapped back in front of
  * the results.
  *
- * @param {'drill' | 'learn'} mode
+ * @param {'drill' | 'learn' | 'ordered'} mode
+ * @param {number | null} [table] which table, for ordered mode ONLY. Null in
+ *   drill and learn, which do not have one.
  * @returns {Promise<void>}
  */
-async function runSession(mode) {
+async function runSession(mode, table = null) {
   running = true;
 
   // Fresh model, from the log plus everything this sitting has already played.
   // In drill this feeds the scheduler; in learn it decides which facts get
-  // taught, and including `sittingEvents` is the difference between a second
-  // learn session teaching three new facts and repeating the last three.
+  // taught, and in ordered it decides how much of the table has peeled — so
+  // including `sittingEvents` is what makes a run played this sitting count.
   model = deriveMastery(knownEvents(), CONFIG);
 
   const session = newSessionId();
@@ -509,15 +495,35 @@ async function runSession(mode) {
   const previousMedianMs = previousSessionMedian(knownEvents());
 
   // The item list. Drill picks one at a time, because each pick depends on the
-  // outcome of the last. Learn decides the whole thing up front, because its
-  // shape is fixed before the kid answers anything.
+  // outcome of the last. Both instruction modes decide the whole thing up front,
+  // because their shape is fixed before the kid answers anything — and ordered
+  // mode NEVER CALLS THE SCHEDULER at all: the run is a row of the table with
+  // its cleared prefix trimmed, in table order, every time.
   //
-  // Progress totals come from `plan.length`, NEVER from learnFacts * learnPasses:
+  // Progress totals come from `plan.length`, NEVER from a config multiplication:
   // `pickLearnFacts` returns FEWER than learnFacts when eligibility runs out, and
   // a hard-coded 12 against a 8-item session would leave the bar stuck at 8/12
-  // on a screen that has already moved on.
-  const plan = mode === 'learn' ? buildLearnSession(pickLearnFacts(model, CONFIG), CONFIG) : null;
+  // on a screen that has already moved on. The same holds harder in ordered mode,
+  // where the run shortens by design as facts peel off the front — an eleven the
+  // bar could not reach would be wrong on every visit after the first.
+  let plan = null;
+  if (mode === 'learn') {
+    plan = buildLearnSession(pickLearnFacts(model, CONFIG), CONFIG);
+  } else if (mode === 'ordered') {
+    plan = runFor(model, table);
+  }
   const total = plan === null ? CONFIG.sessionLength : plan.length;
+
+  // A session with nothing in it is the failure the `canLearn` guard already
+  // exists to prevent, and a deep link is the one way to ask for one: a table
+  // whose facts have all cleared has an empty run, and the menu renders that row
+  // as done and not as a control. Refuse rather than march the kid through zero
+  // problems to a results screen reporting nothing.
+  if (plan !== null && plan.length === 0) {
+    console.warn(`math-game: nothing to play in ${mode}${table === null ? '' : ` table ${table}`}`);
+    running = false;
+    return;
+  }
 
   resultsRegion.hidden = true;
   stage.hidden = false;
@@ -536,25 +542,31 @@ async function runSession(mode) {
   for (let index = 0; index < total; index += 1) {
     // The learn plan holds REPEATED REFERENCES to the same fact objects — the
     // same `A` object appears at index 0, 3, 6 and 9. Passes are told apart by
-    // INDEX, never by object identity, and nothing here writes to a fact.
+    // INDEX, never by object identity, and nothing here writes to a fact. An
+    // ordered run serves each of its facts exactly once, so it has no such
+    // repeats — which is why its rung counts runs where learn's counts attempts.
     const fact = plan === null ? pickNext(model, history, CONFIG, rng) : plan[index];
     const id = factId(fact);
 
     // TRAP — PASS `mode` EXPLICITLY. `ladderFor`'s third parameter defaults to
-    // `config.mode`, which is the FALLBACK for a URL with no query string, not
-    // the mode this session is running in. `ladderFor(fact, CONFIG)` inside a
-    // learn session started from `?mode=learn` therefore returns the DRILL
-    // ladder: the kid gets a hint-free screen with no strategy and no button,
-    // the log records `stage: 'clean'` on learn attempts, and mastery's "clean
-    // means retrieval" rule quietly starts counting instruction as fluency.
-    // Nothing throws.
+    // `config.mode`, which USED TO BE the fallback for a URL with no query
+    // string and is not the mode this session is running in. While that key
+    // existed, `ladderFor(fact, CONFIG)` inside a learn session started from
+    // `?mode=learn` returned the DRILL ladder: the kid got a hint-free screen
+    // with no strategy and no button, the log recorded `stage: 'clean'` on
+    // instruction attempts, and mastery's "clean means retrieval" rule quietly
+    // started counting instruction as fluency. Nothing threw.
+    //
+    // `CONFIG.mode` is retired now, so the same slip throws instead of lying —
+    // but the fix is unchanged and applies identically to ordered mode: pass it.
     const ladder = ladderFor(fact, CONFIG, mode);
 
     // Drill's reveal delay follows the fact's CURRENT bucket: a cold fact is
     // rescued in 4s, a hot one is made to wait 8s because by then the retrieval
     // effort is the exercise. The delay grows with mastery — that is not a typo.
-    // Learn has no delay at all; null, not a large number, so nothing downstream
-    // can mistake it for a very patient timer.
+    // NEITHER INSTRUCTION MODE HAS A DELAY AT ALL: null, not a large number, so
+    // nothing downstream can mistake it for a very patient timer. In ordered
+    // mode as in learn, the only thing that ever advances a problem is the kid.
     const delayMs = mode === 'drill' ? delayMsFor(model.byId.get(id).bucket, CONFIG) : null;
 
     const resolved = await runProblem(fact, ladder, delayMs, mode);
@@ -635,6 +647,12 @@ async function runSession(mode) {
     // derivation median — the comparison spec §5 forbids. Absent means drill,
     // matching the attempt-event rule, so v1 history needs no migration.
     mode,
+    // Which table an ordered run walked, written for ordered sessions ONLY. The
+    // rungs do not need it — they derive the table from `fact.a` on the attempts
+    // themselves, which is what keeps an abandoned run's evidence usable — so
+    // this is for reading the log by eye and for the results screen. A `table` on
+    // a drill line would be a column of nulls that reads as a real signal.
+    ...(mode === 'ordered' ? { table } : {}),
     items,
     cleanRate,
     medianMs,
@@ -676,14 +694,20 @@ async function runSession(mode) {
  * A continuation button on the results screen. Registered once at startup; the
  * listener is delegated on the container, so it survives every re-render.
  *
- * 'learn' and 'drill' start a new session in that mode with NO page reload —
- * which is why `runSession` re-derives everything rather than trusting module
- * state left over from the session that just ended.
+ * A mode name starts a new session in that mode with NO page reload — which is
+ * why `runSession` re-derives everything rather than trusting module state left
+ * over from the session that just ended.
  *
- * @param {'learn' | 'drill' | 'done'} action
+ * 'ordered' needs a table and is refused without a valid one. The results
+ * screen does not offer that button yet; when it does, it passes the number
+ * alongside the action, and a button that arrived without one would otherwise
+ * start a run over a row that does not exist.
+ *
+ * @param {'learn' | 'drill' | 'ordered' | 'done'} action
+ * @param {number | null} [table] required for 'ordered', ignored otherwise
  * @returns {void}
  */
-function onAction(action) {
+function onAction(action, table = null) {
   if (action === 'done') {
     window.location.href = MENU_URL;
     return;
@@ -691,7 +715,10 @@ function onAction(action) {
   if (!MODES.includes(action) || running) {
     return;
   }
-  runSession(action).catch((error) => {
+  if (action === 'ordered' && !isTable(table)) {
+    return;
+  }
+  runSession(action, table).catch((error) => {
     console.error('math-game: session failed', error);
   });
 }
@@ -718,7 +745,21 @@ async function main() {
   onRevealClick(stage, onReveal);
   onResultsAction(resultsRegion, onAction);
 
-  await runSession(readMode());
+  const mode = readMode();
+  const table = readTable();
+
+  // A URL with no recognised `?mode=`, or `?mode=ordered` without a table this
+  // game has, is not an error and is not a session — it is a kid who has not
+  // chosen yet, or a mistyped bookmark. Both belong on the menu screen, which is
+  // the next task's work; until it lands, this is a deliberate no-op and the
+  // page renders the empty shell. THE DEEP LINKS ARE THE ONLY WAY IN MEANWHILE:
+  // ?mode=drill, ?mode=learn, ?mode=ordered&table=N.
+  if (mode === null || (mode === 'ordered' && table === null)) {
+    console.warn('math-game: no mode chosen — the menu screen goes here');
+    return;
+  }
+
+  await runSession(mode, table);
 }
 
 main().catch((error) => {

@@ -1,5 +1,5 @@
-// Mastery derivation for the math game: the core model, plus the two
-// instruction rungs.
+// Mastery derivation for the math game: the core model, the two instruction
+// rungs, and which past session a new one may be compared against.
 //
 // Most of the logic lives in core/mastery.js and is shared with the spelling
 // game. This file is the binding: it supplies math's item-space adapter, which
@@ -33,6 +33,12 @@
 // putting these in the shared module would impose a rule on it that it cannot
 // exercise and would have to be re-verified against.
 //
+// `previousSessionMedian` reads SESSION events rather than attempts, which makes
+// it the odd export here. It lives in this file because it is the other rule
+// about what the log's history is allowed to claim, it shares this module's
+// timestamp ordering, and — the practical reason — main.js reaches for the DOM
+// at import time, so anything left in there cannot be tested at all.
+//
 // Pure module: no DOM, no network, no clock, no randomness. Config arrives as a
 // parameter so the same log can be replayed under a different tunables table.
 
@@ -42,6 +48,8 @@ import { mathSpace } from './space.js';
 export { compareTimestamps };
 
 const ATTEMPT_TYPE = 'attempt';
+const SESSION_TYPE = 'session';
+const DRILL_MODE = 'drill';
 const LEARN_MODE = 'learn';
 const ORDERED_MODE = 'ordered';
 // The stage an attempt lands on when the reveal button was never pressed. Both
@@ -211,6 +219,55 @@ function collectRungOutcomes(events) {
   }
 
   return { learn, ordered };
+}
+
+/**
+ * `previousMedianMs` for the results screen: the `medianMs` of the most recent
+ * DRILL SessionEvent in this list.
+ *
+ * Called with the loaded tail plus everything the sitting has recorded, so a kid
+ * who chains three drill sessions is compared against the one she just finished
+ * rather than against whatever the log ended with an hour ago. Nothing to
+ * compare returns null, which the results screen renders as "first session —
+ * this is your starting point".
+ *
+ * TRAP — THIS IS AN ACCEPT-LIST, AND IT MUST STAY ONE. Accepted: `mode` absent,
+ * or exactly `'drill'`. Everything else is rejected, INCLUDING A MODE THIS
+ * FUNCTION HAS NEVER HEARD OF.
+ *
+ * It used to be a reject-list — `if (event.mode === 'learn') continue` — which
+ * was correct for exactly as long as there were two modes. Ordered mode walked
+ * straight through it, and a session median measured with the strategy on screen
+ * and the answer behind a button became the bar a drill session was measured
+ * against. Spec §5 forbids that comparison because the two do not share a scale,
+ * and it fails SILENTLY: a plausible number, no exception, no red test. A
+ * reject-list makes every future mode that same bug on the day it lands.
+ *
+ * An ABSENT `mode` is a drill session. Every session line written before the
+ * field existed was a drill, the same rule attempt events follow, so all v1
+ * history keeps working with no migration.
+ *
+ * `t` values are compared as plain strings, which is chronological only because
+ * every writer in this system emits `toISOString()`.
+ *
+ * @param {object[]} events
+ * @returns {number | null}
+ */
+export function previousSessionMedian(events) {
+  let best = null;
+  for (const event of events) {
+    if (event === null || typeof event !== 'object') continue;
+    if (event.type !== SESSION_TYPE || !Number.isFinite(event.medianMs)) continue;
+    if (event.mode !== undefined && event.mode !== DRILL_MODE) continue;
+    if (best === null) {
+      best = event;
+      continue;
+    }
+    const bestT = typeof best.t === 'string' ? best.t : '';
+    const eventT = typeof event.t === 'string' ? event.t : '';
+    if (eventT >= bestT) best = event;
+  }
+  return best === null ? null : best.medianMs;
 }
 
 /**

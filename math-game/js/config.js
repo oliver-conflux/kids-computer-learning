@@ -22,8 +22,8 @@
 //   core/scheduler.js weights, noRepeatWithin, governorWindow, governorFloor
 //   core/engine.js    build
 //   core/log.js       logTail
-//   game-only         mode, sessionLength, learnFacts, learnPasses,
-//                     unaidedRuns, delays, blocksMaxProduct
+//   game-only         sessionLength, learnFacts, learnPasses, unaidedRuns,
+//                     delays, blocksMaxProduct
 //
 // `delays` is game-only despite looking shared: the engine takes `delayMs` as a
 // parameter and never reads the table, so each game decides for itself how a
@@ -38,10 +38,13 @@
 export const CONFIG = {
   build: 'm2',
 
-  // Which mode a session runs in when the URL carries no ?mode= parameter.
-  // The menu links to ?mode=learn and ?mode=drill, so this is a fallback for
-  // opening index.html directly, not the primary mechanism.
-  mode: 'drill',
+  // THERE IS NO `mode` KEY, and adding one back would be a mistake. It used to
+  // say which mode a session runs in when the URL carries no ?mode=; a URL with
+  // no ?mode= now shows the game's own menu, because a kid who arrives without
+  // choosing a mode has not chosen one and picking for her was always a guess.
+  // The three modes are different ACTIVITIES, not difficulty levels, so there is
+  // no sensible default among them — and the old one was `drill`, which teaches
+  // nothing.
 
   sessionLength: 20,
 

@@ -205,6 +205,12 @@ something and a bad reason to skip the design conversation.
   math client needed no change.
 - **`master` is not pushed.** `origin/master` is still at the pre-math-game
   commit.
+- **Ordered attempts carry no `revealed` field.** `toAttemptEvent` writes it for
+  `mode: 'learn'` only, so ordered lines omit it although the button is on their
+  screen too. Nothing is lost — `stage` already says whether it was pressed, and
+  that is what both instruction rungs read — but a log reader comparing the two
+  instruction modes by eye will notice the asymmetry. Left alone because
+  `core/engine.js` is shared with spelling and this is a field nothing consumes.
 - **The log is committed deliberately** (v1 spec §14) and now holds three real
   sessions — one v1, one learn, one drill. Do not clear it; it is the before/after
   baseline, and `build` tags separate `m1` from `m2`.

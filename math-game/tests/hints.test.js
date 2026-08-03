@@ -36,6 +36,19 @@ test('the learn ladder is exactly strategy -> reveal for all 121 facts', () => {
   }
 });
 
+test('the ordered ladder is the learn ladder — the same two rungs', () => {
+  // Ordered mode borrows learn's feel entirely: the strategy is on screen from
+  // the first frame, the answer is behind a button, and there is no clock. It
+  // changes exactly one thing, which is which facts get served and in what
+  // order — and that is a session decision this module never sees. A 'clean'
+  // rung here would put ordered attempts inside mastery's "clean means
+  // retrieval" rule, which is the seam the whole mode sits on the other side of.
+  for (const f of allFacts()) {
+    assert.deepEqual(ladderFor(f, CONFIG, 'ordered'), LEARN_LADDER, factId(f));
+    assert.ok(!ladderFor(f, CONFIG, 'ordered').includes('clean'), factId(f));
+  }
+});
+
 test('a learn ladder never contains clean, and a drill ladder never contains strategy', () => {
   for (const f of allFacts()) {
     assert.ok(!ladderFor(f, CONFIG, 'learn').includes('clean'), factId(f));
@@ -54,7 +67,7 @@ test('blocks is not a stage in either mode', () => {
 
 test('every ladder ends in reveal and has exactly two stages', () => {
   for (const f of allFacts()) {
-    for (const mode of ['drill', 'learn']) {
+    for (const mode of ['drill', 'learn', 'ordered']) {
       const ladder = ladderFor(f, CONFIG, mode);
       assert.equal(ladder.length, 2, `${factId(f)} ${mode}`);
       assert.equal(ladder[ladder.length - 1], 'reveal', `${factId(f)} ${mode}`);
@@ -89,10 +102,18 @@ test('the ladder does not vary with blocksMaxProduct', () => {
   }
 });
 
-test('ladderFor falls back to config.mode when no mode is passed', () => {
-  assert.equal(CONFIG.mode, 'drill');
-  assert.deepEqual(ladderFor(fact(6, 7), CONFIG), DRILL_LADDER);
-  assert.deepEqual(ladderFor(fact(6, 7), { ...CONFIG, mode: 'learn' }), LEARN_LADDER);
+test('there is no mode fallback left in the config, so an omitted mode throws', () => {
+  // `CONFIG.mode` is gone. It was the fallback for a URL with no ?mode=, and a
+  // URL with no ?mode= now means "show the menu" rather than "start whatever
+  // this key says" — nobody arriving with no query string has chosen a mode.
+  //
+  // The consequence is worth a test of its own, because the OLD behaviour was
+  // the silent one: `ladderFor(fact, CONFIG)` inside a learn session used to
+  // return the DRILL ladder, and the kid got a hint-free screen while the log
+  // recorded `stage: 'clean'` on instruction attempts. Now it throws. Call
+  // sites pass the mode explicitly.
+  assert.equal(CONFIG.mode, undefined);
+  assert.throws(() => ladderFor(fact(6, 7), CONFIG), /undefined/);
 });
 
 test('ladderFor throws on an unknown mode', () => {
@@ -233,7 +254,7 @@ test('nextStage returns null at the end of a ladder', () => {
 
 test('nextStage returns null at the end of every ladder, in both modes', () => {
   for (const f of allFacts()) {
-    for (const mode of ['drill', 'learn']) {
+    for (const mode of ['drill', 'learn', 'ordered']) {
       const ladder = ladderFor(f, CONFIG, mode);
       assert.equal(nextStage(ladder, ladder[ladder.length - 1]), null, `${factId(f)} ${mode}`);
     }
@@ -247,7 +268,7 @@ test('nextStage walks the single transition of each ladder', () => {
 
 test('walking from the first stage visits every stage of every ladder exactly once', () => {
   for (const f of allFacts()) {
-    for (const mode of ['drill', 'learn']) {
+    for (const mode of ['drill', 'learn', 'ordered']) {
       const ladder = ladderFor(f, CONFIG, mode);
       const walked = [ladder[0]];
       let current = nextStage(ladder, ladder[0]);

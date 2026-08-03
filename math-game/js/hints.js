@@ -11,8 +11,15 @@
 //
 // So the modes split, and the ladders with them:
 //
-//   drill -> ['clean', 'reveal']      no help of any kind, for all 121 facts
-//   learn -> ['strategy', 'reveal']   help from the first frame, no clock
+//   drill   -> ['clean', 'reveal']      no help of any kind, for all 121 facts
+//   learn   -> ['strategy', 'reveal']   help from the first frame, no clock
+//   ordered -> ['strategy', 'reveal']   the same two rungs as learn
+//
+// Ordered mode is INSTRUCTION, not drill. A kid marching a table she has not
+// learned needs the route in front of her; what is new in that mode is the
+// ordering, not the removal of help. So it shares learn's ladder exactly — and
+// sharing it is what makes "unaided" mean the same thing in both, which is what
+// lets one predicate serve both instruction rungs (see js/mastery.js).
 //
 // Both are FIXED. No predicates, no per-fact variation. That uniformity is the
 // point in drill: keeping blocks would have made the game behave differently for
@@ -46,6 +53,7 @@ import { answerOf } from './facts.js';
 const LADDERS = {
   drill: ['clean', 'reveal'],
   learn: ['strategy', 'reveal'],
+  ordered: ['strategy', 'reveal'],
 };
 
 /**
@@ -53,9 +61,16 @@ const LADDERS = {
  * `fact` and `config` are accepted so callers need not special-case, and so a
  * future operation can vary the ladder without every call site changing.
  *
+ * PASS `mode`. The default is a historical shape, not a fallback: `CONFIG.mode`
+ * was retired when a URL with no `?mode=` started meaning "show the menu", so an
+ * omitted mode is now `undefined` and THROWS. That is the wanted failure — while
+ * the fallback existed, forgetting the argument inside a learn session silently
+ * returned the DRILL ladder and the log recorded `stage: 'clean'` on instruction
+ * attempts.
+ *
  * @param {{op: string, a: number, b: number}} fact
- * @param {{mode?: 'drill'|'learn'}} config
- * @param {'drill'|'learn'} [mode] defaults to `config.mode`
+ * @param {{mode?: 'drill'|'learn'|'ordered'}} config
+ * @param {'drill'|'learn'|'ordered'} [mode] no longer defaulted in practice
  * @returns {('clean'|'strategy'|'reveal')[]} a fresh array, safe to mutate
  */
 export function ladderFor(fact, config, mode = config.mode) {

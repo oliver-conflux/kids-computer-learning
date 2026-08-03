@@ -15,15 +15,21 @@
 // and so is inherently about a TRANSITION rather than about a state. See
 // `renderPulse` — that comment is the important one in this file.
 //
-// TWO MODES, TWO SCREENS:
+// THREE MODES, TWO SCREENS:
 //
-//   drill  problem, slots, and after the timer the answer greyed into the slots.
-//          NO hint region at all — not an empty one, not a hidden one that still
-//          takes space. Blocks and strategy text do not exist in this mode for
-//          any of the 121 facts.
-//   learn  strategy text and (where the product allows) a block array ALONGSIDE
-//          it, both on screen from the first frame, plus a "Show me the answer"
-//          button. No clock touches any of it.
+//   drill    problem, slots, and after the timer the answer greyed into the
+//            slots. NO hint region at all — not an empty one, not a hidden one
+//            that still takes space. Blocks and strategy text do not exist in
+//            this mode for any of the 121 facts.
+//   learn    strategy text and (where the product allows) a block array
+//            ALONGSIDE it, both on screen from the first frame, plus a "Show me
+//            the answer" button. No clock touches any of it.
+//   ordered  THE LEARN SCREEN, unchanged. Ordered mode is instruction: it
+//            differs from learn in which facts it serves and in what order, and
+//            that is a session decision this module never sees. `data-mode`
+//            therefore names the SCREEN and stays two-valued, so hints.css keeps
+//            its one selector — the mode a problem is in is not a thing the
+//            renderer has an opinion about beyond which of the two to draw.
 //
 // The reserved-space rule holds WITHIN each mode: nothing that appears or
 // disappears during a problem may move the numerals. In drill that is trivial
@@ -146,11 +152,16 @@ export function mountProblemScreen(container) {
  * SESSION, and main.js is the only thing that knows it. It defaults to 'drill'
  * so a caller that has not been taught about modes yet gets the hint-free
  * screen, which is the safe default — a missing argument can never leak a hint
- * into a fluency session.
+ * into a fluency session, and an unrecognised mode falls the same way.
+ *
+ * Both INSTRUCTION modes draw the learn screen. That the two are the same screen
+ * is the point rather than a shortcut: the help is what makes an attempt's
+ * `stage` mean the same thing in both, which is what lets one "unaided"
+ * predicate serve both rungs (js/mastery.js).
  *
  * @param {Element} container the element mountProblemScreen was given
  * @param {object} state ProblemState from engine.js
- * @param {'drill'|'learn'} [mode] which screen to draw
+ * @param {'drill'|'learn'|'ordered'} [mode] which screen to draw
  * @returns {void}
  */
 export function renderProblem(container, state, mode = 'drill') {
@@ -158,7 +169,7 @@ export function renderProblem(container, state, mode = 'drill') {
     container.querySelector('.problem-screen') ?? mountProblemScreen(container);
 
   const { fact } = state;
-  const learning = mode === 'learn';
+  const learning = mode === 'learn' || mode === 'ordered';
 
   screen.dataset.stage = state.stage;
   screen.dataset.mode = learning ? 'learn' : 'drill';

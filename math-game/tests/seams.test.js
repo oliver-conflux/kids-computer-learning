@@ -4,6 +4,10 @@
 // modules against EACH OTHER, which is where the defects in this project have
 // actually lived: each side was individually correct and they disagreed.
 //
+// The mode is passed to `ladderFor` explicitly everywhere below. There is no
+// `CONFIG.mode` to fall back to any more — a URL with no ?mode= shows the menu —
+// so an omitted mode throws rather than quietly meaning drill.
+//
 // engine.js deliberately does not import hints.js — it takes a ladder as a
 // parameter and advances within it using a private helper. That keeps the engine
 // pure and independently testable, but it means there are TWO implementations of
@@ -31,7 +35,7 @@ function wrongAnswerFor(fact) {
 
 test('engine stage advance agrees with hints.nextStage for every fact', () => {
   for (const fact of allFacts()) {
-    const ladder = ladderFor(fact, CONFIG);
+    const ladder = ladderFor(fact, CONFIG, 'drill');
     const wrong = wrongAnswerFor(fact);
 
     // Walk the whole ladder by feeding a wrong answer at each rung.
@@ -58,7 +62,7 @@ test('engine stage advance agrees with hints.nextStage for every fact', () => {
 
 test('engine stage advance by tick agrees with hints.nextStage', () => {
   for (const fact of allFacts()) {
-    const ladder = ladderFor(fact, CONFIG);
+    const ladder = ladderFor(fact, CONFIG, 'drill');
     let state = startProblem(fact, ladder, 0);
     let now = 0;
 
@@ -76,7 +80,7 @@ test('engine never produces a stage outside its own ladder', () => {
   // hints.nextStage THROWS on a stage it does not recognise. If the engine could
   // ever reach one, wiring would crash at runtime rather than fail a test.
   for (const fact of allFacts()) {
-    const ladder = ladderFor(fact, CONFIG);
+    const ladder = ladderFor(fact, CONFIG, 'drill');
     const wrong = wrongAnswerFor(fact);
     let state = startProblem(fact, ladder, 0);
 
@@ -97,7 +101,7 @@ test('every engine-produced event is consumable by mastery, for every fact', () 
   // engine writes AttemptEvent; mastery reads it. Three agents wrote the two
   // ends and the validator between them without seeing each other.
   for (const fact of allFacts()) {
-    const ladder = ladderFor(fact, CONFIG);
+    const ladder = ladderFor(fact, CONFIG, 'drill');
     let state = startProblem(fact, ladder, 1000);
     for (const digit of String(answerOf(fact))) {
       state = typeDigit(state, digit, 1400);
@@ -120,7 +124,7 @@ test('answer slot count matches what the engine requires to evaluate', () => {
   // length reaches that same count. If these ever disagree the kid gets a box
   // that never resolves — the exact dead-wait the slots exist to prevent.
   for (const fact of allFacts()) {
-    const ladder = ladderFor(fact, CONFIG);
+    const ladder = ladderFor(fact, CONFIG, 'drill');
     const answer = String(answerOf(fact));
     assert.equal(answer.length, answerDigits(fact));
 

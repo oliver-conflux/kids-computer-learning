@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { deriveMastery } from '../js/mastery.js';
+import { deriveMastery, previousSessionMedian } from '../js/mastery.js';
 import { CONFIG } from '../js/config.js';
 import { allFacts, factId } from '../js/facts.js';
 
@@ -1270,4 +1270,71 @@ test('a fact never attempted carries both rungs at zero, and every fact carries 
     assert.equal(typeof stats.learn?.cleared, 'boolean', `${id} has no learn rung`);
     assert.equal(typeof stats.ordered?.cleared, 'boolean', `${id} has no ordered rung`);
   }
+});
+
+// --- v3: which sessions are comparable (spec §5) ---------------------------
+//
+// `previousSessionMedian` decides what "quicker than last time" is measured
+// against, and every way of getting it wrong is silent: a plausible number, no
+// exception, nothing red. It lives here rather than in main.js because main.js
+// reaches for the DOM at import time and so cannot be tested at all.
+
+/** A SessionEvent as main.js writes one. `mode` omitted means v1 history. */
+function sessionEvent(t, medianMs, mode) {
+  const event = { type: 'session', t, build: 'm2', session: 's_9f2c', items: 20, medianMs };
+  if (mode !== undefined) {
+    event.mode = mode;
+  }
+  return event;
+}
+
+test('an ordered session is not something a drill session can be compared against', () => {
+  // THE ONE THAT USED TO PASS SILENTLY. The function was a reject-list on
+  // 'learn', so a fourth mode walked straight through it and a 9-second answer
+  // worked out with the strategy on screen became the bar a 2-second drill
+  // answer was measured against.
+  const events = [
+    sessionEvent(minute(0), 2000, 'drill'),
+    sessionEvent(minute(1), 9000, 'ordered'),
+  ];
+  assert.equal(previousSessionMedian(events), 2000);
+});
+
+test('a learn session is ignored too, and an instruction-only log has nothing to compare', () => {
+  assert.equal(
+    previousSessionMedian([
+      sessionEvent(minute(0), 8000, 'learn'),
+      sessionEvent(minute(1), 9000, 'ordered'),
+    ]),
+    null,
+  );
+});
+
+test('a session event with NO mode is a drill session', () => {
+  // Every session line written before the field existed was a drill. Same rule
+  // as attempt events, so all v1 history keeps working with no migration.
+  assert.equal(previousSessionMedian([sessionEvent(minute(0), 2400)]), 2400);
+});
+
+test('the most recent drill session wins, whatever order the events arrive in', () => {
+  // File order is not chronological — the log client replays a queued outbox at
+  // startup — so "the last one" has to mean the last one in TIME.
+  const events = [
+    sessionEvent(minute(5), 2100, 'drill'),
+    sessionEvent(minute(9), 1800, 'drill'),
+    sessionEvent(minute(7), 2600, 'drill'),
+  ];
+  assert.equal(previousSessionMedian(events), 1800);
+});
+
+test('attempts, corrupt lines and a non-numeric median are all skipped', () => {
+  const events = [
+    null,
+    'not an event',
+    attempt(6, 7, 400, 'clean'),
+    sessionEvent(minute(1), null, 'drill'),
+    sessionEvent(minute(2), 2200, 'drill'),
+  ];
+  assert.equal(previousSessionMedian(events), 2200);
+  assert.equal(previousSessionMedian([]), null);
 });
