@@ -415,12 +415,20 @@ Per fact, two new records:
 {
   // … existing: bucket, cleanCount, medianCleanMs, attempts, taught, taughtCount
 
-  ordered: { runs: 2, unaided: 2, cleared: true  },
+  ordered: { attempts: 2, unaided: 2, cleared: true  },
   learn:   { attempts: 3, unaided: 1, cleared: false },
 }
 ```
 
-- `runs` / `attempts` — how many times this rung has been tried at all
+**Both records use the field name `attempts`, and on the ordered rung it holds a
+RUN count.** An earlier draft of this section called it `runs`, which read better
+and made the two records different shapes for no gain. Anyone rendering
+`ordered.attempts` is rendering "how many times she has walked this table",
+not "how many answers she has typed" — the two coincide today, because a run
+serves each fact once, and would silently stop coinciding if that ever changed.
+
+- `attempts` — how many occasions this rung has been tried at all: learn
+  attempts on the learn rung, runs on the ordered rung
 - `unaided` — how many of those met the §3 predicate
 - `cleared` — the last-two rule from §3
 
@@ -434,6 +442,14 @@ different question — *has she ever been shown a route* — which is what drive
 grid's "shown how" state, and it is deliberately unwindowed. A route taught three
 weeks ago is still a route she has been shown, even if the learn rung has since
 gone quiet.
+
+**But `taughtCount`'s meaning has quietly widened.** Because ordered attempts set
+`taught`, ordered runs now pool with learn sessions in the count: three ordered
+runs plus one learn session on `6×7` gives `taughtCount: 4`. It has gone from
+"how many lessons" to "how many instruction occasions of either kind". That is
+the correct behaviour — both are instruction — but **any copy that renders it as
+a lesson count is now wrong**, and §7's detail panel is the place that could do
+it.
 
 Neither new record affects `bucket`. The mastery seam is untouched.
 
