@@ -10,19 +10,20 @@ bugs and playing is what found them.
 
 ---
 
-## 1. Homophones — **flash shipped; 17 more sets found and not yet added**
+## 1. Homophones — **closed; re-run the detector after any spine growth**
 
 **The bug.** The game plays a sound and asks for a spelling. For a homophone
 that is not a question. The kid can be completely right and be marked wrong.
 
-**Fixed for the sets we know about.** `homophones.js` holds 25 sets and drill
-mode flashes the word once while saying it (commit `fde89da`), which makes the
-question answerable without turning every word into copying.
+**The fix.** Drill mode flashes the word once while saying it (commit
+`fde89da`), which makes the question answerable without turning every word into
+copying. It is gated on membership in `homophones.js`, so a set that is missing
+is a word that silently gets no flash.
 
-**The list is incomplete, and we now have a cheap way to find the rest.**
-Whisper round-tripping all 995 generated mp3s surfaced 43 words it spelled
-differently from the target. 16 were already covered. **These 17 are real,
-typable rival words and are NOT in `homophones.js`:**
+**The list was incomplete, and the cheap way to find the rest worked.** Whisper
+round-tripping all 995 generated mp3s surfaced 43 words it spelled differently
+from the target. 16 were already covered. These 17 were real, typable rival
+words and were missing:
 
 ```
 which / witch     been / bin        piece / peace     passed / past
@@ -32,8 +33,13 @@ cents / sense     board / bored     tied / tide       weight / wait
 led / lead
 ```
 
-Every one is a word the kid could plausibly type, so every one is a problem she
-can answer correctly and be marked wrong on.
+**All 17 are now in `homophones.js`, which holds 42 sets.** That took the number
+of spine words that flash from 40 to 64 — 24 words that a kid could previously
+have heard correctly, spelled correctly, and been marked wrong on.
+
+**This item is not finished so much as current.** The detector is the durable
+part: re-run `speech-transcribe --expect` after any spine growth, because every
+word added is a word whose rival spelling has never been checked.
 
 **Deliberately excluded from that list**, and the reasons are the criteria to
 apply next time:

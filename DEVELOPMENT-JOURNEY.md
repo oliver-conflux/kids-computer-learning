@@ -611,9 +611,11 @@ A sample:
 
 ## Still open, honestly
 
-- **The 17 homophones Whisper found are not in `homophones.js`.** It holds 25 sets.
-  So `which/witch`, `piece/peace` and fifteen others currently get no flash, which
-  means a kid can hear right, spell right, and be marked wrong.
+- **Every word added to the list is a word whose rival spelling has never been
+  checked.** The 17 homophones Whisper found are now in `homophones.js` — that took
+  the words that flash from 40 to 64 — but the detector has to be re-run after any
+  growth, and nothing enforces that. It's a manual step on a machine that isn't
+  this repo.
 - **The typing game has never been tested by a child.** One adult session, sixteen
   rounds. Its notes say so up front: "almost nothing here is [backed by real play],
   yet."

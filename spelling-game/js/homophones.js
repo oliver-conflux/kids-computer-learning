@@ -63,6 +63,36 @@ export const HOMOPHONE_SETS = [
   ['where', 'wear'],
   ['night', 'knight'],
   ['great', 'grate'],
+
+  // FOUND BY MACHINE, NOT BY HAND. Whisper round-tripping all 995 generated
+  // mp3s spelled 43 words differently from the target; 16 were already above,
+  // and these 17 were not. Whisper is a poor correctness check — it passed the
+  // `am` -> "a.m." bug — but a word it hears differently is, by construction, a
+  // word whose rival spelling a child could also type. Re-run it after any
+  // spine growth; see docs/next-steps.md.
+  //
+  // Rejected from the same sweep, and the reasons are the reusable part: proper
+  // nouns (`mat`/`Matt`, `check`/`Czech`) are not words she would write here;
+  // letter names (`are`/`r`, `eye`/`i`) are typable but are not words; and
+  // `except`/`accept` is commonly confused rather than actually homophonous,
+  // which is a different problem with a different fix.
+  ['which', 'witch'],
+  ['been', 'bin'],
+  ['piece', 'peace'],
+  ['passed', 'past'],
+  ['week', 'weak'],
+  ['base', 'bass'], // the instrument, not the fish
+  ['meet', 'meat'],
+  ['whether', 'weather'], // `wether` omitted — real, but not a word a kid types
+  ['sail', 'sale'],
+  ['hole', 'whole'],
+  ['wrote', 'rote'],
+  ['plains', 'planes'],
+  ['cents', 'sense'],
+  ['board', 'bored'],
+  ['tied', 'tide'],
+  ['weight', 'wait'], // distinct from `way`/`weigh` above
+  ['led', 'lead'], // the metal, not the verb
 ];
 
 /**
