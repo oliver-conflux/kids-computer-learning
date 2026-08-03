@@ -243,16 +243,25 @@ export function deriveMastery(events, config, space) {
   /** Items with at least one instruction-mode attempt anywhere in the full log. */
   const taughtIds = new Set();
   /**
-   * Item -> the set of learn SESSIONS that taught it, so `taughtCount` can be
-   * how many lessons an item has had rather than how many attempts. A session
-   * teaches each of its words `config.learnPasses` times, and counting raw
-   * attempts would make one lesson look like three.
+   * Item -> the set of INSTRUCTION SESSIONS that taught it, so `taughtCount` can
+   * be how many occasions an item has been taught on rather than how many
+   * attempts. A learn session teaches each of its words `config.learnPasses`
+   * times, and counting raw attempts would make one lesson look like three.
+   *
+   * "Instruction session", not "lesson": this counts every mode in
+   * `INSTRUCTION_MODES`, so in the math game an ordered run — one walk through a
+   * times table — is an occasion here too, and pools with learn sessions in the
+   * same total. An ordered run has no passes and serves each fact once, so the
+   * `learnPasses` reasoning above is the learn case rather than the general one.
+   * The consequence, which is easy to miss: three ordered runs plus one learn
+   * session on an item gives `taughtCount: 4`, and any UI copy calling that a
+   * count of LESSONS is wrong.
    *
    * @type {Map<ItemId, Set<unknown>>}
    */
   const taughtSessionsById = new Map();
-  /** Fallback lesson key for a learn attempt with no session id. */
-  let looseLearnAttempts = 0;
+  /** Fallback key for an instruction attempt with no session id. */
+  let looseInstructionAttempts = 0;
 
   const known = new Set(space.allItems().map((item) => space.itemId(item)));
   // The field name a game calls its item by — `item` for everything except the
@@ -329,7 +338,7 @@ export function deriveMastery(events, config, space) {
       lessons.add(
         typeof event.session === 'string' && event.session !== ''
           ? event.session
-          : `#loose${(looseLearnAttempts += 1)}`,
+          : `#loose${(looseInstructionAttempts += 1)}`,
       );
       // Everything below is mastery evidence, and instruction attempts are none.
       continue;
