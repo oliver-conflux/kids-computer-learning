@@ -79,8 +79,9 @@
     </div>
 
     <!--
-      main.js is T10 and does not exist yet; until it lands this page renders the
-      empty shell and logs a 404 for this one request. That is expected.
+      The only script. main.js owns every screen above: which of the three
+      regions is visible, and what goes in it. Arriving with no ?mode= shows the
+      menu; ?mode=learn, drill or ordered goes straight into a session.
     -->
     <script type="module" src="js/main.js"></script>
   </body>
