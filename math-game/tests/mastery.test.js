@@ -37,6 +37,14 @@ function drillAttempt(a, b, ms, stage, wrong = []) {
   return { ...attempt(a, b, ms, stage, wrong), mode: 'drill' };
 }
 
+/**
+ * An ordered-mode attempt. Ordered ladders are ['strategy','reveal'], the same
+ * as learn, so 'strategy' is the unaided stage and the default here.
+ */
+function orderedAttempt(a, b, ms, wrong = [], stage = 'strategy', session = 's_9f2c') {
+  return { ...attempt(a, b, ms, stage, wrong), mode: 'ordered', session };
+}
+
 /** Same attempt, stamped with an explicit ISO timestamp. */
 function at(t, event) {
   return { ...event, t };
@@ -1080,4 +1088,50 @@ test('maxPlausibleMs is inclusive at the boundary', () => {
   const overBy1 = deriveMastery([at(0, CONFIG.maxPlausibleMs + 1)], CONFIG).byId.get('*:6x7');
   assert.equal(overBy1.cleanCount, 0, 'one millisecond over does not');
   assert.equal(overBy1.medianCleanMs, null);
+});
+
+// --- v3: ordered mode is instruction, not mastery evidence (spec §3) --------
+
+test('ordered attempts never reach the buckets, however clean and fast', () => {
+  // Stage 'clean' on purpose. The ordered ladder is ['strategy','reveal'] so
+  // this shape should never be written — five drill attempts of exactly this
+  // shape make the fact hot, which is what makes this an exclusion test rather
+  // than an accident of slow instruction latencies.
+  const events = repeat(5, () => orderedAttempt(6, 7, 400, [], 'clean'));
+  const stats = statsFor(events, SIX_SEVEN);
+  assert.equal(stats.bucket, 'cold');
+  assert.equal(stats.cleanCount, 0);
+  assert.equal(stats.medianCleanMs, null);
+  assert.deepEqual(stats.attempts, []);
+});
+
+test('ordered attempts DO set taught — walking a table in order is instruction', () => {
+  const stats = statsFor(repeat(5, () => orderedAttempt(6, 7, 400, [], 'clean')), SIX_SEVEN);
+  assert.equal(stats.taught, true);
+  assert.equal(stats.taughtCount, 1, 'one session, one lesson');
+});
+
+test('ordered attempts interleaved through drill change nothing the drill earned', () => {
+  // The test that catches a partial fix: excluded from the buckets AND out of
+  // the retain window, not merely discounted.
+  const drillOnly = [
+    at('2026-08-01T09:00:00.000Z', attempt(6, 7, 400, 'clean')),
+    at('2026-08-01T09:02:00.000Z', attempt(6, 7, 500, 'clean')),
+    at('2026-08-01T09:04:00.000Z', attempt(6, 7, 600, 'clean')),
+  ];
+  const mixed = [
+    at('2026-08-01T08:59:00.000Z', orderedAttempt(6, 7, 20_000)),
+    ...drillOnly,
+    at('2026-08-01T09:03:00.000Z', orderedAttempt(6, 7, 18_000)),
+    at('2026-08-01T09:05:00.000Z', orderedAttempt(6, 7, 25_000)),
+  ];
+
+  const before = statsFor(drillOnly, SIX_SEVEN);
+  const after = statsFor(mixed, SIX_SEVEN);
+
+  assert.equal(after.bucket, before.bucket);
+  assert.equal(after.bucket, 'hot');
+  assert.equal(after.cleanCount, before.cleanCount);
+  assert.equal(after.medianCleanMs, before.medianCleanMs);
+  assert.deepEqual(after.attempts, before.attempts);
 });

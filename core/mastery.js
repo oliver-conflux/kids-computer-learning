@@ -18,7 +18,9 @@
 
 const CLEAN_STAGE = 'clean';
 const ATTEMPT_TYPE = 'attempt';
-const LEARN_MODE = 'learn';
+// The modes that TEACH rather than measure. A game may have more than one — see
+// isInstructionAttempt.
+const INSTRUCTION_MODES = new Set(['learn', 'ordered']);
 
 // Enough of ISO 8601 to know the value is a real date-time we can order
 // lexicographically. Anything else is treated as "no usable timestamp".
@@ -95,10 +97,11 @@ export function compareTimestamps(left, right) {
 }
 
 /**
- * Is this attempt event a learn-mode attempt?
+ * Is this attempt event an INSTRUCTION-mode attempt — one where the kid was
+ * being shown a route rather than asked to retrieve an answer?
  *
- * Only the exact literal `'learn'` counts. Everything else — the string
- * `'drill'`, an absent field, or a corrupt value — is a drill attempt.
+ * Only the exact literals in `INSTRUCTION_MODES` count. Everything else — the
+ * string `'drill'`, an absent field, or a corrupt value — is a drill attempt.
  *
  * The absent case is the load-bearing one: `mode` arrived after the first logs
  * were written, and every line written before it existed was a drill attempt.
@@ -107,11 +110,18 @@ export function compareTimestamps(left, right) {
  * field be present, would silently erase every bucket the kid has already
  * earned.
  *
+ * This is a SET rather than a single string because the math game has two
+ * instruction modes — `learn`, and `ordered`, which walks a times table end to
+ * end with the strategy on screen. Both teach, so both are excluded from the
+ * buckets and both set `taught`. The spelling game has only `learn` and never
+ * writes `ordered`, so the extra member costs it nothing and changes none of its
+ * history.
+ *
  * @param {object} event
  * @returns {boolean}
  */
-function isLearnAttempt(event) {
-  return event.mode === LEARN_MODE;
+function isInstructionAttempt(event) {
+  return INSTRUCTION_MODES.has(event.mode);
 }
 
 /**
@@ -167,16 +177,17 @@ function bucketFor(cleanCount, medianCleanMs, config) {
  * position, where they cannot displace real attempts out of the retain window —
  * rather than throwing.
  *
- * LEARN-MODE ATTEMPTS ARE NOT MASTERY EVIDENCE. An attempt event with
- * `mode: 'learn'` is excluded from `attempts`, `cleanCount`, `medianCleanMs`
- * and `bucket` — not discounted, excluded. Drill measures retrieval speed
- * against a clock; learn measures whether a taught route was followed, with the
- * strategy on screen and the answer behind a button the kid presses. A
- * 20-second answer in learn mode is a successful derivation, not slow recall.
- * Folding it in would drag the median and mislabel an item the kid is acquiring
- * well. The two do not share a scale, so they must not share a bucket.
+ * INSTRUCTION-MODE ATTEMPTS ARE NOT MASTERY EVIDENCE. An attempt event whose
+ * `mode` is one of `INSTRUCTION_MODES` is excluded from `attempts`,
+ * `cleanCount`, `medianCleanMs` and `bucket` — not discounted, excluded. Drill
+ * measures retrieval speed against a clock; instruction measures whether a
+ * taught route was followed, with the strategy on screen and the answer behind
+ * a button the kid presses. A 20-second answer in learn mode is a successful
+ * derivation, not slow recall. Folding it in would drag the median and mislabel
+ * an item the kid is acquiring well. The two do not share a scale, so they must
+ * not share a bucket.
  *
- * An ABSENT `mode` is a drill attempt — see `isLearnAttempt`. Because the whole
+ * An ABSENT `mode` is a drill attempt — see `isInstructionAttempt`. Because the whole
  * model derives on read, this exclusion applies retroactively across all
  * history the moment the rule changes, with no migration.
  *
@@ -186,12 +197,12 @@ function bucketFor(cleanCount, medianCleanMs, config) {
  *     `config.retain` DRILL attempts for the item. Mastery is a recent-form
  *     question, asked of the timed mode only.
  *   - `confusions` uses EVERY attempt event passed in — retained or not, drill
- *     or learn. A wrong answer from three weeks ago is still evidence that two
- *     items interfere, and it must not age out just because the item has been
- *     drilled since. Learn mode is the deliberate exception to the mode split:
- *     interference between two items is interference regardless of which mode
- *     surfaced it.
- *   - `taught` uses every learn attempt in the FULL event list, unwindowed. A
+ *     or instruction. A wrong answer from three weeks ago is still evidence that
+ *     two items interfere, and it must not age out just because the item has
+ *     been drilled since. The instruction modes are the deliberate exception to
+ *     the mode split: interference between two items is interference regardless
+ *     of which mode surfaced it.
+ *   - `taught` uses every instruction attempt in the FULL event list. A
  *     route taught three weeks ago is still a route the kid has been shown, so
  *     it must not expire out of the retain window. This is what lets a results
  *     screen render an item that is cold but taught as "shown how" rather than
@@ -229,7 +240,7 @@ export function deriveMastery(events, config, space) {
   const attemptsById = new Map();
   /** @type {Map<ItemId, Set<unknown>>} */
   const wrongById = new Map();
-  /** Items with at least one learn-mode attempt anywhere in the full log. */
+  /** Items with at least one instruction-mode attempt anywhere in the full log. */
   const taughtIds = new Set();
   /**
    * Item -> the set of learn SESSIONS that taught it, so `taughtCount` can be
@@ -305,7 +316,7 @@ export function deriveMastery(events, config, space) {
 
     // `taught` is likewise unwindowed: the question is whether the kid was ever
     // shown a route for this item, not whether it was shown recently.
-    if (isLearnAttempt(event)) {
+    if (isInstructionAttempt(event)) {
       taughtIds.add(id);
       let lessons = taughtSessionsById.get(id);
       if (lessons === undefined) {
@@ -320,7 +331,7 @@ export function deriveMastery(events, config, space) {
           ? event.session
           : `#loose${(looseLearnAttempts += 1)}`,
       );
-      // Everything below is mastery evidence, and learn attempts are none.
+      // Everything below is mastery evidence, and instruction attempts are none.
       continue;
     }
 
