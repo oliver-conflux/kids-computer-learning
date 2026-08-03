@@ -13,7 +13,12 @@
 // be re-established each time. There is NO fallback mode: a URL with no
 // recognised `?mode=` is a kid who has not chosen one.
 //
-//   flushOutbox -> loadEvents -> [ runSession(mode, table) -> results -> ... ]*
+//   flushOutbox -> loadEvents -> menu -> [ runSession(mode, table) -> results ]*
+//
+// where every arrow after the first two is a screen swap and NOT a navigation.
+// Three regions live in index.html — #stage, #results and #menu — exactly one is
+// visible, and `MENU_URL` is now reached only from the menu's own "Back to all
+// games". A kid arriving with no `?mode=` starts at the menu.
 //
 // Within one session:
 //
@@ -63,6 +68,7 @@ import {
   onRevealClick,
 } from './ui/problem.js';
 import { renderResults, onResultsAction } from './ui/results.js';
+import { renderMenu, onMenuAction } from './ui/menu.js';
 
 /**
  * The live randomness source, injected into the scheduler. The scheduler takes
@@ -256,6 +262,23 @@ function canLearnFrom(model) {
 const stage = document.getElementById('stage');
 const shell = document.getElementById('shell');
 const resultsRegion = document.getElementById('results');
+const menuRegion = document.getElementById('menu');
+
+/**
+ * The thin strip along the top of the shell, which carries the progress bar.
+ *
+ * TRAP — THE PROGRESS BAR IS NOT INSIDE THE STAGE. It lives in `#shell`
+ * (index.html:35), ABOVE all three regions, so `stage.hidden = true` does not
+ * hide it and neither does anything else the screen swap does. Show the menu
+ * without dealing with it and the menu renders under a stale `11 / 11` left over
+ * from the session that just ended — nothing throws, no test goes red, and it
+ * quietly reads as progress through a menu.
+ *
+ * `showMenu` therefore does two things to this element and `runSession` undoes
+ * both: the count is reset AND the strip is hidden, because a menu has no
+ * progress and an emptied bar reading `0 / 0` is still a progress bar.
+ */
+const topStrip = shell.querySelector('.shell__top');
 
 /**
  * The log tail, read ONCE at startup. Never re-read: the server appends
@@ -526,8 +549,12 @@ async function runSession(mode, table = null) {
   }
 
   resultsRegion.hidden = true;
+  menuRegion.hidden = true;
   stage.hidden = false;
   mountProblemScreen(stage);
+  // The other half of the pair `showMenu` opens: the strip comes back, and the
+  // count is set before the first problem appears rather than after it.
+  topStrip.hidden = false;
   renderProgress(shell, 0, total);
 
   if (mode === 'drill') {
@@ -691,24 +718,64 @@ async function runSession(mode, table = null) {
 }
 
 /**
- * A continuation button on the results screen. Registered once at startup; the
- * listener is delegated on the container, so it survives every re-render.
+ * Show the game's own home screen.
  *
- * A mode name starts a new session in that mode with NO page reload — which is
- * why `runSession` re-derives everything rather than trusting module state left
- * over from the session that just ended.
+ * The model is DERIVED HERE rather than reused, from the loaded tail plus
+ * everything this sitting has played. That is what makes a run finished a moment
+ * ago move its bar with no reload — and at startup it is the only thing that
+ * builds a model at all, because nothing has run a session yet.
  *
- * 'ordered' needs a table and is refused without a valid one. The results
- * screen does not offer that button yet; when it does, it passes the number
- * alongside the action, and a button that arrived without one would otherwise
- * start a run over a row that does not exist.
+ * @returns {void}
+ */
+function showMenu() {
+  model = deriveMastery(knownEvents(), CONFIG);
+
+  // TRAP — CLEAR AND HIDE THE TOP STRIP. See `topStrip`. It is outside all three
+  // regions, so the swap below does not touch it, and the menu would otherwise
+  // render under the finished session's `11 / 11`.
+  renderProgress(shell, 0, 0);
+  topStrip.hidden = true;
+
+  stage.hidden = true;
+  resultsRegion.hidden = true;
+  menuRegion.hidden = false;
+  renderMenu(menuRegion, model);
+}
+
+/**
+ * A control on the results screen or on the menu. Registered once at startup for
+ * each; both listeners are delegated on a container that outlives every screen
+ * inside it, so they survive every re-render.
  *
- * @param {'learn' | 'drill' | 'ordered' | 'done'} action
+ * One handler serves both screens because both ask for the same four things. A
+ * mode name starts a new session in that mode with NO page reload — which is why
+ * `runSession` re-derives everything rather than trusting module state left over
+ * from the session that just ended.
+ *
+ * 'done' and 'menu' both land on the menu screen. THE RESULTS SCREEN NO LONGER
+ * NAVIGATES: `Done` used to leave for games-menu.html, and now it returns to the
+ * game's own home, where a bar has moved and the next thing to play is one press
+ * away. Both names are accepted because results.js still sends 'done' and the
+ * two mean the same thing here.
+ *
+ * 'games' is the ONE real navigation left in the app, and it comes from the
+ * menu's "Back to all games" and nowhere else.
+ *
+ * 'ordered' needs a table and is refused without a valid one — the menu never
+ * sends one without it, because a finished table renders as no control at all,
+ * but a run over a row that does not exist is worth refusing rather than
+ * discovering.
+ *
+ * @param {'learn' | 'drill' | 'ordered' | 'done' | 'menu' | 'games'} action
  * @param {number | null} [table] required for 'ordered', ignored otherwise
  * @returns {void}
  */
 function onAction(action, table = null) {
-  if (action === 'done') {
+  if (action === 'done' || action === 'menu') {
+    showMenu();
+    return;
+  }
+  if (action === 'games') {
     window.location.href = MENU_URL;
     return;
   }
@@ -737,25 +804,27 @@ async function main() {
   await flushOutbox();
   loadedEvents = await loadEvents(); // defaults to CONFIG.logTail
 
-  // All three input routes are wired ONCE, before the first mount. Each is
+  // All four input routes are wired ONCE, before the first mount. Each is
   // delegated on a container that outlives every screen inside it, so remounting
-  // cannot lose the wiring — and registering them per session would stack
-  // duplicate listeners on the second one.
+  // cannot lose the wiring — and registering them per session, or per render,
+  // would stack duplicate listeners. The menu is re-rendered every single time it
+  // is shown, so it is the one most exposed to that mistake: a handler bound
+  // inside `showMenu` would start N sessions on the Nth visit to the menu.
   document.addEventListener('keydown', onKeyDown);
   onRevealClick(stage, onReveal);
   onResultsAction(resultsRegion, onAction);
+  onMenuAction(menuRegion, onAction);
 
   const mode = readMode();
   const table = readTable();
 
   // A URL with no recognised `?mode=`, or `?mode=ordered` without a table this
   // game has, is not an error and is not a session — it is a kid who has not
-  // chosen yet, or a mistyped bookmark. Both belong on the menu screen, which is
-  // the next task's work; until it lands, this is a deliberate no-op and the
-  // page renders the empty shell. THE DEEP LINKS ARE THE ONLY WAY IN MEANWHILE:
-  // ?mode=drill, ?mode=learn, ?mode=ordered&table=N.
+  // chosen yet, or a mistyped bookmark. Both land on the menu, which is the
+  // normal way in: games-menu.html points here with no query string at all. The
+  // deep links still bypass it — ?mode=drill, ?mode=learn, ?mode=ordered&table=N.
   if (mode === null || (mode === 'ordered' && table === null)) {
-    console.warn('math-game: no mode chosen — the menu screen goes here');
+    showMenu();
     return;
   }
 

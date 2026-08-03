@@ -17,6 +17,8 @@
     <!-- Owned by T9. Its selectors are scoped under .results and do not reach
          the problem screen; loaded here because index.html is T8's file. -->
     <link rel="stylesheet" href="css/results.css" />
+    <!-- The menu screen. Scoped under .menu, same one-file-per-screen split. -->
+    <link rel="stylesheet" href="css/menu.css" />
   </head>
 
   <body>
@@ -48,17 +50,23 @@
       </header>
 
       <!--
-        TWO stage elements, one per screen, exactly one visible at a time.
+        THREE stage elements, one per screen, exactly one visible at a time.
 
-        They are separate on purpose: both renderers own everything inside the
-        node they are handed — mountProblemScreen clears its container and T9's
-        renderResults calls replaceChildren — so sharing one node would mean
-        each screen silently destroying the other's DOM. T10 swaps them by
-        toggling `hidden` at session end:
+        They are separate on purpose: every renderer owns everything inside the
+        node it is handed — mountProblemScreen clears its container, and both
+        renderResults and renderMenu call replaceChildren — so sharing one node
+        would mean each screen silently destroying the others' DOM. main.js
+        swaps them by toggling `hidden`:
 
             stage.hidden = true;
             results.hidden = false;
             renderResults(results, model, summary);
+
+        #menu is the game's own home, and a kid arriving with no `?mode=` lands
+        here rather than in a mode chosen for her. It is a REGION AND NOT A
+        SECOND PAGE: a separate file would fetch the log tail to draw its bars
+        and then navigate here to fetch the same tail again, and would put a
+        page load between a kid and a game. See js/ui/menu.js.
 
         NO COUNTDOWN, NO TIMER BAR, NO ELAPSED TIME lives anywhere in this
         document. Time is measured relentlessly and never shown — a visible
@@ -67,6 +75,7 @@
       -->
       <main class="shell__stage" id="stage"></main>
       <section class="shell__stage shell__stage--results" id="results" hidden></section>
+      <section class="shell__stage shell__stage--menu" id="menu" hidden></section>
     </div>
 
     <!--

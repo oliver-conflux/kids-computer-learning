@@ -23,6 +23,14 @@
   flex: 0 0 auto;
 }
 
+/* The strip is hidden while the menu is up — a menu has no progress — and
+   `display: flex` above would otherwise beat the `hidden` attribute. Same trap,
+   and same one-line fix, as .shell__stage[hidden] below. It fails SILENTLY:
+   main.js sets `hidden`, nothing throws, and the bar just stays on screen. */
+.shell__top[hidden] {
+  display: none;
+}
+
 .progress {
   flex: 1 1 auto;
   height: 10px;

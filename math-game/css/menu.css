@@ -1,0 +1,281 @@
+/* menu.css — the game's own home screen.
+ *
+ * One file per screen, matching problem.css and results.css. Every selector
+ * here is scoped under `.menu`, and the palette values are written literally
+ * for the same reason results.css writes them literally: this file must render
+ * correctly whatever base.css happens to name its variables.
+ *
+ * The screen is a LIST OF DECISIONS and nothing else, so it is built as one
+ * column with generous targets. Three route buttons, nine table rows, one way
+ * out. Nothing scrolls sideways and nothing is hidden behind a second click —
+ * the whole curriculum visible at once is the point of the screen (spec §1).
+ *
+ * A FINISHED TABLE IS STYLED AS AN ABSENCE OF A BUTTON, not as a disabled one.
+ * ui/menu.js renders it as a div rather than a <button>, so there is no hover,
+ * no pointer, no focus ring and no press — it is a completed row, not a control
+ * that refuses. The tick and the full bar are the whole of its reward.
+ */
+
+.menu {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: clamp(8px, 2vh, 24px) 0 32px;
+
+  --page: #eef0f3;
+  --accent: #7b6bd6;
+  --heading: #2f3742;
+  --muted: #7b8493;
+  --surface: #ffffff;
+  --deck: #d9dde3;
+  --line: #b9c0cc;
+  --done: #5b9e78;
+}
+
+/* The menu is a list from the top, not a thing centred in the viewport like the
+   problem screen. Same override results.css needs from layout.css. */
+.shell__stage--menu {
+  justify-content: flex-start;
+  align-items: stretch;
+  overflow-y: auto;
+}
+
+/* ---------- header ---------- */
+
+.menu__header {
+  margin-bottom: clamp(16px, 3vh, 28px);
+  text-align: center;
+}
+
+.menu__title {
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
+  font-size: clamp(30px, 7vw, 42px);
+  font-weight: 700;
+  color: var(--heading);
+  line-height: 1.1;
+}
+
+.menu__subtitle {
+  margin-top: 4px;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+/* ---------- the three routes ---------- */
+
+.menu__routes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The two scheduler routes and the "In order" heading share this shape, so the
+   third route reads as a peer of the other two rather than as a section that
+   happens to sit underneath them. They are different activities, not levels. */
+.menu__route,
+.menu__ordered-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 18px;
+  text-align: left;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 16px;
+}
+
+.menu__route {
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  color: inherit;
+}
+
+.menu__ordered-head {
+  /* The heading is not a control: it is a label for the nine rows below it, and
+     the rows are where the pressing happens. Flatter, so it does not read as a
+     button that does nothing. */
+  background: transparent;
+  border-style: dashed;
+}
+
+.menu__route-icon {
+  flex: 0 0 auto;
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.menu__route-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.menu__route-name {
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--heading);
+}
+
+.menu__route-note {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.menu__route:focus-visible,
+.menu__table:focus-visible,
+.menu__back:focus-visible {
+  outline: 3px solid var(--heading);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .menu__route:hover,
+  .menu__table:hover {
+    border-color: var(--accent);
+  }
+}
+
+.menu__route:active,
+.menu__table:active {
+  transform: translateY(1px);
+}
+
+/* ---------- the nine tables ---------- */
+
+.menu__ordered {
+  margin-top: 12px;
+}
+
+.menu__tables {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0 0 0 clamp(0px, 4vw, 26px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.menu__table {
+  display: grid;
+  /* name | bar | count. The bar takes the slack, and both text columns are
+     fixed-width so the nine bars line up as one shape — a ragged left edge on
+     the bars would make the rows hard to compare, which is the one thing this
+     list is for. */
+  grid-template-columns: 7ch 1fr 6.5ch;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 8px 14px;
+  text-align: left;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.menu__table--done {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+}
+
+.menu__table-name {
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--heading);
+  white-space: nowrap;
+}
+
+.menu__table--done .menu__table-name {
+  color: var(--muted);
+}
+
+.menu__bar {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--deck);
+  overflow: hidden;
+}
+
+/* Driven by one custom property, a fraction 0..1 set inline by renderMenu, the
+   same mechanism the shell's own progress strip uses. */
+.menu__bar-fill {
+  display: block;
+  width: calc(var(--menu-progress, 0) * 100%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.menu__table--done .menu__bar-fill {
+  background: var(--done);
+}
+
+.menu__table-count {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.menu__table--done .menu__table-count {
+  color: var(--done);
+}
+
+/* ---------- the way out ---------- */
+
+.menu__footer {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.menu__back {
+  min-height: 48px;
+  padding: 12px 24px;
+  background: transparent;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  font-family: var(--font-display, 'Baloo 2', system-ui, sans-serif);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+@media (hover: hover) {
+  .menu__back:hover {
+    border-color: var(--muted);
+    color: var(--heading);
+  }
+}
+
+@media (max-width: 420px) {
+  /* The three columns keep their widths — "the 10s" is the longest label and it
+     must not wrap or crowd its bar. Only the padding gives way. */
+  .menu__table {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .menu__route,
+  .menu__ordered-head {
+    padding: 14px;
+  }
+}
