@@ -292,7 +292,7 @@ Screen content is spec §1. Three routes: Learn 3 facts, Drill, and an "In order
 
 No tests — UI is not tested in this project (`README.md:87`), and everything it reads was tested in Tasks 2 and 3.
 
-`ui/menu.js` follows `ui/results.js`'s contract exactly: it holds no state, starts nothing, and reports which button was pressed through a delegated handler. It must not import `ordered.js` or `mastery.js` — it receives the model and asks `tableProgress` for numbers, nothing more.
+`ui/menu.js` follows `ui/results.js`'s contract exactly: it holds no state, starts nothing, and reports which button was pressed through a delegated handler. It imports `tableProgress` from `ordered.js` and nothing else — it must not import `mastery.js`, derive a model, or reach for the log. It receives the model and asks `tableProgress` for numbers.
 
 A table whose run is empty renders as done and **is not a control** — no link, no button. A button that starts a session with nothing in it is the failure the `canLearn` guard already exists to prevent (v2 §8).
 
