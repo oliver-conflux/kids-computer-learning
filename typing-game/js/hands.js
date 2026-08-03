@@ -123,13 +123,3 @@ export function highlightFinger(ch) {
   }
 }
 
-/**
- * Hands show ONLY at guidance level 3 (spec §1).
- *
- * @param {number} level 0..3
- * @returns {void}
- */
-export function setHandsVisibility(level) {
-  const svg = document.getElementById('hands');
-  if (svg !== null) svg.classList.toggle('hidden', level < 3);
-}

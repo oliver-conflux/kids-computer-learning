@@ -1,13 +1,13 @@
 // typing-game/js/ui.js
 //
 // Everything the kid sees except the keyboard and hands: the two text lines,
-// the prompt, the progress bar, the guidance level, and the results screen.
+// the prompt, the progress bar, and the results screen.
 //
 // DOM-facing: verified by playing it, not by unit tests.
 
 import { fingerFor, fingerName, needsShift, shiftSideFor } from './keymap.js';
-import { setKeyboardVisibility, highlightKey } from './keyboard.js';
-import { setHandsVisibility, highlightFinger } from './hands.js';
+import { highlightKey } from './keyboard.js';
+import { highlightFinger } from './hands.js';
 import { displayAccuracy } from './progress.js';
 
 /**
@@ -107,31 +107,32 @@ export function renderProgress(index, total) {
   document.getElementById('progress-bar').style.width = `${(index / total) * 100}%`;
 }
 
+/** Highlight the next key on both the deck and the hands. Both are always shown. */
+export function highlightNext(ch) {
+  highlightKey(ch);
+  highlightFinger(ch);
+}
+
 /**
- * Apply a guidance level across keyboard and hands (spec §1).
+ * The results screen.
  *
- * @param {number} level 0..3
- * @returns {void}
- */
-export function applyGuidance(level) {
-  setKeyboardVisibility(level);
-  setHandsVisibility(level);
-}
-
-/** Highlight the next key on both the deck and the hands, honouring guidance. */
-export function highlightNext(ch, level) {
-  highlightKey(level >= 2 ? ch : null);
-  highlightFinger(level >= 3 ? ch : null);
-}
-
-/**
- * The results screen. The step-down offer appears only after a 3-star round and
- * is framed as unlocking a harder challenge — never as losing a help (spec §1).
+ * THERE IS NO STEP-DOWN OFFER. This screen used to offer, after a three-star
+ * round, to replay it with the hands hidden — a guidance ladder from Full down
+ * to nothing, framed as unlocking a harder challenge. It was removed, and the
+ * reason is worth keeping: it only ratcheted. A kid who accepted and found it
+ * too hard had no way back, because the offer appears only after three stars
+ * and she could no longer earn three stars. The help she gave up was the help
+ * she needed to get it back.
+ *
+ * It also read as a fault rather than a choice. Guidance was applied per item,
+ * and drills teaching a new key forced Full regardless, so within one lesson
+ * the hands appeared for the drills and vanished for the words — with nothing
+ * on screen connecting that to a button she had pressed a lesson earlier.
  *
  * @param {{stars: number, accuracy: number, wpm: number, bestStreak: number,
- *          canStepDown: boolean, hasNext: boolean, keepGoing: boolean}} summary
+ *          hasNext: boolean, keepGoing: boolean}} summary
  * @param {{onAgain: Function, onMenu: Function, onNext: Function,
- *          onKeepGoing: Function, onStepDown: Function}} handlers
+ *          onKeepGoing: Function}} handlers
  * @returns {void}
  */
 export function showResults(summary, handlers) {
@@ -158,14 +159,6 @@ export function showResults(summary, handlers) {
     row.appendChild(span(label, 'results-label'));
     row.appendChild(span(value, 'results-value'));
     card.appendChild(row);
-  }
-
-  if (summary.canStepDown) {
-    const offer = document.createElement('button');
-    offer.className = 'results-offer';
-    offer.textContent = 'Nice! Want to try that again with the hands off?';
-    offer.addEventListener('click', handlers.onStepDown);
-    card.appendChild(offer);
   }
 
   const actions = document.createElement('div');

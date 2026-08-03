@@ -19,9 +19,7 @@
 // it — same availableKeys, different content — and it exists because the home
 // row is where a kid spends the longest on the fewest keys. Six short rungs on
 // nine keys beat two long ones, and each sibling carries its own stars, which
-// is the whole pull to play it. Note that guidanceForItem() in main.js forces
-// full hands only for drills containing a NEW key, so a sibling correctly
-// follows whatever guidance level the kid has set.
+// is the whole pull to play it.
 const LETTER_RUNGS = [
   { id: 'home-left',     title: 'Left hand',       newKeys: [...'asdf', ' '],
     hint: 'Left fingers on a s d f. Feel the bump on f. Thumbs on the space bar.',

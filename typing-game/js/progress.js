@@ -14,9 +14,6 @@
 const TWO_STAR_ACCURACY = 0.90;
 const THREE_STAR_ACCURACY = 0.95;
 
-/** Guidance level at or below which a 3-star round earns the hands-off badge. */
-const HANDS_OFF_GUIDANCE = 1;
-
 /**
  * Stars for a round's accuracy. Finishing at all earns one — the ladder is a
  * soft gate and nobody gets stuck (spec §9).
@@ -60,14 +57,13 @@ function asRound(event, lessonId) {
  *
  * @param {object[]} events
  * @param {string} lessonId
- * @returns {{stars: number, bestAccuracy: number, bestWpm: number, attempts: number, handsOff: boolean}}
+ * @returns {{stars: number, bestAccuracy: number, bestWpm: number, attempts: number}}
  */
 export function forLesson(events, lessonId) {
   let stars = 0;
   let bestAccuracy = 0;
   let bestWpm = 0;
   let attempts = 0;
-  let handsOff = false;
 
   for (const event of events) {
     const round = asRound(event, lessonId);
@@ -82,11 +78,9 @@ export function forLesson(events, lessonId) {
     const wpm = typeof round.wpm === 'number' && Number.isFinite(round.wpm) ? round.wpm : 0;
     bestWpm = Math.max(bestWpm, Math.round(wpm));
 
-    const guidance = typeof round.guidance === 'number' ? round.guidance : Infinity;
-    if (roundStars === 3 && guidance <= HANDS_OFF_GUIDANCE) handsOff = true;
   }
 
-  return { stars, bestAccuracy, bestWpm, attempts, handsOff };
+  return { stars, bestAccuracy, bestWpm, attempts };
 }
 
 /**

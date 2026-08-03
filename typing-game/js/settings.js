@@ -15,7 +15,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // kid who skipped gets asked again on every launch (spec §5).
   hasAskedName: false,
   blockOnError: true,
-  guidance: 3,
   accent: '#7b6bd6',
   skin: '#e8b7ac',
 });
@@ -34,9 +33,6 @@ function clean(raw) {
   if (typeof raw.name === 'string' && raw.name.length > 0) out.name = raw.name;
   if (typeof raw.hasAskedName === 'boolean') out.hasAskedName = raw.hasAskedName;
   if (typeof raw.blockOnError === 'boolean') out.blockOnError = raw.blockOnError;
-  if (Number.isInteger(raw.guidance) && raw.guidance >= 0 && raw.guidance <= 3) {
-    out.guidance = raw.guidance;
-  }
   if (typeof raw.accent === 'string') out.accent = raw.accent;
   if (typeof raw.skin === 'string') out.skin = raw.skin;
   return out;

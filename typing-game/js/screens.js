@@ -46,12 +46,12 @@ export function showNamePrompt(onDone) {
 function rungButton(lesson, progress, onLesson) {
   const button = document.createElement('button');
   button.className = 'rung';
-  const p = progress[lesson.id] ?? { stars: 0, handsOff: false };
+  const p = progress[lesson.id] ?? { stars: 0 };
   const stars = '★'.repeat(p.stars) + '☆'.repeat(3 - p.stars);
   button.appendChild(Object.assign(document.createElement('span'),
     { className: 'rung-title', textContent: lesson.title }));
   button.appendChild(Object.assign(document.createElement('span'),
-    { className: 'rung-stars', textContent: stars + (p.handsOff ? ' ✋' : '') }));
+    { className: 'rung-stars', textContent: stars }));
   button.addEventListener('click', () => onLesson(lesson.id));
   return button;
 }

@@ -6,8 +6,7 @@ import { starsFor, displayAccuracy, forLesson, allProgress } from '../js/progres
 
 const round = (over) => ({
   type: 'round', t: '2026-08-01T15:00:00.000Z', build: 't1', session: 's_1',
-  lesson: 'top-ei', items: 10, accuracy: 0.96, wpm: 12, bestStreak: 20,
-  guidance: 3, ...over,
+  lesson: 'top-ei', items: 10, accuracy: 0.96, wpm: 12, bestStreak: 20, ...over,
 });
 
 test('star thresholds sit exactly where the spec puts them', () => {
@@ -43,7 +42,7 @@ test('displayAccuracy floors rather than rounds', () => {
 test('an empty event list is zero progress, not a crash', () => {
   const p = forLesson([], 'top-ei');
   assert.deepEqual(p, {
-    stars: 0, bestAccuracy: 0, bestWpm: 0, attempts: 0, handsOff: false,
+    stars: 0, bestAccuracy: 0, bestWpm: 0, attempts: 0,
   });
 });
 
@@ -68,18 +67,12 @@ test('bests are the maximum across attempts, and attempts counts them all', () =
   assert.equal(p.stars, 3, 'stars reflect the best round, not the last');
 });
 
-test('the hands-off badge needs 3 stars AND guidance <= 1', () => {
-  assert.equal(forLesson([round({ accuracy: 0.96, guidance: 3 })], 'top-ei').handsOff, false);
-  assert.equal(forLesson([round({ accuracy: 0.96, guidance: 2 })], 'top-ei').handsOff, false);
-  assert.equal(forLesson([round({ accuracy: 0.96, guidance: 1 })], 'top-ei').handsOff, true);
-  assert.equal(forLesson([round({ accuracy: 0.96, guidance: 0 })], 'top-ei').handsOff, true);
-  assert.equal(forLesson([round({ accuracy: 0.80, guidance: 0 })], 'top-ei').handsOff, false,
-    '3 stars is required, not just low guidance');
-});
-
-test('the badge is sticky: earned once, it stays earned', () => {
-  const events = [round({ accuracy: 0.96, guidance: 0 }), round({ accuracy: 0.5, guidance: 3 })];
-  assert.equal(forLesson(events, 'top-ei').handsOff, true);
+// The hands-off badge and the guidance level it depended on were removed; the
+// hands are always shown. Old rounds in a real log still carry a `guidance`
+// field, so this pins that reading history is unaffected by ignoring it.
+test('a guidance field on an old round is ignored, not read', () => {
+  const p = forLesson([round({ accuracy: 0.96, guidance: 0 })], 'top-ei');
+  assert.deepEqual(p, { stars: 3, bestAccuracy: 96, bestWpm: 12, attempts: 1 });
 });
 
 test('events for other lessons are ignored', () => {
@@ -109,7 +102,7 @@ test('malformed events are skipped rather than fatal', () => {
 });
 
 test('a missing wpm defaults to 0 rather than producing NaN', () => {
-  const events = [{ type: 'round', lesson: 'top-ei', accuracy: 0.96, guidance: 3 }];
+  const events = [{ type: 'round', lesson: 'top-ei', accuracy: 0.96 }];
   const p = forLesson(events, 'top-ei');
   assert.equal(p.bestWpm, 0);
   assert.ok(Number.isFinite(p.bestWpm));

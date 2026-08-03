@@ -96,16 +96,3 @@ export function flashWrong(ch) {
   setTimeout(() => el.classList.remove('is-wrong'), 400);
 }
 
-/**
- * Apply a guidance level (spec §1): 3 and 2 show the deck, 1 dims it, 0 hides
- * it entirely. Whether the HANDS show is hands.js's business.
- *
- * @param {number} level 0..3
- * @returns {void}
- */
-export function setKeyboardVisibility(level) {
-  const stage = document.getElementById('stage');
-  if (stage === null) return;
-  stage.classList.toggle('guidance-hidden', level === 0);
-  stage.classList.toggle('guidance-dim', level === 1);
-}

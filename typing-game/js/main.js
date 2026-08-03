@@ -19,7 +19,7 @@ import { loadEvents, record, flushOutbox, serverIsUp } from './log.js';
 import { allProgress, starsFor } from './progress.js';
 import { pickNext } from './nextup.js';
 import {
-  renderLines, renderPrompt, renderProgress, applyGuidance,
+  renderLines, renderPrompt, renderProgress,
   highlightNext, showResults, hideResults, shakeLine,
 } from './ui.js';
 import { showNamePrompt, showMenu, hideMenu, practiceItems } from './screens.js';
@@ -73,24 +73,11 @@ function startItem() {
   renderLines(state);
   renderPrompt(state, { name: settings.name, hint: lesson.hint });
   renderProgress(itemIndex, items.length);
-  // Per ITEM, not per lesson: guidanceForItem's new-key exception is about what
-  // the kid can see, so the deck and hands have to be shown for that item too.
-  // Applying the lesson-wide setting once would leave a new-key drill lighting
-  // keys on a hidden keyboard.
-  applyGuidance(guidanceForItem());
-  highlightNext(nextChar(state), guidanceForItem());
-}
-
-/**
- * A drill containing a not-yet-mastered new key always renders at Full,
- * whatever the setting says — you cannot learn a new key's finger without being
- * shown it (spec §1). Words and sentences in the same round follow the setting,
- * so the hands-off badge is still earnable on a new-key lesson.
- */
-function guidanceForItem() {
-  const isDrill = itemIndex < lesson.mix.drills;
-  const hasNewKey = lesson.newKeys.some((k) => items[itemIndex].includes(k));
-  return isDrill && hasNewKey ? 3 : settings.guidance;
+  // THE KEYBOARD AND THE HANDS ARE ALWAYS SHOWN. There used to be a guidance
+  // level here, 0..3, that faded and then removed them as the kid improved,
+  // with a step-down offered after a three-star round. It is gone: see the note
+  // on the results screen in ui.js for why.
+  highlightNext(nextChar(state));
 }
 
 function finishItem() {
@@ -109,7 +96,6 @@ function finishItem() {
     keystrokes: state.keystrokes,
     errors: state.errors,
     ms: state.finishedAt - state.startedAt,
-    guidance: guidanceForItem(),
     blockOnError: settings.blockOnError,
     misses: state.misses,
   });
@@ -141,8 +127,6 @@ function finishRound() {
     accuracy,
     wpm,
     bestStreak: roundBestStreak,
-    guidance: settings.guidance,
-    handsOff: stars === 3 && settings.guidance <= 1,
   };
   record(roundEvent);
 
@@ -156,7 +140,6 @@ function finishRound() {
   showResults(
     {
       stars, accuracy, wpm, bestStreak: roundBestStreak,
-      canStepDown: stars === 3 && settings.guidance > 0,
       hasNext: nextLesson(lesson.id) !== null,
       keepGoing: keepGoingTrack !== null,
     },
@@ -165,11 +148,6 @@ function finishRound() {
       onMenu: () => openMenu(),
       onNext: () => playLesson(nextLesson(lesson.id).id),
       onKeepGoing: () => playKeepGoing(keepGoingTrack),
-      onStepDown: () => {
-        settings = { ...settings, guidance: settings.guidance - 1 };
-        saveSettings(settings);
-        replayRound();
-      },
     },
   );
 }
@@ -188,7 +166,7 @@ function onKeyDown(e) {
     e.preventDefault();
     state = backspace(state);
     renderLines(state);
-    highlightNext(nextChar(state), guidanceForItem());
+    highlightNext(nextChar(state));
     return;
   }
   if (e.key.length !== 1) return; // ignore Tab, arrows, modifiers
@@ -201,7 +179,7 @@ function onKeyDown(e) {
   if (wasWrong) shakeLine();
   renderLines(state);
   renderPrompt(state, { name: settings.name, hint: lesson.hint });
-  highlightNext(nextChar(state), guidanceForItem());
+  highlightNext(nextChar(state));
 
   // AFTER highlightNext, not before: highlighting the next key clears every
   // is-next and is-wrong class on the deck, so a flash raised first is wiped in
@@ -225,7 +203,7 @@ function playLesson(id) {
   roundStartedAt = Date.now();
 
   document.getElementById('lesson-title').textContent = lesson.title;
-  startItem(); // applies this item's guidance itself
+  startItem();
 }
 
 /**
@@ -276,7 +254,7 @@ function playPractice(tab) {
   roundStartedAt = Date.now();
 
   document.getElementById('lesson-title').textContent = lesson.title;
-  startItem(); // applies this item's guidance itself
+  startItem();
 }
 
 /**

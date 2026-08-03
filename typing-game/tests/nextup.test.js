@@ -10,7 +10,7 @@ const LETTERS = lessonsForTrack('letters').map((l) => l.id);
 /** A round event with the accuracy that earns `stars` (see progress.starsFor). */
 function round(lesson, stars) {
   const accuracy = stars === 3 ? 0.98 : stars === 2 ? 0.92 : 0.5;
-  return { type: 'round', lesson, accuracy, wpm: 10, guidance: 3 };
+  return { type: 'round', lesson, accuracy, wpm: 10 };
 }
 
 test('a fresh log offers the first three rungs, in ladder order', () => {

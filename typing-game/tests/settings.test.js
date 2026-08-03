@@ -15,9 +15,8 @@ function fakeStorage(initial = {}) {
   };
 }
 
-test('defaults match the spec: block mode on, guidance at full', () => {
+test('defaults match the spec: block mode on', () => {
   assert.equal(DEFAULT_SETTINGS.blockOnError, true);
-  assert.equal(DEFAULT_SETTINGS.guidance, 3);
   assert.equal(DEFAULT_SETTINGS.name, null);
   assert.equal(DEFAULT_SETTINGS.accent, '#7b6bd6');
   assert.equal(DEFAULT_SETTINGS.skin, '#e8b7ac');
@@ -36,11 +35,11 @@ test('no localStorage at all is a first run, not a crash', () => {
 
 test('saved settings round-trip', () => {
   globalThis.localStorage = fakeStorage();
-  saveSettings({ ...DEFAULT_SETTINGS, name: 'Petra', guidance: 1 });
+  saveSettings({ ...DEFAULT_SETTINGS, name: 'Petra', blockOnError: false });
   const loaded = loadSettings();
   assert.equal(loaded.name, 'Petra');
-  assert.equal(loaded.guidance, 1);
-  assert.equal(loaded.blockOnError, true, 'untouched keys keep their defaults');
+  assert.equal(loaded.blockOnError, false);
+  assert.equal(loaded.accent, DEFAULT_SETTINGS.accent, 'untouched keys keep their defaults');
 });
 
 test('hasAskedName defaults false and round-trips, so a skip is remembered', () => {
@@ -71,13 +70,17 @@ test('unknown keys in storage are dropped, not passed through', () => {
   assert.equal(loadSettings().nonsense, undefined);
 });
 
-test('a guidance level outside 0..3 falls back to the default', () => {
-  for (const bad of [-1, 4, 'high', null]) {
-    globalThis.localStorage = fakeStorage({
-      'kct.typing.settings.v1': JSON.stringify({ guidance: bad }),
-    });
-    assert.equal(loadSettings().guidance, 3, String(bad));
-  }
+// A REAL KID'S BROWSER STILL HOLDS `guidance: 2`. The setting is gone and the
+// hands are always shown, so a stored value must be dropped rather than carried
+// forward — otherwise the field that no longer does anything would still be
+// sitting there, waiting to confuse whoever finds it next.
+test('a stored guidance level is dropped, not preserved', () => {
+  globalThis.localStorage = fakeStorage({
+    'kct.typing.settings.v1': JSON.stringify({ name: 'Petra', guidance: 2 }),
+  });
+  const loaded = loadSettings();
+  assert.equal(loaded.guidance, undefined);
+  assert.equal(loaded.name, 'Petra', 'the rest of the object still loads');
 });
 
 test('a storage that throws on write does not throw into the caller', () => {
