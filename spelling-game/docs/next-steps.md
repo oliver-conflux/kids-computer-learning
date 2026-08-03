@@ -247,9 +247,11 @@ deliberate reloads between sessions.
 
 ## 7. Unfinished from the build plan
 
-- **No spelling card in `games-menu.html`.** Verified: zero matches for
-  "spelling". The game is reachable only by typing the URL. This was Wave 4
-  Task 4.1 and is the smallest high-value item on this list.
+- ~~**No spelling card in `games-menu.html`.**~~ **DONE** in commit `a88be4b`,
+  which added two — "Learn Spelling" and "Drill Spelling", pointing at
+  `?mode=learn` and `?mode=drill`. The "verified: zero matches" above was true
+  the day it was written and stale within days, which is the hazard of pinning a
+  claim to a grep in a document nobody re-runs.
 - **`tools/replay.js` is math-only.** It imports `../math-game/js/config.js`
   directly. The spelling game now has the harder scheduling questions and no way
   to test a config change against a real log. Wave 4 Task 4.2.
@@ -283,14 +285,26 @@ that path. Fix these only if it is ever revived; none of them can affect play.
 
 ## 9. Housekeeping
 
-- **Branch `spelling-game` is not merged.** `master` is still at `56367e4`.
+- ~~**Branch `spelling-game` is not merged.**~~ Merged since. `master` is well
+  past `56367e4` — as of 2026-08-03 it carries the probe-and-release work. The
+  local `spelling-game` branch still exists and can go.
 - **Shared CSS is now duplicated three ways.** `base.css`, `layout.css` and
   `results.css` exist in all three games. This was "overdue" at two copies. The
   theme tokens are the part that actually wants sharing.
-- **`data/` is fully gitignored now** — logs, audio cache and word JSON. The
-  spelling log is real play data and is the only record of the sessions cited
-  above, so do not clear it; it is the before/after baseline for every scheduling
-  change on this list.
+- **`data/` is fully gitignored now** — logs, audio cache and word JSON.
+
+  **CORRECTION, 2026-08-03: the spelling log is NOT the kid's play data.** All
+  543 events are Oliver testing the game, and the 209 in the typing log likewise.
+  This matters more than it sounds. An adult types at roughly 250ms a keystroke
+  and a seven-year-old hunt-and-pecks at 500–800, so every latency figure the log
+  yields describes the wrong hands. Measuring `hotMs` against it produced a
+  confident, entirely wrong conclusion — that 4000ms was non-binding, because 0
+  of 314 clean attempts exceeded it — which is exactly backwards for the kid it
+  is set for.
+
+  So it is a fine fixture for shape, ordering and crash-safety, and worthless for
+  anything timing-shaped. Treat the first real session from the kid as the start
+  of the baseline, not this.
 - **Keys live in `.env`**, gitignored, with `.env.example` tracked as the
   template. They must be carried to the kid's machine by hand — that
   inconvenience is deliberate, because this repo has a public origin.

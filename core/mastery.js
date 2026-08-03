@@ -34,6 +34,7 @@ import { itemKeyOf } from './space.js';
  * @typedef {import('./space.js').ItemSpace} ItemSpace
  *
  * @typedef {{ ms: number, stage: string, wrong: unknown[] }} Attempt
+ * @typedef {{ t: string | undefined, ms: number, stage: string, session: unknown }} FirstAttempt
  * @typedef {{
  *   id: ItemId,
  *   item: Item, — or whatever `space.itemKey` names it; `fact` in the math game
@@ -44,6 +45,9 @@ import { itemKeyOf } from './space.js';
  *   medianCleanMs: number | null,
  *   taught: boolean,
  *   taughtCount: number,
+ *   firstAttempt: FirstAttempt | null,
+ *   cleanSessions: number,
+ *   cleanTotal: number,
  * }} ItemStats
  * @typedef {{ byId: Map<ItemId, ItemStats>, confusions: Map<ItemId, Set<unknown>> }} MasteryModel
  */
@@ -263,6 +267,29 @@ export function deriveMastery(events, config, space) {
   /** Fallback key for an instruction attempt with no session id. */
   let looseInstructionAttempts = 0;
 
+  // THE THREE UNWINDOWED DRILL FACTS. Everything below this comment is computed
+  // over the full event list rather than the last `config.retain` attempts, and
+  // the distinction is load-bearing rather than an optimisation.
+  //
+  // The first sighting of an item is a fact about ALL of history. A consumer
+  // asking "was she right the very first time she ever met this word?" is asking
+  // something that cannot expire — but `retain` is 5, so a windowed answer would
+  // quietly become "was she right five drills ago?" and a long-known word would
+  // read as never seen. Same for the session spread: proof that a word survived
+  // a night's sleep is not the kind of evidence that should age out.
+  //
+  // This module does not know what any of it MEANS. It reports the facts; the
+  // rule that turns them into "marked" lives in the game that has the homophone
+  // list — see spelling-game/js/placement.js.
+  /** @type {Map<ItemId, FirstAttempt>} */
+  const firstAttemptById = new Map();
+  /** Item -> the set of SESSIONS containing at least one clean, plausible drill. */
+  const cleanSessionsById = new Map();
+  /** Item -> how many clean, plausible drill attempts, unwindowed. */
+  const cleanTotalById = new Map();
+  /** Fallback session key for a drill attempt with no session id. */
+  let looseCleanAttempts = 0;
+
   const known = new Set(space.allItems().map((item) => space.itemId(item)));
   // The field name a game calls its item by — `item` for everything except the
   // math game. See core/space.js.
@@ -344,6 +371,37 @@ export function deriveMastery(events, config, space) {
       continue;
     }
 
+    // The loop runs in ascending `t`, so the first drill attempt reached for an
+    // id IS the earliest one. An implausibly long attempt still counts here: it
+    // is not latency evidence, but it did happen, and reading it as "never seen"
+    // would let one interrupted turn re-open a word that was already settled.
+    if (!firstAttemptById.has(id)) {
+      firstAttemptById.set(id, {
+        t: event.t,
+        ms: event.ms,
+        stage: event.stage,
+        session: event.session,
+      });
+    }
+
+    if (event.stage === CLEAN_STAGE && event.ms <= config.maxPlausibleMs) {
+      cleanTotalById.set(id, (cleanTotalById.get(id) ?? 0) + 1);
+      let sessions = cleanSessionsById.get(id);
+      if (sessions === undefined) {
+        sessions = new Set();
+        cleanSessionsById.set(id, sessions);
+      }
+      // Sessionless attempts each count as their own sitting, for the reason
+      // `taughtSessionsById` does the same: collapsing them under one key would
+      // make an entire pre-`session` log look like a single evening's work, and
+      // a rule asking for proof across two sittings would never be satisfiable.
+      sessions.add(
+        typeof event.session === 'string' && event.session !== ''
+          ? event.session
+          : `#loose${(looseCleanAttempts += 1)}`,
+      );
+    }
+
     let attempts = attemptsById.get(id);
     if (attempts === undefined) {
       attempts = [];
@@ -395,6 +453,9 @@ export function deriveMastery(events, config, space) {
       medianCleanMs,
       taught: taughtIds.has(id),
       taughtCount: taughtSessionsById.get(id)?.size ?? 0,
+      firstAttempt: firstAttemptById.get(id) ?? null,
+      cleanSessions: cleanSessionsById.get(id)?.size ?? 0,
+      cleanTotal: cleanTotalById.get(id) ?? 0,
     });
   }
 

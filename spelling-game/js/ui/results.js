@@ -1,4 +1,5 @@
-// Results screen: the session summary, the frontier, and the words in play.
+// Results screen: the session summary, what is finished with, and the words in
+// play.
 //
 // This module renders and nothing else. It holds no game state beyond which
 // word chip the kid last tapped, which lives for exactly as long as the
@@ -11,14 +12,35 @@
 // thousand-word spine, and a thousand cells would be a wall rather than a
 // picture. The two things that carry the same meaning here are:
 //
-//   1. THE FRONTIER — how far down the spine the active window has reached.
-//      This is the single number that answers "is she progressing?", and it is
-//      the reason the session event carries `frontier` at all (spec §11). It is
+//   1. WHAT IS FINISHED WITH — how many of the catalogue she has marked off.
+//      This is the single number that answers "is she progressing?". It is
 //      derived from the log every session and stored nowhere, so it is also the
 //      only place the kid can see that the derivation is moving.
-//   2. THE ACTIVE WINDOW — the twenty-odd words actually in play right now,
-//      each with its state. Small, countable, visibly shrinking work, which is
+//   2. THE DRILL SET — the twenty-odd words actually in play right now, each
+//      with its state. Small, countable, visibly shrinking work, which is
 //      exactly the job math's cold-cell count does.
+//
+// PROGRESS IS MARKED-OFF COUNT, NOT COLOUR, AND NOT A POSITION. Both halves of
+// that sentence used to be false here and the probe-and-release design
+// (2026-08-03) made them true, so it is worth saying why rather than only what:
+//
+//   - Not COLOUR. cold/warm/hot still exist, still decide how often a word is
+//     served and how fast its hints appear, and still appear all over this
+//     screen — but they are FLUENCY, and fluency at seven is mostly typing
+//     speed. Counting hot words as progress made advancement wait on motor
+//     skill, which this project has a separate game for. `hot` is therefore no
+//     longer summed anywhere as an achievement.
+//   - Not a POSITION. The old screen showed how far down the spine the window
+//     had reached, which was honest while the game walked the spine in order.
+//     It no longer does: probes are drawn from the whole catalogue, so she may
+//     have marked off a word at position 800 on her second sitting. A position
+//     bar would now report a place she is not, and would keep reporting it as
+//     the number that matters.
+//
+// The catalogue is deliberately far longer than any one kid will finish, so the
+// count is stated as a countable set and never as a percentage. "A hundred and
+// twelve words done" is an achievement; "11%" of a thousand-word list is a
+// grade, and a discouraging one.
 //
 // What deliberately does NOT appear: any speed score, any words-per-minute,
 // any target or age norm, any comparison to another person, any streak, and any
@@ -29,8 +51,13 @@
 // beat, which is the habit the whole game is built to avoid.
 //
 // TWO comparisons are permitted and both are the kid against her own previous
-// session — the median (see comparisonNote) and the frontier (see
-// frontierNote). There is no third reference point anywhere in this file.
+// session — the median (see comparisonNote) and the marked-off count (see
+// markedNote). There is no third reference point anywhere in this file.
+//
+// THE CSS CLASS NAMES STILL SAY `frontier` AND `window`, and that is on purpose.
+// Renaming them here without `css/results.css` — which this task does not own —
+// would strip the styling off the screen's largest number. The vocabulary in the
+// markup moved on; the hooks the stylesheet hangs off did not.
 //
 // LEARN AND DRILL ARE DIFFERENT ACTIVITIES, NOT DIFFICULTY LEVELS. Nothing on
 // this screen ranks them, and neither button is styled as the harder one.
@@ -365,44 +392,52 @@ export function comparisonNote(medianMs, previousMedianMs) {
 }
 
 /**
- * The second permitted comparison: where the frontier sits now against where it
- * sat at the end of the previous session.
+ * The second permitted comparison: how many words are finished with now against
+ * how many were finished with at the end of the previous session.
  *
- * THE FRONTIER CAN MOVE BACKWARDS and that is not a bug. A hot word cools when
- * its clean spellings age out of the retain window, at which point it re-enters
- * the active window and pulls the far edge back with it. That is the mastery
- * model working exactly as designed, so it is reported as plainly as a promotion
- * — no red, no apology, and with a word about why — for the same reason
- * `renderMoves` reports a bucket regression plainly.
+ * NO NEW WORDS IS THE NORMAL OUTCOME OF A GOOD SESSION, not a bad one, and the
+ * `same` wording has to survive that. Marking off asks for three clean spellings
+ * spanning two sittings (spec §2 rule 2), so a session spent converting stuck
+ * words can easily finish none of them and still be the session that does the
+ * work — and a learn session finishes none by construction, because learn
+ * attempts are excluded from mastery evidence. So `same` is stated flat, with no
+ * apology and nothing implying a stall.
+ *
+ * THE COUNT NEVER GOES DOWN, so unlike the frontier this replaced there is no
+ * "came back round" case to write. Both routes into `marked` read facts that
+ * only accumulate — a first attempt that was clean stays clean for ever, and
+ * clean totals and session counts only rise. The one way the number could fall
+ * is the item space shrinking underneath it, which happens when a word's audio
+ * goes missing from the cache. That is a fault in the install, not something
+ * that happened to the kid, and there is no honest sentence for it at this
+ * reading age — so it says nothing numeric at all rather than inventing a reason
+ * she lost words. Same rule as describeMisspelling: silence beats a confident
+ * wrong label.
  *
  * Pure. Exported for tests.
  *
- * @param {number} frontier spine index reached this session
- * @param {number | null | undefined} previousFrontier the same number last session, null on a first run
+ * @param {number} marked words finished with, now
+ * @param {number | null | undefined} previousMarked the same count last session, null on a first run
  * @returns {{text: string, tone: string}}
  */
-export function frontierNote(frontier, previousFrontier) {
-  if (!Number.isFinite(frontier)) {
-    return { text: 'where you are up to on the word list', tone: 'plain' };
+export function markedNote(marked, previousMarked) {
+  if (!Number.isFinite(marked)) {
+    return { text: 'how much of the word list you have finished', tone: 'plain' };
   }
-  if (previousFrontier === null || !Number.isFinite(previousFrontier)) {
+  if (previousMarked === null || !Number.isFinite(previousMarked)) {
     return { text: 'first session — this is your starting point', tone: 'first' };
   }
-  const moved = frontier - previousFrontier;
-  if (moved === 0) {
-    return { text: 'same place as last time', tone: 'same' };
-  }
-  if (moved > 0) {
+  const gained = marked - previousMarked;
+  if (gained > 0) {
     return {
-      text: `${moved} ${moved === 1 ? 'word' : 'words'} further along than last time`,
+      text: `${gained} more ${gained === 1 ? 'word' : 'words'} finished since last time`,
       tone: 'forward',
     };
   }
-  const back = -moved;
-  return {
-    text: `${back} ${back === 1 ? 'word' : 'words'} came back round — they do that when it has been a while`,
-    tone: 'back',
-  };
+  if (gained === 0) {
+    return { text: 'the same as last time', tone: 'same' };
+  }
+  return { text: 'how much of the word list you have finished', tone: 'plain' };
 }
 
 /**
@@ -475,8 +510,8 @@ function renderSummaryStrip(summary, counts) {
  * and that is all; main.js owns every state transition. See onResultsAction.
  *
  * Learn is offered unless `summary.canLearn` is explicitly false, which means no
- * family in the active window has two or more words in it and there is nothing
- * to teach — a button that leads nowhere is worse than no button.
+ * family in the drill set has two or more words in it and there is nothing to
+ * teach — a button that leads nowhere is worse than no button.
  *
  * @param {object} summary SessionSummary
  * @param {{sessionLength: number}} config
@@ -498,8 +533,9 @@ function renderActions(summary, config) {
   // finished, and the screen does not presume to know.
   //
   // "Learn a word family" carries no count on purpose: the family that gets
-  // picked is whatever the window offers and may have three words or five, and a
-  // promised number that turns out wrong on the next screen is worse than none.
+  // picked is whatever the drill set offers and may have three words or five,
+  // and a promised number that turns out wrong on the next screen is worse than
+  // none.
   if (summary?.canLearn !== false) {
     row.append(button('learn', 'Learn a word family', 'go'));
   }
@@ -587,68 +623,74 @@ function renderMoves(model, summary) {
 }
 
 /**
- * The frontier: how far down the spine the active window has reached.
+ * How much of the catalogue is finished with.
  *
- * There is no stored level in this game and no placement test — the window is
- * recomputed from the log every load (core/frontier.js). That makes progress real
- * but invisible, and this section is the only place it is ever shown. It is the
- * reason the session event carries `frontier`.
+ * There is no stored level in this game and no placement test — placement is
+ * recomputed from the log every load (js/placement.js). That makes progress real
+ * but invisible, and this section is the only place it is ever shown.
  *
- * The bar is a POSITION, not a timer and not a score. It fills as the kid moves
- * down the spine, it carries a mark at last session's position so the movement
- * is visible rather than asserted, and it counts words — never seconds.
+ * The bar counts WORDS, never seconds, and it is not a timer and not a score. It
+ * fills as words are marked off and carries a mark at last session's count, so
+ * the movement is visible rather than only asserted in the sentence above it.
+ *
+ * THE DENOMINATOR IS THE WHOLE CATALOGUE, INCLUDING WORDS THAT CANNOT BE PLAYED.
+ * `model.byId` is total over the item space by contract, so `counts.total` is
+ * all 995 words; `marked` is derived over the trimmed, audio-backed list the
+ * game actually draws from. Those two disagree by however many words have no
+ * recording yet, and the honest reading of that gap is the true one — a word she
+ * has never been asked is a word she has not finished. Reporting against the
+ * playable list instead would make the fraction jump every time the audio cache
+ * grew, which is a change in the install reported as progress by the kid.
  *
  * @param {object} summary SessionSummary
  * @param {{cold: number, shown: number, warm: number, hot: number, total: number}} counts
+ * @param {number} marked words finished with
  * @returns {HTMLElement}
  */
-function renderFrontier(summary, counts) {
+function renderMarked(summary, counts, marked) {
   const section = el('section', 'results__frontier');
   section.append(el('h2', 'results__h2', 'Where you are up to'));
 
   const total = counts.total;
-  const frontier = Number.isFinite(summary?.frontier) ? summary.frontier : 0;
-  // `frontier` is a spine INDEX, so the word at it is the (index + 1)th. Clamped
-  // because a finished spine reports an index one past the end.
-  const position = Math.max(0, Math.min(frontier + 1, total));
-  const previous = Number.isFinite(summary?.previousFrontier) ? summary.previousFrontier : null;
+  const done = Math.max(0, Math.min(marked, total));
+  const previous = Number.isFinite(summary?.previousMarked) ? summary.previousMarked : null;
 
   const line = el('p', 'results__frontier-line');
-  line.append(el('span', 'results__frontier-position', formatCount(position)));
-  line.append(el('span', 'results__frontier-of', `of ${formatCount(total)} words`));
+  line.append(el('span', 'results__frontier-position', formatCount(done)));
+  line.append(el('span', 'results__frontier-of', `of ${formatCount(total)} words finished`));
   section.append(line);
 
-  const note = frontierNote(frontier, previous);
+  const note = markedNote(marked, previous);
   section.append(el('p', `results__frontier-note results__frontier-note--${note.tone}`, note.text));
 
   const track = el('div', 'results__spine');
   track.setAttribute('role', 'img');
-  track.setAttribute(
-    'aria-label',
-    `Word ${position} of ${total} on the list. ${note.text}.`,
-  );
+  track.setAttribute('aria-label', `${done} of ${total} words finished. ${note.text}.`);
   const fill = el('div', 'results__spine-fill');
-  fill.style.setProperty('--reached', total > 0 ? String(position / total) : '0');
+  fill.style.setProperty('--reached', total > 0 ? String(done / total) : '0');
   track.append(fill);
   if (previous !== null && total > 0) {
     const mark = el('div', 'results__spine-mark');
-    const at = Math.max(0, Math.min(previous + 1, total)) / total;
-    mark.style.setProperty('--at', String(at));
+    mark.style.setProperty('--at', String(Math.max(0, Math.min(previous, total)) / total));
     track.append(mark);
   }
   section.append(track);
 
-  // The mastered count, stated as a countable set rather than a percentage.
-  // "Forty words from memory" is an achievement; "4%" of a thousand-word list is
-  // a grade, and a discouraging one on a list that is deliberately far longer
-  // than any one kid will finish.
+  // WHAT "FINISHED" MEANS, in one sentence, because it is a promise and she will
+  // check it. A marked word never comes back, and the reason this line has to be
+  // here is that the screen has just spent three stat blocks talking about words
+  // that DO come back. Without it the largest number on the screen is
+  // unexplained. The zero case is phrased as the instruction it is, since there
+  // is nothing yet for "those words" to point at.
   section.append(
     el(
       'p',
       'results__frontier-mastered',
-      counts.hot === 1
-        ? '1 word you can spell from memory so far.'
-        : `${formatCount(counts.hot)} words you can spell from memory so far.`,
+      done === 0
+        ? 'Spell a word right on your own and it is finished — it does not come back.'
+        : `Finished means you spelled ${done === 1 ? 'it' : 'them'} right on your own. ${
+            done === 1 ? 'That word does' : 'Those words do'
+          } not come back.`,
     ),
   );
 
@@ -656,7 +698,7 @@ function renderFrontier(summary, counts) {
 }
 
 /**
- * One word chip in the active window.
+ * One word chip in the drill set.
  *
  * @param {object} stats WordStats
  * @returns {HTMLElement}
@@ -672,41 +714,54 @@ function wordChip(stats) {
 }
 
 /**
- * The words currently in play — the active window, in spine order.
+ * The words currently in play — the drill set, in spine order.
  *
  * This is the small, concrete, visibly shrinking set of work that the math
- * game's cold-cell count provides, and it is scoped to the window rather than
- * the spine for the same reason the window exists: a thousand words is not a
- * job, and twenty is.
+ * game's cold-cell count provides, and it is scoped to the drill set rather than
+ * the spine for the same reason the cap on that set exists: a thousand words is
+ * not a job, and twenty is.
+ *
+ * AN EMPTY DRILL SET IS THREE DIFFERENT STATES and the old copy could only say
+ * one of them:
+ *
+ *   - `unmet > 0` — nothing she has met is still unfinished. The ordinary state
+ *     of a first sitting and of any good run; the next session is simply all
+ *     probes. Telling a kid here that she has done the whole list would be a lie
+ *     she can check, and it is the lie the old single-branch copy told.
+ *   - `unmet === 0` — the probe pool has run dry too, so she really has finished
+ *     the catalogue. Said as the finish it is.
+ *   - `unmet === null` — no placement was handed in, so the screen has been
+ *     given nothing to say. It says nothing, rather than picking whichever of
+ *     the two claims above happens to fall out of a missing value. Both are
+ *     claims about the kid, and neither is checkable from here.
  *
  * @param {import('../../../core/mastery.js').MasteryModel} model
- * @param {string[]} windowIds ids, spine order. Not named `window` — this is a
- *   browser module and shadowing the global there is a trap for the next reader.
+ * @param {string[]} drillIds ids, spine order
+ * @param {number | null} unmet words she has never been shown — the probe pool's
+ *   size, or null when there is no placement to read it from
  * @returns {{section: HTMLElement, list: HTMLElement | null}}
  */
-function renderWindow(model, windowIds) {
+function renderDrill(model, drillIds, unmet) {
   const section = el('section', 'results__window');
   const head = el('div', 'results__window-head');
   head.append(el('h2', 'results__h2', 'The words you are on'));
   section.append(head);
 
-  if (windowIds.length === 0) {
-    // Reachable, and a real state rather than an error: every word in the spine
-    // is hot. Say so as the finish it is.
-    section.append(
-      el(
-        'p',
-        'results__empty',
-        'Nothing left in the window — every word on the list has come back from memory. That is the whole list.',
-      ),
-    );
+  if (drillIds.length === 0) {
+    const empty =
+      unmet === null
+        ? 'Nothing to show here.'
+        : unmet === 0
+          ? 'Nothing left to practise — every word on the list is finished. That is the whole list.'
+          : 'Nothing to practise right now. Every word you have met is finished, so next time you will meet new ones.';
+    section.append(el('p', 'results__empty', empty));
     return { section, list: null };
   }
 
   const list = el('div', 'results__words');
   list.setAttribute('role', 'group');
   list.setAttribute('aria-label', 'Words in play, easiest first');
-  for (const id of windowIds) {
+  for (const id of drillIds) {
     const stats = model.byId.get(id);
     if (stats !== undefined) {
       list.append(wordChip(stats));
@@ -863,15 +918,32 @@ export function onResultsAction(container, handler) {
  * @param {import('../../../core/mastery.js').MasteryModel} model total over the spine
  * @param {object} summary SessionSummary — see the module header and the report:
  *   `{ session, mode, items, cleanRate, medianMs, previousMedianMs, moved,
- *      window, frontier, previousFrontier, canLearn }`. `previousMedianMs` and
- *   `previousFrontier` are null on a first run.
+ *      placement, previousMarked, canLearn }`. `previousMedianMs` and
+ *   `previousMarked` are null on a first run.
+ *
+ *   `placement` is the whole Placement from js/placement.js. After a DRILL
+ *   session it is current to the last word; after a LEARN session it is the
+ *   start-of-session value, and that is not staleness — `derivePlacement` reads
+ *   only `firstAttempt`, `cleanTotal` and `cleanSessions`, and all three exclude
+ *   learn attempts by the mastery contract. Nothing a learn session does can
+ *   move a word into `marked` or out of `drill`, so there is nothing that could
+ *   have changed. This is why markedNote correctly reads "the same as last time"
+ *   after learn, and why that is the truth rather than a missed update.
  * @param {object} config the game's CONFIG — reads `sessionLength` and `retain`
  * @returns {void}
  */
 export function renderResults(container, model, summary, config) {
   const root = el('section', 'results');
   const counts = countStates(model);
-  const windowIds = Array.isArray(summary?.window) ? summary.window : [];
+
+  // Read defensively, and take the drill set and the marked count from the SAME
+  // object. They are two views of one partition of the spine, and reading them
+  // from two places is how the screen would come to claim she has finished
+  // everything while still listing words she is on.
+  const placement = summary?.placement ?? null;
+  const drillIds = Array.isArray(placement?.drill) ? placement.drill : [];
+  const marked = Number.isFinite(placement?.marked?.size) ? placement.marked.size : 0;
+  const unmet = Array.isArray(placement?.probePool) ? placement.probePool.length : null;
 
   const header = el('header', 'results__header');
   header.append(el('h1', 'results__title', 'Session done'));
@@ -888,9 +960,9 @@ export function renderResults(container, model, summary, config) {
   root.append(renderSummaryStrip(summary, counts));
   root.append(renderActions(summary, config));
   root.append(renderMoves(model, summary));
-  root.append(renderFrontier(summary, counts));
+  root.append(renderMarked(summary, counts, marked));
 
-  const { section: windowSection, list } = renderWindow(model, windowIds);
+  const { section: windowSection, list } = renderDrill(model, drillIds, unmet);
 
   const legend = el('div', 'results__legend');
   for (const state of STATES) {

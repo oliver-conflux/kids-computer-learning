@@ -91,6 +91,13 @@ test('a fact with zero attempts is present, cold, and has a null median', () => 
     // them: a new field on FactStats has to be added here deliberately.
     ordered: { attempts: 0, unaided: 0, cleared: false },
     learn: { attempts: 0, unaided: 0, cleared: false },
+    // The three UNWINDOWED drill facts, added 2026-08-03 for the spelling game's
+    // probe-and-release scheduling. Math does not read them and does not have to
+    // — this assertion is a shape pin over the shared core, so they appear here
+    // whether or not this game consumes them. See core/tests/mastery.test.js.
+    firstAttempt: null,
+    cleanSessions: 0,
+    cleanTotal: 0,
   });
 });
 
@@ -1376,4 +1383,32 @@ test('attempts, corrupt lines and a non-numeric median are all skipped', () => {
   ];
   assert.equal(previousSessionMedian(events), 2200);
   assert.equal(previousSessionMedian([]), null);
+});
+
+test('an ordered attempt is not a first drill sighting, and not a clean session', () => {
+  // A SEAM BETWEEN TWO FEATURES THAT NEVER SAW EACH OTHER. The three unwindowed
+  // drill facts — `firstAttempt`, `cleanSessions`, `cleanTotal` — were added on
+  // one branch for the spelling game's probe-and-release scheduling. Ordered
+  // mode was added on another. They met in a merge.
+  //
+  // They are compatible only because the instruction-mode branch in
+  // core/mastery.js `continue`s BEFORE the unwindowed counters run, so widening
+  // that branch to cover `ordered` excluded ordered attempts from all three for
+  // free. Move either block past the other and the merge is still green, still
+  // silent, and now a table walk counts as the first time she ever met the fact
+  // — which is precisely the evidence probe-and-release releases a word on.
+  //
+  // Spelling never writes `mode: 'ordered'`, so this can only bite math. It is
+  // asserted here rather than in core/tests because math is the only game that
+  // can produce the event.
+  const events = [
+    at('2026-08-03T10:00:00.000Z', orderedAttempt(6, 7, 400, [], 'clean', 's_run1')),
+    at('2026-08-03T11:00:00.000Z', attempt(6, 7, 900, 'clean')),
+  ];
+  const stats = statsFor(events, SIX_SEVEN);
+
+  // The drill attempt is the first sighting, though the ordered one came first.
+  assert.equal(stats.firstAttempt.ms, 900, 'ordered attempt became the first sighting');
+  assert.equal(stats.cleanTotal, 1, 'ordered attempt counted as a clean drill');
+  assert.equal(stats.cleanSessions, 1, 'ordered run counted as a clean sitting');
 });
