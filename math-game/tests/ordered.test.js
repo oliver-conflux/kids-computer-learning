@@ -140,15 +140,22 @@ test('tableProgress covers tables 2 through 10, ascending, and nothing else', ()
   }
 });
 
-test('tableProgress counts every cleared fact in the row, gaps included', () => {
+test('a fact cleared out of order does not move the bar', () => {
+  // THE DECISION THIS TEST EXISTS TO PIN. `cleared` counts the peeled PREFIX
+  // and nothing else. 2x0 .. 2x4 and 2x7 have cleared — six facts — but only
+  // five have peeled, because 2x5 holds the front.
+  //
+  // The bar is the only thing the kid sees before she presses that row, so it
+  // has to predict what she is about to do. Counting 2x7 would show "6 of 11"
+  // and then serve her seven problems. Without this test the count drifts back
+  // to a row filter, which is the shorter code and reads perfectly plausible.
   const cleared = new Set([0, 1, 2, 3, 4, 7]);
   const model = modelWith((fact) => fact.a === 2 && cleared.has(fact.b));
   const twos = tableProgress(model).find((row) => row.table === 2);
 
-  // Six cleared, but the run is still six long: 2x7 has cleared and has not
-  // peeled. `cleared` is a count of the ROW, not a measure of the run.
-  assert.equal(twos.cleared, 6);
+  assert.equal(twos.cleared, 5);
   assert.equal(runFor(model, 2).length, 6);
+  assert.equal(twos.cleared + runFor(model, 2).length, twos.total);
 });
 
 test('tableProgress and runFor agree, for all nine tables, on one model', () => {
@@ -171,9 +178,10 @@ test('tableProgress and runFor agree, for all nine tables, on one model', () => 
     // Empty run and finished table are the same statement in both directions.
     assert.equal(run.length === 0, cleared === total, label);
 
-    // Everything ahead of the run has cleared, so the count is at least the
-    // peeled prefix — and strictly more when a gap survives in the middle.
-    assert.ok(cleared >= total - run.length, label);
+    // `cleared` IS the peeled prefix, exactly — never more. This model puts a
+    // surviving gap at b = 9 in every row, so a row filter would come out
+    // higher here on eight of the nine tables.
+    assert.equal(cleared, total - run.length, label);
 
     const isCleared = (fact) => model.byId.get(factId(fact)).ordered.cleared;
     assert.ok(

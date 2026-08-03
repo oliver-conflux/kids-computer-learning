@@ -133,10 +133,16 @@ export function runFor(model, n) {
 /**
  * How far each table has got, for the menu's bars. Tables 2..10, ascending.
  *
- * `cleared` counts EVERY cleared fact in the row, gaps included, so it is not
- * always `total - runFor(model, n).length` — a fact that cleared out of order is
- * counted here and is still served in the run. The two agree at the ends, which
- * is what matters: `cleared === total` exactly when the run is empty.
+ * `cleared` counts ONLY THE FACTS THAT HAVE PEELED OFF THE FRONT — the run's
+ * starting offset, `total - runFor(model, n).length` — and NOT every cleared
+ * fact in the row. A fact that cleared out of order does not move the bar.
+ *
+ * THE BAR IS A PROMISE ABOUT THE BUTTON UNDER IT. It is the only thing the kid
+ * sees before she presses that row, so it has to predict what she is about to
+ * do. Gaps are normal rather than rare — she clears `2x7` while still flubbing
+ * `2x5`, and both stay in the run, because peeling is prefix-only. Counting the
+ * gaps would show "6 of 11" and then serve her seven problems. Counting the
+ * front shows "4 of 11" and serves seven, and the two numbers agree.
  *
  * @param {MasteryModel} model
  * @returns {{table: number, cleared: number, total: number}[]}
@@ -144,11 +150,11 @@ export function runFor(model, n) {
 export function tableProgress(model) {
   const progress = [];
   for (let table = FIRST_TABLE; table <= LAST_TABLE; table += 1) {
-    const row = tableRow(table);
+    const total = tableRow(table).length;
     progress.push({
       table,
-      cleared: row.filter((fact) => hasCleared(model, fact)).length,
-      total: row.length,
+      cleared: total - runFor(model, table).length,
+      total,
     });
   }
   return progress;
