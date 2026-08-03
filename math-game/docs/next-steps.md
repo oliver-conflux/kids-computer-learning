@@ -104,7 +104,58 @@ which facts land together, so do these two at the same time.
 
 ---
 
-## 4. Open questions needing a human, not a fix
+## 4. A third mode: drill in order — **wanted, shape undecided**
+
+**What exists.** Both modes serve facts chosen by the scheduler: a frontier of
+not-yet-hot items, sampled by bucket weight so cold facts come round more often.
+That is the right machinery for building fluency, and it is deliberately not
+sequential — the order a kid meets facts in is a function of what she does not
+know yet.
+
+**What is missing is the other way of practising.** Straight through, in order:
+`2×2, 2×3, 2×4, 2×5, 2×6 …` and on through the threes, the fours. Marching a
+table end to end is how most people actually learned these, and it gives a kid a
+sense of place — where she is, how far in, what is coming — that a weighted
+sample deliberately does not.
+
+**And then the second half, which is the more interesting part.** Go through in
+order, note what broke, and hammer *those* until they stick. Say she gets `2×8`
+and `3×8`, then loses `4×8` and everything after it. Those are the reps she
+needs, and they are identifiable precisely because the run was ordered — a
+sequential pass makes the failure boundary visible in a way sampling never does.
+
+**Open questions, all genuinely open:**
+
+- **Is this a third mode, or a shape of drill?** A `?mode=order` alongside
+  `learn` and `drill`, or a variation inside drill? Three cards on the menu is
+  already a lot for one game.
+- **Does an ordered run log the same way?** It has to — `core/mastery.js`
+  derives everything from the event log and knows nothing about how an item was
+  chosen. But an ordered pass is not a fluency measurement, and treating its
+  timings as such would flatter or damage a kid's buckets for the wrong reason.
+  Learn-mode attempts are already excluded from mastery for exactly this reason
+  (`mastery.js`: "the two do not share a scale, so they must not share a
+  bucket"). An ordered pass may need the same treatment, or its own third scale.
+- **How does the follow-up round terminate?** "Drill those until you get them"
+  needs a definition of *got it*. The obvious answer is the existing `hot`
+  bucket, three clean attempts under `hotMs` — but that could take a long time
+  inside a single sitting, and a kid who cannot get there needs an exit that is
+  not failure.
+- **Where does it start and stop?** All 121 facts is far too long a run. Per
+  table (`the 2s`, `the 3s`) is the obvious unit and matches how the tables are
+  talked about.
+- **Does it fight the frontier?** The frontier exists so one stubborn fact cannot
+  block progress. An ordered run is the opposite promise — you go through in
+  order, including the ones you are bad at. Both are defensible; they should not
+  silently disagree about what the kid is working on.
+
+**Recorded while walking through the games, not from play data.** It is a
+preference about how practice should feel, which is a legitimate reason to build
+something and a bad reason to skip the design conversation.
+
+---
+
+## 5. Open questions needing a human, not a fix
 
 - **The square strategy wording.** Added late so `7×7` would not be unteachable:
   `6×6` "5 x 6 = 30, add one more 6", `7×7` "5 x 7 = 35, then two more 7s",
@@ -123,7 +174,7 @@ which facts land together, so do these two at the same time.
 
 ---
 
-## 5. Deferred by design
+## 6. Deferred by design
 
 - **Time on task, across all games.** The server is the natural home: it already
   sees every request from every game, so the typing game is covered without being
@@ -141,7 +192,7 @@ which facts land together, so do these two at the same time.
 
 ---
 
-## 6. Housekeeping
+## 7. Housekeeping
 
 - ~~**`games-menu.html` will conflict.**~~ **Resolved 2026-08-02.** The typing
   redesign merged after the math game landed, and git auto-merged the file —

@@ -13,36 +13,27 @@ had a few sittings.
 
 ## 1. There is no way to change any setting after the first run
 
-**The gap.** `settings.js` stores five things. Exactly two can ever be changed
-from inside the game, and one of those only in one direction:
+**The gap.** `settings.js` stores four things. Exactly one can ever be changed
+from inside the game, and only once:
 
 | Setting | Changeable in game? |
 |---|---|
-| `guidance` | **Down only** — via the step-down offer after a 3-star round |
 | `name` | Once, at first run |
 | `blockOnError` | **Never** |
 | `accent`, `skin` | **Never — and nothing reads them at all** |
 
-**Why it matters.** Three separate promises in the spec are unkept by this:
+**Why it matters.** Two promises in the spec are unkept by this:
 
-- §1 says the guidance level is "always manually overridable in both directions,
-  so a struggling kid can be put back to Full without ceremony." A kid who steps
-  down to level 1 and finds it too hard has no way back up — the only route is
-  editing localStorage in devtools. This is the worst of the three, because the
-  whole guidance design is framed as a reward the kid controls, and it currently
-  only ratchets one way.
 - §6 says block mode "is the default; flip a kid to pass-through when they're
   ready." There is no flip.
 - §5 asks for the name once. A kid who skips it, or typos it, is stuck — and the
   name is load-bearing for the My Name drill, which is the whole motivation for
   learning shift.
 
-**Where to start.** One settings panel reachable from the menu, covering
-guidance (0–3, both directions), block vs pass-through, and the name. The menu
-already exists (`screens.js`, `showMenu`) and is the natural home — a gear on
-the menu rather than anything reachable mid-round. Guidance already has a
-working write path in `main.js` (`onStepDown`); it needs an up as well as a
-down, and a home that is not the results screen.
+**Where to start.** One settings panel reachable from the menu, covering block
+vs pass-through and the name. The menu already exists (`screens.js`, `showMenu`)
+and is the natural home — a gear on the menu rather than anything reachable
+mid-round.
 
 **While you are there — two fields are written and never read.**
 
@@ -60,6 +51,17 @@ from a stored pointer, so the field had no remaining reader and was deleted from
 `settings.js` and `main.js`. `clean()` rebuilds from `DEFAULT_SETTINGS`, so a
 stored value left over from an older build is dropped on the next save with no
 migration.
+
+**Resolved — `guidance` is gone too, and for a related reason.** It was a 0–3
+ladder that faded and then hid the keyboard and hands, stepped down by an offer
+after a three-star round. It only ratcheted: the offer requires three stars, so a
+kid who took it and then struggled could not earn her way back to the help she
+had given up. It also read as a fault rather than a choice, because guidance
+applied per item and new-key drills forced Full regardless — so the hands
+appeared for the drills and vanished for the words, mid-lesson, with nothing
+explaining why. The hands are now always shown. The field, the step-down offer,
+and the hands-off badge that could only be earned through it are all deleted
+rather than pinned.
 
 Worth keeping the general lesson: task N+1 replaces task N's entry point, and
 the now-orphaned bookkeeping keeps running because nothing fails when it does.
@@ -235,15 +237,72 @@ rather than a hunch. See §2, which wants the log opened up anyway.
 
 ---
 
-## 5. Open questions needing a human, not a fix
+## 5. The delete key is never needed, and never taught — **wanted**
+
+**The gap.** Nothing in this game requires backspace. `engine.js`'s `backspace`
+clears a sticky wrong character, but in block mode — the default — a wrong press
+just sits there and typing the correct key moves on regardless. Every rung is
+completable start to finish without ever pressing it. Delete is also not a
+character, so it cannot appear in target text or accumulate through
+`availableKeys` the way every other key does. It falls outside the ladder's
+entire shape.
+
+That matters because it is one of the most-used keys on the board. A kid who has
+never been shown it will hunt for it, with her hands off home row, every time she
+mistypes.
+
+**Wanted: a "fix this letter" rung, early — right after the home row.** Not the
+first lesson, but close. The game pre-fills the typed line with a mistake and
+asks her to correct it:
+
+```
+target:   cat        dad        dad
+typed:    caz        daz        zaz
+```
+
+One wrong character at the end is the easy case; a wrong character further back
+costs more backspaces; a wrong first character costs the whole word.
+
+**Why the game authors the mistake and not the kid.** Asking a child to mistype
+on purpose poisons the log — errors are the signal the whole mastery model reads,
+and this project already learned that lesson the expensive way when a kid typed
+"jamacia" five times to buy a reveal. An authored error keeps the history honest:
+she never committed it. It is also the real skill in miniature — notice, back up,
+correct — rather than a drill on a keypress.
+
+It is the same move as the spelling game's homophone flash: change the QUESTION,
+not the scoring.
+
+**Then the ongoing part.** Whenever something needs deleting, highlight the delete
+key on the deck and the correct finger on the hands — the same guidance every
+other key already gets. The machinery exists; the wrong character is already known
+to the engine as `state.wrong`.
+
+**The failure mode worth measuring is over-deleting** — wiping the whole word
+rather than the one character. A correct fix is exactly N backspaces then the
+right characters. That is loggable, and it is what a coach would actually watch
+for. Nothing in the log records backspaces at all today (see §2).
+
+**Open: which finger.** `keymap.js` assigns `delete` to `rp`, the right pinky,
+which is the standard touch-typing assignment and what the on-screen keyboard
+already draws. But plenty of competent adult typists use the ring finger for it,
+including me. Worth watching what she does naturally before insisting. Teaching a
+reach she will never use is worse than teaching nothing.
+
+**Considered and not chosen: make backspace mandatory on a real error.** In block
+mode, refuse to accept the correct key until the wrong character is cleared. It
+needs no new content and trains on genuine mistakes. Rejected for now because it
+adds friction at exactly the moment she is already struggling, which is the worst
+time to add any — but it is cheap and reversible if the authored-error rung turns
+out not to transfer.
+
+---
+
+## 6. Open questions needing a human, not a fix
 
 - **The cheers and prompts.** Carried straight from the spec's §14 and still
   unexamined: "Howdy Petra!", "Nice! Try the other shift next time." Whether
   they land or grate is not something a test answers.
-- **Do the guidance levels strip away at the right pace?** The step-down is
-  offered after any 3-star round. That may come too fast — three stars is 95%
-  accuracy on ten items, which a kid can hit on a lucky round without being
-  ready to lose the hands.
 - **Is the drill/word/sentence mix right per rung?** The numbers in
   `curriculum.js` were reasoned, not observed.
 - **The `startup-notice` copy**, shown when the server is not running. Written
@@ -256,7 +315,7 @@ rather than a hunch. See §2, which wants the log opened up anyway.
 
 ---
 
-## 6. Deferred by design
+## 7. Deferred by design
 
 - **Numbers row symbols** — `~ @ # $ % ^ &` and the bracket cluster remain out
   of scope. `!` is taught (it is shift-1, on `num-10`), which makes the boundary
@@ -272,7 +331,7 @@ rather than a hunch. See §2, which wants the log opened up anyway.
 
 ---
 
-## 7. Housekeeping
+## 8. Housekeeping
 
 - **`data/typing-log.jsonl` is gitignored**, unlike the math log which is
   committed. It records the kid's name alongside their keystroke errors, and
