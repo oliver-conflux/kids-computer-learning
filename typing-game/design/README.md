@@ -4,8 +4,9 @@ Source of truth for the visual design of the typing game.
 
 ## `typing-keyboard.dc.html`
 
-Fetched from the Claude Design session:
-<https://claude.ai/design/p/3fc6d87e-737f-4cf7-9d59-b791ee335747?file=Typing+Keyboard.dc.html>
+Fetched from a private Claude Design session — the source URL is not reachable by
+anyone but its author, so it is deliberately not reproduced here. The committed
+snapshot below is the whole of what this project needs.
 
 Snapshot taken 2026-07-28, after the hand geometry was shortened.
 
