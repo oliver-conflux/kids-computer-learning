@@ -79,6 +79,13 @@ test('a fact with zero attempts is present, cold, and has a null median', () => 
     // form and stays; the count is what lets a learn picker rotate between
     // equally-cold groups instead of returning the same one forever.
     taughtCount: 0,
+    // The three UNWINDOWED drill facts, added 2026-08-03 for the spelling game's
+    // probe-and-release scheduling. Math does not read them and does not have to
+    // — this assertion is a shape pin over the shared core, so they appear here
+    // whether or not this game consumes them. See core/tests/mastery.test.js.
+    firstAttempt: null,
+    cleanSessions: 0,
+    cleanTotal: 0,
   });
 });
 

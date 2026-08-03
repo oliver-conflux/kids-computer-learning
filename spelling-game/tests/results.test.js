@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import {
   comparisonNote,
   describeMisspelling,
-  frontierNote,
+  markedNote,
   stageChip,
   stageText,
 } from '../js/ui/results.js';
@@ -107,35 +107,71 @@ test('a slower session is never described as a failure', () => {
   assert.match(note.text, /that happens/);
 });
 
-// --- frontierNote ----------------------------------------------------------
+// --- markedNote ------------------------------------------------------------
+//
+// Progress is the marked-off count against the catalogue, NOT the old spine
+// position and NOT a count of hot words (probe-and-release, 2026-08-03). These
+// took over from the frontierNote tests one-for-one, and the case that used to
+// be the interesting one — the number going backwards — is now the case that
+// must produce no number at all.
 
-test('frontierNote counts the words moved, not the raw indices', () => {
-  const note = frontierNote(63, 59);
+test('markedNote counts the words finished since last session', () => {
+  const note = markedNote(63, 59);
   assert.equal(note.tone, 'forward');
-  assert.match(note.text, /^4 words further along/);
+  assert.match(note.text, /^4 more words finished/);
 });
 
-test('frontierNote singularises one word', () => {
-  assert.match(frontierNote(60, 59).text, /^1 word further along/);
+test('markedNote singularises one word', () => {
+  assert.match(markedNote(60, 59).text, /^1 more word finished/);
 });
 
-test('frontierNote reports a frontier that moved BACKWARDS plainly', () => {
-  // Reachable and not a bug: a hot word cools when its clean spellings age out
-  // of the retain window, re-enters the active window, and pulls the far edge
-  // back. Reported as an explanation, never as a loss.
-  const note = frontierNote(59, 63);
-  assert.equal(note.tone, 'back');
-  assert.match(note.text, /^4 words came back round/);
-  assert.doesNotMatch(note.text, /lost|slipped|worse|fail/i);
+test('markedNote states a session that finished nothing flatly', () => {
+  // The normal outcome of a good session and of every learn session: marking off
+  // asks for three clean spellings across two sittings, so converting a stuck
+  // word can easily finish none. It must not read as a stall or a failure.
+  const note = markedNote(63, 63);
+  assert.equal(note.tone, 'same');
+  assert.doesNotMatch(note.text, /nothing|none|no new|still|stuck|did not|didn't/i);
 });
 
-test('frontierNote handles a standing start and a first session', () => {
-  assert.equal(frontierNote(63, 63).tone, 'same');
-  assert.equal(frontierNote(20, null).tone, 'first');
-  assert.equal(frontierNote(0, null).tone, 'first');
+test('markedNote makes no claim when the count has somehow fallen', () => {
+  // Unreachable through play — both routes into `marked` read facts that only
+  // accumulate. It means the item space shrank underneath the count, which is a
+  // missing audio file, not something the kid did. Say nothing numeric rather
+  // than tell her she lost words she did not lose.
+  const note = markedNote(59, 63);
+  assert.equal(note.tone, 'plain');
+  assert.doesNotMatch(note.text, /\d/);
+  assert.doesNotMatch(note.text, /lost|back|worse|fail|forgot/i);
 });
 
-test('frontierNote survives a missing frontier rather than printing NaN', () => {
-  assert.equal(frontierNote(undefined, 20).tone, 'plain');
-  assert.doesNotMatch(frontierNote(undefined, 20).text, /NaN/);
+test('markedNote has no previous session to compare against on a first run', () => {
+  assert.equal(markedNote(20, null).tone, 'first');
+  assert.equal(markedNote(0, null).tone, 'first');
+  assert.equal(markedNote(20, undefined).tone, 'first');
+});
+
+test('markedNote survives a missing count rather than printing NaN', () => {
+  assert.equal(markedNote(undefined, 20).tone, 'plain');
+  assert.doesNotMatch(markedNote(undefined, 20).text, /NaN/);
+  assert.equal(markedNote(NaN, 20).tone, 'plain');
+});
+
+test('no note on this screen compares the kid to anyone but herself', () => {
+  // The house product rule, asserted rather than trusted to review. Both
+  // permitted comparisons are against her own previous session; there is no
+  // third reference point, and no wording that implies one.
+  const notes = [
+    markedNote(63, 59),
+    markedNote(63, 63),
+    markedNote(63, null),
+    markedNote(59, 63),
+    comparisonNote(4400, 5200),
+    comparisonNote(5200, 4400),
+    comparisonNote(4400, null),
+  ];
+  for (const note of notes) {
+    assert.doesNotMatch(note.text, /average|typical kid|other|everyone|most kids|ahead of|behind/i);
+    assert.doesNotMatch(note.text, /streak|record|score|target|goal|beat/i);
+  }
 });

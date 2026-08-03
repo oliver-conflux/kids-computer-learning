@@ -8,9 +8,10 @@
 //   serverIsUp -> flushOutbox -> loadEvents -> [ runSession(mode) -> results ]*
 //
 // Everything is re-derived at the top of every session. Nothing about the kid's
-// level is stored: the frontier is computed from the log each time, which is why
-// one codebase serves a four-year-old and a ten-year-old with no setting to get
-// wrong and no profile to pick.
+// level is stored: her placement — cursor, what she has finished with, what is
+// worth drilling — is computed from the log each time, which is why one codebase
+// serves a four-year-old and a ten-year-old with no setting to get wrong and no
+// profile to pick.
 
 import { CONFIG } from './config.js';
 import { SPINE, playableSpine } from './spine.js';
@@ -18,10 +19,11 @@ import { spellingSpace } from './space.js';
 import { pickLearnFamily, buildLearnSession } from './learn.js';
 import { createAudio } from './audio.js';
 import { hasHomophone } from './homophones.js';
+import { derivePlacement } from './placement.js';
+import { playableHash } from './playable-hash.js';
 import { serverIsUp, loadEvents, record, flushOutbox } from './log.js';
 
 import { deriveMastery } from '../../core/mastery.js';
-import { activeWindow } from '../../core/frontier.js';
 import { typingCost, KEYMAP } from '../../core/typing-cost.js';
 import { pickNext } from '../../core/scheduler.js';
 import { createEngine } from '../../core/engine.js';
@@ -402,15 +404,17 @@ async function runSession(mode) {
   // stale exactly when it mattered.
   let model = deriveMastery(sittingEvents, CONFIG, spellingSpace);
   const startBuckets = new Map([...model.byId].map(([id, stats]) => [id, stats.bucket]));
-  let frontierIds = activeWindow(PLAYABLE, model, CONFIG.windowSize, spellingSpace);
+  let placement = derivePlacement(model, PLAYABLE, CONFIG, hasHomophone);
 
-  // THE WHOLE SPINE IS HOT. `activeWindow` returns [] and core's `pickNext`
-  // throws on an empty candidate set — deliberately, because for the math game
-  // an empty set really is a caller bug. Here it is a state a kid reaches by
-  // finishing, and it deserves an answer rather than a stack trace. Not fixed by
-  // falling back to the whole spine, which would re-serve mastered words forever
-  // with nothing to say she had finished.
-  if (frontierIds.length === 0) {
+  // SHE HAS FINISHED THE CATALOGUE. Nothing left to drill and nothing left to
+  // probe is the real end of this game, and it deserves an answer rather than a
+  // stack trace: core's `pickNext` throws on an empty candidate set —
+  // deliberately, because for the math game an empty set really is a caller bug.
+  // Here it is a state a kid reaches by finishing.
+  //
+  // Not fixed by falling back to the whole spine, which would re-serve
+  // marked-off words for ever with nothing to say she had finished.
+  if (nothingLeft(placement)) {
     running = false;
     showNotice('You have spelled every word we have!', [
       'There are no words left in the list to practise.',
@@ -424,13 +428,28 @@ async function runSession(mode) {
 
   const previousMedianMs = lastSessionMedian(mode);
   const previousFrontier = lastSessionFrontier();
+  // Read BEFORE the session writes its own event, or "since last time" compares
+  // this session against itself and always reports no movement.
+  const previousMarked = lastSessionMarked();
 
   let order;
   let family = null;
   let container;
 
   if (mode === 'learn') {
-    family = pickLearnFamily(model, frontierIds, CONFIG);
+    // The lesson is built from words she has MET AND NOT FINISHED WITH — the
+    // drill set — rather than from a slice of the spine. A lesson about words
+    // she has never seen teaches nothing she asked for, and a word she got
+    // right first time does not need a lesson at all.
+    //
+    // Which does mean an empty drill set has no lesson in it: a fresh log has
+    // met nothing, so there is nothing to teach until she has played some drill.
+    //
+    // The SIBLINGS come from the other argument — the whole playable list,
+    // marked-off words included — because the words she already owns are the
+    // analogy that cracks the one she does not. PLAYABLE rather than SPINE: a
+    // sibling with no recording would be a silent problem mid-lesson.
+    family = pickLearnFamily(model, placement.drill, PLAYABLE, CONFIG);
     order = buildLearnSession(family.words, CONFIG);
     const mounted = mountLearnScreen(stage);
     container = mounted.wordContainer;
@@ -446,6 +465,13 @@ async function runSession(mode) {
   const history = [];
   const attempts = [];
 
+  // One probe every this many problems. Derived rather than configured, because
+  // what matters is the RATIO — `probesPerSession` probes per `sessionLength`
+  // problems — and storing both the ratio and the interval is two numbers that
+  // can disagree. Floored at 1 so a config with more probes than problems asks
+  // for probes throughout rather than dividing its way to zero or NaN.
+  const probeEvery = Math.max(1, Math.round(CONFIG.sessionLength / CONFIG.probesPerSession));
+
   renderProgress(shell, 0, total);
 
   for (let index = 0; index < total; index += 1) {
@@ -453,20 +479,54 @@ async function runSession(mode) {
     if (mode === 'learn') {
       id = order[index];
     } else {
-      // BOTH DIALS MEET HERE, AND NOWHERE ELSE. `candidates` is the frontier —
-      // which words are in play at all — and `itemWeight` is typing difficulty,
-      // a property of the word rather than of what the kid knows. They answer
-      // different questions and are multiplied, so an awkward word is served
-      // less often but never never (typingCost clamps to its own floor).
-      id = pickNext({
-        model,
-        history,
-        config: CONFIG,
-        rng,
-        space: spellingSpace,
-        candidates: frontierIds,
-        itemWeight: (candidateId) => typingCost(wordOf(model, candidateId), KEYMAP, CONFIG),
-      });
+      // The words in play: the drill set, or the queue behind it in the odd case
+      // where one is empty and the other is not. Reading `pending` as a fallback
+      // costs a comparison and means a later change to how `drillCap` is applied
+      // cannot turn into an empty-candidate throw halfway through a session.
+      const candidates = placement.drill.length > 0 ? placement.drill : placement.pending;
+
+      // THE PROBE SLOT. Every `probeEvery`-th problem asks a word she has never
+      // met, drawn at random from the WHOLE catalogue rather than from anywhere
+      // near her frontier. That is how a word she can already spell gets found
+      // and retired without her having to earn it three times over, and it is
+      // the entire placement mechanism — which is why there is no placement
+      // screen and why NOTHING HERE MARKS A PROBLEM AS A PROBE. Same audio, same
+      // reveal ladder, same homophone flash, same logged event shape. She must
+      // not be able to tell she is being tested, or she is being tested.
+      //
+      // Counted from the START of the session rather than the end, because a
+      // sitting that gets abandoned halfway should still have contributed its
+      // share of probes. A probe is the only problem that tells us something we
+      // did not already have on file, and sessions do get walked away from.
+      //
+      // AN EMPTY DRILL SET MAKES EVERY PROBLEM A PROBE, and that is not
+      // special-cased because it must not be: a fresh log has met nothing, so
+      // the first session is all probes and doubles as the placement test. It
+      // then turns into ordinary play with no mode switch and nothing for her
+      // to notice.
+      const wantsProbe = index % probeEvery === 0 || candidates.length === 0;
+      if (wantsProbe && placement.probePool.length > 0) {
+        // Uniform over the pool. `probePool` comes back in spine order because
+        // placement.js is pure and may not shuffle; the randomness is this
+        // file's to own, and it is the same injected `rng` the scheduler uses.
+        id = placement.probePool[Math.floor(rng() * placement.probePool.length)];
+      } else {
+        // BOTH DIALS MEET HERE, AND NOWHERE ELSE. `candidates` is the drill set
+        // — which words are in play at all — and `itemWeight` is typing
+        // difficulty, a property of the word rather than of what the kid knows.
+        // They answer different questions and are multiplied, so an awkward word
+        // is served less often but never never (typingCost clamps to its own
+        // floor).
+        id = pickNext({
+          model,
+          history,
+          config: CONFIG,
+          rng,
+          space: spellingSpace,
+          candidates,
+          itemWeight: (candidateId) => typingCost(wordOf(model, candidateId), KEYMAP, CONFIG),
+        });
+      }
     }
 
     if (mode === 'learn') {
@@ -487,9 +547,13 @@ async function runSession(mode) {
     // evidence. core/scheduler.js documents the measurement.
     model = deriveMastery(sittingEvents, CONFIG, spellingSpace);
     if (mode === 'drill') {
-      frontierIds = activeWindow(PLAYABLE, model, CONFIG.windowSize, spellingSpace);
-      if (frontierIds.length === 0) {
-        break; // she finished the spine mid-session; the results screen still runs
+      // Re-derived for the same reason the model is. It is also what stops a
+      // probe repeating inside one session: the word she just answered now has
+      // a first sighting, so it has left `probePool` by the next draw — no
+      // separate seen-set to keep, and it stays true across a page reload.
+      placement = derivePlacement(model, PLAYABLE, CONFIG, hasHomophone);
+      if (nothingLeft(placement)) {
+        break; // she finished the catalogue mid-session; the results screen still runs
       }
     }
 
@@ -525,6 +589,36 @@ async function runSession(mode) {
     // The one number that answers "is she progressing?", and the reason this
     // event exists at all.
     frontier,
+
+    // WORDS FINISHED WITH, and the number the results screen now reports
+    // against the catalogue. It is written onto the event rather than derived
+    // at read time for one reason: `marked` depends on `markSpanSessions` and
+    // on the homophone list, so a count re-derived next year under a changed
+    // constant would silently disagree with what she was shown at the time.
+    // The derived-on-read view stays authoritative for PLAY; this is the
+    // receipt for what the screen SAID.
+    marked: placement.marked.size,
+
+    // THE ITEM SPACE THIS SESSION WAS PLAYED AGAINST. PLAYABLE is built from the
+    // audio cache on disk and is therefore NOT a function of the log, which
+    // makes every session in this file unreplayable without it: a replay months
+    // from now rebuilds the word list from whatever the cache holds THEN and
+    // silently plays a different game. That is not hypothetical — 401 words had
+    // no pronunciation on 2026-08-02 and have one now, which is exactly why
+    // replaying those sessions reproduces none of them (docs/next-steps.md
+    // item 6).
+    //
+    // Two fields because they fail differently. The count says how much the item
+    // space moved; the hash says whether it moved at all, including the case
+    // where one word was swapped for another and the count did not budge.
+    //
+    // Order never reaches the hash — PLAYABLE is a filter over SPINE, so it is
+    // in spine order however /api/audio happened to list the cache, and
+    // playable-hash.js sorts besides. An order-sensitive hash would be worse
+    // than no hash, because it would report an item space that kept changing
+    // when it had not.
+    playableCount: PLAYABLE.length,
+    playableHash: playableHash(PLAYABLE.map((entry) => entry.word)),
   };
   record(sessionEvent);
   sittingEvents.push(sessionEvent);
@@ -537,7 +631,17 @@ async function runSession(mode) {
     medianMs,
     previousMedianMs,
     moved: bucketMoves(startBuckets, model),
-    window: frontierIds,
+    // The WHOLE placement, not the drill list and the marked count separately.
+    // They are two views of one partition of the spine, and handing them over as
+    // two fields is how the screen would come to claim she had finished
+    // everything while still listing words she was on.
+    //
+    // Current as of the last problem in drill mode, where it is re-derived after
+    // every word. In learn mode it is the start-of-session value and that is
+    // still correct: learn attempts are excluded from mastery evidence, so
+    // nothing a learn session does can move a word into `marked`.
+    placement,
+    previousMarked,
     frontier,
     previousFrontier,
     canLearn: true,
@@ -548,6 +652,31 @@ async function runSession(mode) {
   renderResults(resultsRegion, model, summary, CONFIG);
 
   running = false;
+}
+
+/**
+ * Is there any word left to serve?
+ *
+ * Three of the five placement sets, and the two that are left out are the point.
+ * `marked` is finished with by definition. `deferred` is a word she missed while
+ * it was out of reach, and it is deliberately NOT servable — releasing those is
+ * the whole design, and counting them here would keep the game running on words
+ * she has no traction on and call that progress.
+ *
+ * `pending` is the queue behind `drill` and cannot be non-empty while `drill` is
+ * empty under today's cap. It is read anyway so this stays the question "is
+ * there anything left?" rather than "is the served list empty?" — only the first
+ * one is still correct if how the cap is applied ever changes.
+ *
+ * @param {import('./placement.js').Placement} placement
+ * @returns {boolean}
+ */
+function nothingLeft(placement) {
+  return (
+    placement.drill.length === 0 &&
+    placement.pending.length === 0 &&
+    placement.probePool.length === 0
+  );
 }
 
 /**
@@ -592,6 +721,28 @@ function lastSessionFrontier() {
     const event = sittingEvents[index];
     if (event.type === 'session' && Number.isFinite(event.frontier)) {
       return event.frontier;
+    }
+  }
+  return null;
+}
+
+/**
+ * Words finished with as of the last session that recorded the count.
+ *
+ * Not filtered by mode, unlike `lastSessionMedian`. A median is only comparable
+ * against the same activity — learn and drill are different exercises with
+ * different keystroke loads — but a marked count is a fact about the whole
+ * catalogue and does not care which screen she was on when it moved.
+ *
+ * `null` on a first run, and on every `s1` session, which predate the field.
+ * The results screen reads that as "first session" rather than as no movement,
+ * which is the honest answer: we do not know what it was.
+ */
+function lastSessionMarked() {
+  for (let index = sittingEvents.length - 1; index >= 0; index -= 1) {
+    const event = sittingEvents[index];
+    if (event.type === 'session' && Number.isFinite(event.marked)) {
+      return event.marked;
     }
   }
   return null;
