@@ -47,7 +47,7 @@
 
 import { CONFIG } from './config.js';
 import { allFacts, factId } from './facts.js';
-import { deriveMastery, previousSessionMedian } from './mastery.js';
+import { deriveMastery, isUnaided, previousSessionMedian } from './mastery.js';
 import { pickNext } from './scheduler.js';
 import { ladderFor, delayMsFor } from './hints.js';
 import { pickLearnFacts, buildLearnSession, isLearnable } from './learn.js';
@@ -666,6 +666,20 @@ async function runSession(mode, table = null) {
   const cleanRate = items === 0 ? 0 : cleanCount / items;
   const medianMs = median(attempts.map((event) => event.ms));
 
+  // What an INSTRUCTION session actually achieved. `cleanRate` cannot say it —
+  // neither instruction ladder has a `clean` rung, so it is always exactly 0 —
+  // and the rung records cannot either, because they are per fact and over all
+  // history where this is one sitting.
+  //
+  // The predicate is imported rather than written out here. It is the same rule
+  // the two rungs clear on, and a second copy of it in this file could drift
+  // until the strip said "5 unaided" over a table whose bar had not moved.
+  //
+  // Always computed, rendered only for instruction modes: the drill ladder is
+  // ['clean', 'reveal'] so no drill attempt can ever be unaided and this is a
+  // structural 0, which reads as a failure grade rather than as "not applicable".
+  const unaided = attempts.filter(isUnaided).length;
+
   // TRAP — `t` MUST BE toISOString(). mastery.js orders events by comparing `t`
   // as a plain string, which is chronological only while every writer emits the
   // UTC Z-suffixed ISO format. A local offset like +05:00 makes lexicographic
@@ -707,6 +721,11 @@ async function runSession(mode, table = null) {
   // "0% from memory": a failure grade for a session that cannot produce anything
   // else. Omit `mode` and every learn session ends by telling the kid they got
   // nothing right.
+  //
+  // `table` rides along for ordered sessions ONLY, and null everywhere else, so
+  // the strip can name the row it just walked and the continuation row knows
+  // which table "again" would mean. `unaided` is the instruction modes' answer
+  // to `cleanRate`.
   const summary = {
     session,
     items,
@@ -715,6 +734,8 @@ async function runSession(mode, table = null) {
     previousMedianMs,
     moved: bucketMoves(startBuckets, model),
     mode,
+    table,
+    unaided,
     canLearn: canLearnFrom(model),
   };
 

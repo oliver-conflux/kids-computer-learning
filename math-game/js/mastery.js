@@ -86,6 +86,18 @@ const UNAIDED_STAGE = 'strategy';
  * Both fields are already on every AttemptEvent. No new attempt fields, and no
  * log migration.
  *
+ * Exported so main.js can count a finished session's unaided answers for the
+ * results strip without writing a second copy of the predicate. There is exactly
+ * one definition of unaided in this codebase and this is it — the rungs and the
+ * strip must never be able to disagree about what the kid did. Duplicated rules
+ * have bitten this project twice already.
+ *
+ * ONLY MEANINGFUL ON AN INSTRUCTION ATTEMPT. The drill ladder is
+ * ['clean', 'reveal'], so a drill attempt never carries stage 'strategy' and
+ * this is always false for one — which is right, but it is right by accident of
+ * the ladder rather than by anything said here. Do not read a 0 off a drill
+ * session as "she needed help with all of them".
+ *
  * A `wrong` array that is missing entirely reads as no wrong answers, matching
  * the core's own handling. A `wrong` array carrying junk from a corrupt line
  * reads as AIDED — the raw length is used, not the count of valid numbers,
@@ -96,7 +108,7 @@ const UNAIDED_STAGE = 'strategy';
  * @param {object} event
  * @returns {boolean}
  */
-function isUnaided(event) {
+export function isUnaided(event) {
   if (event.stage !== UNAIDED_STAGE) {
     return false;
   }

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { deriveMastery, previousSessionMedian } from '../js/mastery.js';
+import { deriveMastery, isUnaided, previousSessionMedian } from '../js/mastery.js';
 import { CONFIG } from '../js/config.js';
 import { allFacts, factId } from '../js/facts.js';
 
@@ -1270,6 +1270,45 @@ test('a fact never attempted carries both rungs at zero, and every fact carries 
     assert.equal(typeof stats.learn?.cleared, 'boolean', `${id} has no learn rung`);
     assert.equal(typeof stats.ordered?.cleared, 'boolean', `${id} has no ordered rung`);
   }
+});
+
+// --- v3: the unaided predicate, on its own ---------------------------------
+//
+// The rung tests above exercise this through `deriveMastery`. These call it
+// directly, because it is exported now: main.js counts a finished session's
+// unaided answers with it for the results strip, and the strip and the rungs
+// must never be able to disagree about what the kid did. A second copy of this
+// rule living in main.js is the thing these tests exist to make unnecessary.
+
+test('unaided means the reveal button was never pressed AND nothing wrong was typed', () => {
+  assert.equal(isUnaided(orderedAttempt(2, 7, 3000)), true);
+  assert.equal(
+    isUnaided(orderedAttempt(2, 7, 3000, [], 'reveal')),
+    false,
+    'she pressed the button',
+  );
+  assert.equal(
+    isUnaided(orderedAttempt(2, 7, 3000, [12])),
+    false,
+    'right in the end after a wrong guess is not unaided',
+  );
+});
+
+test('a drill attempt is never unaided, because the drill ladder has no strategy rung', () => {
+  assert.equal(isUnaided(drillAttempt(6, 7, 400, 'clean')), false);
+  assert.equal(isUnaided(drillAttempt(6, 7, 8000, 'reveal')), false);
+});
+
+test('a missing wrong array is no wrong answers; junk inside one reads as aided', () => {
+  const noField = { ...orderedAttempt(2, 7, 3000) };
+  delete noField.wrong;
+  assert.equal(isUnaided(noField), true, 'no field at all is nothing wrong typed');
+  assert.equal(
+    isUnaided({ ...orderedAttempt(2, 7, 3000), wrong: [null, 'x'] }),
+    false,
+    'the RAW length counts, not the valid numbers — "was she right first time" is '
+      + 'unanswerable from a corrupt line, so it falls the way that clears nothing',
+  );
 });
 
 // --- v3: which sessions are comparable (spec §5) ---------------------------

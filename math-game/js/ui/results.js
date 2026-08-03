@@ -34,6 +34,7 @@
 
 import { allFacts, answerOf, factId, parseFactId, transposeId } from '../facts.js';
 import { isLearnable } from '../learn.js';
+import { tableProgress } from '../ordered.js';
 
 const OPERANDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
@@ -251,27 +252,89 @@ function comparisonNote(medianMs, previousMedianMs) {
 }
 
 /**
+ * How far the table an ordered session walked has peeled, or null when there is
+ * no table to ask about.
+ *
+ * The number comes from `tableProgress`, the same function the menu's bars come
+ * from, so the strip and the bar the kid is about to look at cannot disagree. It
+ * counts the PEELED FRONT rather than every cleared fact in the row — see
+ * `tableProgress` — which is the number that predicts how long the next run is.
+ *
+ * @param {import('../mastery.js').MasteryModel} model
+ * @param {number | null | undefined} table
+ * @returns {{table: number, cleared: number, total: number} | null}
+ */
+function progressForTable(model, table) {
+  if (!Number.isInteger(table)) {
+    return null;
+  }
+  return tableProgress(model).find((row) => row.table === table) ?? null;
+}
+
+/**
  * The session strip.
  *
  * DRILL: problems done, clean rate, typical time — unchanged from v1.
  *
- * LEARN: neither of the other two drill stats means anything here, and both
- * would lie. Learn mode has no `clean` rung by construction, so its clean rate
- * is always exactly 0 and would render as "0% from memory" — a failure grade
- * for a session that cannot produce anything else. And a learn median measures
- * how long a derivation took, which is a different scale from retrieval speed
- * (spec §5); putting it beside `previousMedianMs` would compare the two, which
- * is the one thing §5 forbids. So learn shows what it actually did: how many
- * problems were worked through, and how many squares now have a route.
+ * NEITHER INSTRUCTION MODE GETS THE DRILL STRIP, and the reason is one reason
+ * rather than two. Both instruction ladders are ['strategy', 'reveal'], so
+ * neither mode has a `clean` rung AT ALL: their clean rate is not low, it is
+ * structurally zero, and "0% from memory" is a failure grade handed to a session
+ * that could not have scored anything else. Their medians are the same kind of
+ * lie — time spent working an answer out is a different scale from retrieval
+ * speed (spec §5), so setting one beside `previousMedianMs` would make exactly
+ * the comparison §5 forbids. `previousSessionMedian` already refuses to record
+ * an instruction session as the bar; this is the other half, refusing to measure
+ * one against the bar.
+ *
+ * LEARN shows what it actually did: how many problems were worked through, and
+ * how many squares now have a route.
+ *
+ * ORDERED shows the three numbers a kid marching a table wants: how many answers
+ * she got through, how many of them she produced without pressing the button,
+ * and how much of the eleven she can now start past. The third is what makes the
+ * next visit shorter, so it is the one that means progress.
  *
  * @param {object} summary SessionSummary
  * @param {{cold: number, shown: number, warm: number, hot: number}} counts
+ * @param {import('../mastery.js').MasteryModel} model for the table's progress
  * @returns {HTMLElement}
  */
-function renderSummaryStrip(summary, counts) {
+function renderSummaryStrip(summary, counts, model) {
   const items = Number.isFinite(summary?.items) ? summary.items : 0;
   const cleanRate = summary?.cleanRate;
   const strip = el('div', 'results__stats');
+
+  if (summary?.mode === 'ordered') {
+    strip.append(statBlock(String(items), 'answers', 'worked through, in table order'));
+
+    const unaided = Number.isFinite(summary?.unaided) ? summary.unaided : 0;
+    strip.append(
+      statBlock(
+        String(unaided),
+        'unaided',
+        unaided === items
+          ? 'every one of them right first time, no button'
+          : 'right first time, without the button',
+      ),
+    );
+
+    // Absent only if a table somehow reached here that ordered.js does not
+    // serve. Two blocks then, rather than a block reading "— of —".
+    const progress = progressForTable(model, summary?.table);
+    if (progress !== null) {
+      strip.append(
+        statBlock(
+          `${progress.cleared} of ${progress.total}`,
+          `the ${progress.table}s`,
+          progress.cleared >= progress.total
+            ? 'the whole table — this row is done'
+            : 'you can start past these now',
+        ),
+      );
+    }
+    return strip;
+  }
 
   if (summary?.mode === 'learn') {
     strip.append(statBlock(String(items), 'answers', 'worked through with the strategy on screen'));
@@ -327,8 +390,12 @@ function renderMoves(model, summary) {
       el(
         'p',
         'results__empty',
-        summary?.mode === 'learn'
-          ? 'Learn sessions never move the colours — they hand you the route. Drill is what turns a square from shown how to getting there.'
+        // Both instruction modes, not just learn. Neither can move a colour —
+        // their attempts are excluded from the buckets by construction — so
+        // "that happens" would be telling a kid an empty list was bad luck
+        // after a session that could not have produced a full one.
+        summary?.mode === 'learn' || summary?.mode === 'ordered'
+          ? 'These sessions never move the colours — they hand you the route. Drill is what turns a square from shown how to getting there.'
           : 'No squares changed colour this session. That happens — the colours only move when the last five tries say so.',
       ),
     );
@@ -656,13 +723,33 @@ function headline(counts) {
 }
 
 /**
+ * Which session just ended, under the title.
+ *
+ * Ordered mode names its row, because "In order" alone would be the one mode
+ * whose session you cannot identify afterwards — there are nine of them and
+ * they differ only by which table was walked.
+ *
+ * @param {object} summary SessionSummary
+ * @returns {string}
+ */
+function subtitle(summary) {
+  if (summary?.mode === 'ordered') {
+    return Number.isInteger(summary?.table)
+      ? `In order · the ${summary.table}s`
+      : 'In order';
+  }
+  return summary?.mode === 'learn' ? 'Learn session' : 'Drill session';
+}
+
+/**
  * Render the results screen into `container`, replacing whatever was there.
  *
  * @param {HTMLElement} container
  * @param {import('../mastery.js').MasteryModel} model total over all 121 facts
- * @param {object} summary SessionSummary — { session, mode, items, cleanRate,
- *   medianMs, previousMedianMs, moved, canLearn }. `previousMedianMs` is null on
- *   a first run.
+ * @param {object} summary SessionSummary — { session, mode, table, items,
+ *   cleanRate, unaided, medianMs, previousMedianMs, moved, canLearn }.
+ *   `previousMedianMs` is null on a first run; `table` is a number for ordered
+ *   sessions and null otherwise.
  * @returns {void}
  */
 export function renderResults(container, model, summary) {
@@ -671,16 +758,10 @@ export function renderResults(container, model, summary) {
 
   const header = el('header', 'results__header');
   header.append(el('h1', 'results__title', 'Session done'));
-  header.append(
-    el(
-      'p',
-      'results__subtitle',
-      summary?.mode === 'learn' ? 'Learn session' : 'Drill session',
-    ),
-  );
+  header.append(el('p', 'results__subtitle', subtitle(summary)));
   root.append(header);
 
-  root.append(renderSummaryStrip(summary, counts));
+  root.append(renderSummaryStrip(summary, counts, model));
   root.append(renderActions(summary));
   root.append(renderMoves(model, summary));
 
