@@ -623,22 +623,66 @@ function renderDetail(model, id) {
 }
 
 /**
- * The continuation row. Both continuations appear after BOTH modes: the screen
+ * Which table the ordered continuation should offer, or null when there is none.
+ *
+ * Three cases, in order:
+ *
+ * - The table just walked still has facts left — offer it AGAIN. A run gets
+ *   shorter across visits rather than within one, so "again" is the normal way
+ *   to finish a table and not a repeat of anything.
+ * - It finished, or the session was not an ordered one — offer the next
+ *   unfinished table, wrapping past the tens back to the twos. Wrapping matters:
+ *   a kid who finishes the 9s should be handed the 3s she left half done, not
+ *   nothing.
+ * - Every table is done — null, and the caller renders no button at all. Same
+ *   rule `canLearn` already enforces for learn: a button that starts a session
+ *   with nothing in it is worse than no button.
+ *
+ * `current` is only ever a table when an ordered session just ended; after drill
+ * and learn it is null and the lowest unfinished table is offered.
+ *
+ * @param {import('../mastery.js').MasteryModel} model
+ * @param {number | null} current the table just played, or null
+ * @returns {number | null}
+ */
+function nextOrderedTable(model, current) {
+  const unfinished = tableProgress(model).filter((row) => row.cleared < row.total);
+  if (unfinished.length === 0) {
+    return null;
+  }
+  if (!Number.isInteger(current)) {
+    return unfinished[0].table;
+  }
+  const again = unfinished.find((row) => row.table === current);
+  if (again !== undefined) {
+    return again.table;
+  }
+  return (unfinished.find((row) => row.table > current) ?? unfinished[0]).table;
+}
+
+/**
+ * The continuation row. Every continuation appears after EVERY mode: the screen
  * that ends a session is also the one that starts the next, because the way to
- * a fifteen-minute sitting is one more three-minute block, not a longer bar.
+ * a fifteen-minute sitting is one more three-minute block, not a longer bar. The
+ * table button shows after a drill and after a learn session too — which mode is
+ * the better next step depends on the kid, not on which one just finished, and
+ * the screen does not presume to know.
  *
- * Nothing here starts anything. The buttons carry a `data-results-action` and
- * that is all; main.js owns every state transition and decides what "learn"
- * means. See onResultsAction.
+ * Nothing here starts anything. The buttons carry a `data-results-action` and a
+ * `data-table` where there is one, and that is all; main.js owns every state
+ * transition and decides what "learn" means. See onResultsAction.
  *
- * Learn is offered unless `summary.canLearn` is explicitly false, which means
- * every strategy-bearing fact is already hot and there is nothing left to
- * teach — a button that leads nowhere is worse than no button.
+ * TWO BUTTONS CAN VANISH, both for the same reason. Learn goes when
+ * `summary.canLearn` is explicitly false — every strategy-bearing fact is
+ * already hot and there is nothing left to teach. The table goes when every
+ * table is done. In both cases the alternative is a button that leads to a
+ * session with nothing in it.
  *
  * @param {object} summary SessionSummary
+ * @param {import('../mastery.js').MasteryModel} model
  * @returns {HTMLElement}
  */
-function renderActions(summary) {
+function renderActions(summary, model) {
   const row = el('nav', 'results__actions');
   row.setAttribute('aria-label', 'What next');
 
@@ -649,12 +693,24 @@ function renderActions(summary) {
     return node;
   };
 
-  // The two continuations are weighted equally. Which one is the better next
-  // step depends on the kid, not on which mode just finished, and the screen
-  // does not presume to know.
   if (summary?.canLearn !== false) {
     row.append(button('learn', 'Learn 3 facts', 'go'));
   }
+
+  const played = summary?.mode === 'ordered' ? summary?.table : null;
+  const table = nextOrderedTable(model, Number.isInteger(played) ? played : null);
+  if (table !== null) {
+    const node = button(
+      'ordered',
+      table === played ? `The ${table}s again` : `The ${table}s`,
+      'go',
+    );
+    // The one action that carries a payload. onResultsAction reads it back off
+    // the button, so the row stays the only place that decides which table.
+    node.dataset.table = String(table);
+    row.append(node);
+  }
+
   row.append(button('drill', 'Drill 20', 'go'));
   row.append(button('done', 'Done', 'quiet'));
 
@@ -669,10 +725,16 @@ const ACTION_LISTENERS = new WeakMap();
  * survives any number of re-renders of the screen inside it, and re-registering
  * REPLACES the previous handler rather than stacking a second one.
  *
- * The handler is called with exactly one of `'learn' | 'drill' | 'done'`.
+ * The handler is called with `(action, table)`, where `table` is a number for
+ * `'ordered'` and null for everything else — the same shape onMenuAction hands
+ * over, because main.js's `onAction` serves both screens.
+ *
+ * `'done'` is kept as the name of the Done button. main.js accepts it and
+ * `'menu'` as the same thing, and renaming it here would be a change to a wire
+ * name for no gain.
  *
  * @param {HTMLElement} container
- * @param {(action: 'learn' | 'drill' | 'done') => void} handler
+ * @param {(action: 'learn' | 'drill' | 'ordered' | 'done', table: number | null) => void} handler
  * @returns {void}
  */
 export function onResultsAction(container, handler) {
@@ -683,7 +745,12 @@ export function onResultsAction(container, handler) {
   const listener = (event) => {
     const button = event.target.closest('[data-results-action]');
     if (button !== null && container.contains(button)) {
-      handler(button.dataset.resultsAction);
+      // `dataset.table` is absent on every button but the ordered one, and
+      // `parseInt(undefined)` is NaN — which `isTable` in main.js refuses. Null
+      // is handed over instead, so "this action has no table" is one value
+      // rather than two.
+      const raw = button.dataset.table;
+      handler(button.dataset.resultsAction, raw === undefined ? null : Number.parseInt(raw, 10));
     }
   };
   ACTION_LISTENERS.set(container, listener);
@@ -762,7 +829,7 @@ export function renderResults(container, model, summary) {
   root.append(header);
 
   root.append(renderSummaryStrip(summary, counts, model));
-  root.append(renderActions(summary));
+  root.append(renderActions(summary, model));
   root.append(renderMoves(model, summary));
 
   const gridSection = el('section', 'results__grid-section');

@@ -790,10 +790,13 @@ function showMenu() {
  * 'games' is the ONE real navigation left in the app, and it comes from the
  * menu's "Back to all games" and nowhere else.
  *
- * 'ordered' needs a table and is refused without a valid one — the menu never
- * sends one without it, because a finished table renders as no control at all,
- * but a run over a row that does not exist is worth refusing rather than
- * discovering.
+ * 'ordered' needs a table and is refused without a valid one. Neither screen
+ * sends one without it — a finished table is no control at all on the menu, and
+ * no button at all on the results screen — but a run over a row that does not
+ * exist is worth refusing rather than discovering. A table that finished a
+ * moment ago is a different matter and is NOT refused here: `runSession` builds
+ * a fresh model, finds the run empty and falls back to the menu, which is where
+ * the kid can see it went green.
  *
  * @param {'learn' | 'drill' | 'ordered' | 'done' | 'menu' | 'games'} action
  * @param {number | null} [table] required for 'ordered', ignored otherwise
