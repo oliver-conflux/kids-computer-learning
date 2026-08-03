@@ -137,28 +137,36 @@
                 <a href="typing-game/index.html" class="play-button">Play Game</a>
             </div>
 
-            <!-- Learn Numbers -->
-            <div class="game-card">
-                <div class="game-icon">💡</div>
-                <h2 class="game-title">Learn Numbers</h2>
-                <div class="age-badge">All Ages</div>
-                <p class="game-description">
-                    Shows you a way to work out the tricky times tables,
-                    one at a time. Take as long as you like!
-                </p>
-                <a href="math-game/index.html?mode=learn" class="play-button">Play Game</a>
-            </div>
+            <!--
+              Numbers. ONE card, and it carries NO query string on purpose: the
+              game opens on its own menu and the kid picks there.
 
-            <!-- Drill Numbers -->
+              This used to be two cards, Learn Numbers and Drill Numbers, because
+              the modes are different activities and drill teaches nothing — so
+              learn could not be a setting buried behind a toggle or a kid takes
+              the default forever and the hard facts never get taught. That reason
+              still holds. What changed is where the choosing happens: this list
+              is flat and math wanted a third entry, so the choice moved inside
+              the game, where all three sit as peers and the nine tables are
+              visible with it.
+
+              THE COPY MUST NOT READ AS DIFFICULTY LEVELS. Learn is not the easy
+              one and drill is not the hard one; they are different activities,
+              and naming them here at all risks implying an order. The card says
+              what the game is and lets its own menu describe the three.
+
+              Spelling has the identical split and the identical available fix.
+              It is deliberately not part of this change.
+            -->
             <div class="game-card">
                 <div class="game-icon">✖️</div>
-                <h2 class="game-title">Drill Numbers</h2>
+                <h2 class="game-title">Numbers</h2>
                 <div class="age-badge">All Ages</div>
                 <p class="game-description">
-                    Practice the times tables you already have a way to work out.
-                    See a grid of which facts you know by heart.
+                    The times tables. Get shown a way to work one out, practice
+                    the ones you know, or go straight through a table in order.
                 </p>
-                <a href="math-game/index.html?mode=drill" class="play-button">Play Game</a>
+                <a href="math-game/index.html" class="play-button">Play Game</a>
             </div>
 
             <!-- Learn Spelling -->
