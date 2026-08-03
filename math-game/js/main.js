@@ -540,11 +540,19 @@ async function runSession(mode, table = null) {
   // A session with nothing in it is the failure the `canLearn` guard already
   // exists to prevent, and a deep link is the one way to ask for one: a table
   // whose facts have all cleared has an empty run, and the menu renders that row
-  // as done and not as a control. Refuse rather than march the kid through zero
-  // problems to a results screen reporting nothing.
+  // as done and not as a control.
+  //
+  // FALL BACK TO THE MENU RATHER THAN RETURNING. Before the menu existed there
+  // was nowhere to go, so this warned and stopped — which left the kid on a bare
+  // stage under whatever the last session's progress bar said. There is a home
+  // screen now, and every dead end must reach it: `?mode=ordered&table=2` on a
+  // finished table is one route in, and the results screen's `[ The 3s ]` button
+  // is another, since the model it chose that table from is a moment older than
+  // the one this session derives.
   if (plan !== null && plan.length === 0) {
     console.warn(`math-game: nothing to play in ${mode}${table === null ? '' : ` table ${table}`}`);
     running = false;
+    showMenu();
     return;
   }
 
