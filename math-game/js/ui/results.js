@@ -327,9 +327,16 @@ function renderSummaryStrip(summary, counts, model) {
         statBlock(
           `${progress.cleared} of ${progress.total}`,
           `the ${progress.table}s`,
-          progress.cleared >= progress.total
-            ? 'the whole table — this row is done'
-            : 'you can start past these now',
+          // Zero needs its own sentence. A first visit to a table ends here
+          // however well it went, because a fact peels on the SECOND unaided
+          // run and not the first — so "you can start past these now" would be
+          // a flat lie over a 0, at the end of a session the kid may have got
+          // every single answer right.
+          progress.cleared === 0
+            ? 'a fact drops off after two clean times through'
+            : progress.cleared >= progress.total
+              ? 'the whole table — this row is done'
+              : 'you can start past these now',
         ),
       );
     }
