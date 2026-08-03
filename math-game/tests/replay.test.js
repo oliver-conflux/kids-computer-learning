@@ -175,13 +175,13 @@ test('a config override changes the replay and never touches CONFIG', () => {
 });
 
 test('an unknown config key is an error, not a silent no-op', () => {
-  assert.throws(() => configWithOverrides(['notAKey=3']), /Unknown config key/);
-  assert.throws(() => configWithOverrides(['weights.tepid=3']), /Unknown config key/);
-  assert.throws(() => configWithOverrides(['hotMs=fast']), /numeric/);
+  assert.throws(() => configWithOverrides(['notAKey=3'], CONFIG), /Unknown config key/);
+  assert.throws(() => configWithOverrides(['weights.tepid=3'], CONFIG), /Unknown config key/);
+  assert.throws(() => configWithOverrides(['hotMs=fast'], CONFIG), /numeric/);
 });
 
 test('overrides are typed like the field they replace', () => {
-  const config = configWithOverrides(['hotMs=1200', 'weights.cold=8', 'build=m2']);
+  const config = configWithOverrides(['hotMs=1200', 'weights.cold=8', 'build=m2'], CONFIG);
   assert.equal(config.hotMs, 1200);
   assert.equal(config.weights.cold, 8);
   assert.equal(config.build, 'm2');
