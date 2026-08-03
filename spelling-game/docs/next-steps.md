@@ -57,11 +57,6 @@ was wrong, so she would have been marked wrong for hearing correctly. For a true
 homophone the audio is *right* and she is still marked wrong — which is worse,
 because nothing is broken and nothing would ever show up in a log as a defect.
 
-**Where to start.** Add the 17 to `homophones.js`; `hasHomophone` and the flash
-need no change. Re-run the detector after any spine growth:
-`speech-transcribe --expect words.txt <dir>` on the GPU box — its mismatches are
-a homophone list, not a failure list.
-
 **Nothing is broken in the code**, and that is the point. The engine compares
 typed letters to the target and does so correctly. The PROMPT is insufficient:
 audio alone cannot say which homophone is wanted, and no amount of better audio
@@ -150,9 +145,9 @@ Listen to those pairs specifically rather than trusting the audit alone.
 
 ---
 
-## 4. `irregular` is 87 words and is not a family
+## 4. `irregular` is 232 words and is not a family
 
-28% of the playable list carries the tag, making it by far the largest group. A
+23% of the list carries the tag, making it by far the largest group. A
 learn session on `irregular` samples four words that share nothing but the
 absence of a rule — `of`, `a`, `they`, `his` in one lesson.
 
@@ -167,7 +162,71 @@ hiding inside the bucket.
 
 ---
 
-## 5. One unexplained divergence — open
+## 5. A kid who already knows the words is stuck proving it — **observed, not diagnosed**
+
+**The complaint, from playing it.** It does not reach ahead. A speller who is
+getting the early words right stays on the early words far longer than feels
+right.
+
+**Not yet diagnosed, deliberately.** What follows is the mechanism as written and
+a set of candidate fixes, recorded while it was fresh. Do the measurement before
+building any of it.
+
+**One hypothesis ruled out already.** It is tempting to think there is a
+first-playthrough placement round that a kid who had already played would have
+missed. There isn't. The code says so twice, on purpose — `core/frontier.js`:
+*"no placement test — the log is the placement test"*, and `ui/results.js`:
+*"There is no stored level in this game and no placement test."* Nothing was
+missed. The fast path was never built.
+
+**The arithmetic that probably explains the feel.** The frontier exposes
+`windowSize: 20` not-yet-hot words. A word goes hot at three clean attempts with
+a median under `hotMs`. So clearing a window costs a minimum of **60 correct
+answers**, and new words only trickle in as individual words graduate. For a kid
+who genuinely knows all twenty, that is sixty keystroke-heavy repetitions to earn
+ground she already held. The window is a filter rather than a slice, so it does
+advance — just at three-reps-per-word, always, no matter how obvious the word is.
+
+**The shape of the fix: make the cost of proof proportional to the doubt.**
+Three candidates, roughly increasing in ambition.
+
+**(a) Asymmetric first attempt.** If a word is answered clean the very first time
+it is ever seen, count it learned then — one rep, not three. Miss it first time
+and it reverts to the full three. The first attempt is the most informative one
+in the whole system: it is the only attempt with no practice effect behind it.
+This is the cheapest of the three and probably the highest value per line.
+
+**(b) Confidence at the band, not the word.** Fry's bands of 100 are the unit the
+list is actually organised around. If ~90% of band 1 is coming back clean, stop
+demanding full proof on the rest of band 1 — the evidence is no longer about the
+individual word. Note this needs a floor: "she is good at this band" must not
+silently skip the one word in it she cannot spell.
+
+**(c) Bleed the next band in.** Rather than advancing a window, mix band 2 words
+into a band-1 session as band 1 goes well, then band 3 as band 2 does. The
+frontier already blends cold and hot words by weight, so the machinery for
+mixing exists; what is new is making band membership a term in the weighting.
+This is the most appealing of the three and the largest change.
+
+**Where it touches the existing design.** Any of these adjusts what counts as
+mastered, which is `core/mastery.js`'s bucket rule and is shared with the math
+and geography games. It should be a config-level or space-adapter change, not a
+special case inside `mastery.js` — that module's whole point is not knowing what
+kind of item it holds. `hotMs: 4000` is also still the original guess and is
+itself a candidate cause: a threshold set too tight keeps a fluent speller
+permanently warm and stalls the window on words she owns. `tools/replay.js` can
+retune it against real history before anything is built.
+
+**This is the same complaint as §3, from the other end.** That item records "more
+Fry words would just be more four-letter words — frequency is not difficulty, and
+'it is all easy' is the actual complaint." Morphology answers it by making the
+content harder. This item answers it by getting through the easy content faster.
+They are worth designing together, because doing only one of them leaves the
+other half of the problem standing.
+
+---
+
+## 6. One unexplained divergence — open
 
 Real play produced four consecutive learn sessions on `in pin win tin`
 (`s_c578 s_c447 s_3f31 s_1322`, 2026-08-02 14:48–14:57). The structural cause was
@@ -186,7 +245,7 @@ deliberate reloads between sessions.
 
 ---
 
-## 6. Unfinished from the build plan
+## 7. Unfinished from the build plan
 
 - **No spelling card in `games-menu.html`.** Verified: zero matches for
   "spelling". The game is reachable only by typing the URL. This was Wave 4
@@ -199,7 +258,7 @@ deliberate reloads between sessions.
 
 ---
 
-## 7. Carried forward from the Gate B review
+## 8. Carried forward from the Gate B review
 
 The first three concern `fetch-words.js`, which **no longer runs** — the game
 left Merriam-Webster on 2026-08-02 (item 2). The file is kept as the record of
@@ -222,7 +281,7 @@ that path. Fix these only if it is ever revived; none of them can affect play.
 
 ---
 
-## 8. Housekeeping
+## 9. Housekeeping
 
 - **Branch `spelling-game` is not merged.** `master` is still at `56367e4`.
 - **Shared CSS is now duplicated three ways.** `base.css`, `layout.css` and
